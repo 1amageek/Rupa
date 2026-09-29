@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import SwiftCAD
 
 /// Cut's dialog while it runs: the bodies to cut, the curves and faces cutting them, which of the
@@ -57,6 +58,12 @@ struct WorkspaceBodyCutSession: Equatable {
     static func isCurveObject(_ node: SceneNode, in document: DesignDocument) -> Bool {
         guard let featureID = node.reference?.featureID else { return false }
         return document.cadDocument.designGraph.nodes[featureID]?.outputs.contains { $0.role == .curve } == true
+    }
+
+    /// What a click reaches whatever the selection scope: bodies while picking targets; curves
+    /// and faces while picking cutters.
+    var viewportHitPolicy: ViewportSelectionHitPolicy {
+        picking == .targets ? .object : .all
     }
 
     /// Whether both lists hold something, so the cut can run.

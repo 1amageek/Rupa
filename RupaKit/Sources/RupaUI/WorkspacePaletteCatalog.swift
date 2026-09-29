@@ -67,7 +67,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Raise Curve Degree", aliases: ["Raise Degree"], shortcut: "⇧S", invocation: .edit(.raiseCurveDegree)),
         Command(title: "Convert Vertex", invocation: .edit(.convertVertex)),
         Command(title: "Rebuild", aliases: ["Rebuild Curve"], invocation: .edit(.rebuild)),
-        Command(title: "Deform", aliases: ["Deform Curve"], invocation: .edit(.deform)),
+        Command(title: "Deform", aliases: ["Deform Curve", "Deform Solid and Sheet"], invocation: .edit(.deform)),
         Command(title: "Create Outline", invocation: .edit(.createOutline)),
         Command(title: "Create Instance", aliases: ["Create Curve Instance", "Create Solid and Sheet Instance"], invocation: .edit(.createInstance)),
         Command(title: "Realize Instances", aliases: ["Realize Curve Instances", "Realize Solid and Sheet Instances"], invocation: .edit(.realizeInstances)),

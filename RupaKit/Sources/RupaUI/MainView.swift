@@ -2222,7 +2222,7 @@ private struct ProjectMainViewContent: View {
             canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
             projectionRequest: viewportProjectionRequest,
             cameraFrameRequest: viewportCameraFrameRequest,
-            selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
+            selectionHitPolicy: viewportSelectionHitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
             canvasOverlayExclusions: viewportChromeGeometry.exclusions,
             gridVisualSpacingMode: snapshot.workspaceState.viewportGridSettings.visualSpacingMode,
@@ -2440,8 +2440,10 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// The selected bodies' move, rotate and scale gizmo; a running command that takes clicks has
+    /// none, so a click on a selected body reaches the command.
     private var viewportBodyPlacementCommitHandler: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? {
-        guard selectedTool == .select, selectionScope == .object else {
+        guard selectedTool == .select, selectionScope == .object, !runningCommandTakesViewportClicks else {
             return nil
         }
         return { target in
@@ -2954,10 +2956,13 @@ private struct ProjectMainViewContent: View {
         return false
     }
 
+    /// The selected object's move and resize handles; a running command that takes clicks has
+    /// none, so a click on the object reaches the command and a drag cannot move it midway.
     private var allowsObjectAffordances: Bool {
         selectedTool == .select
             && selectionScope == .object
             && selectedPresentationHasExactCADAffordanceContext
+            && !runningCommandTakesViewportClicks
     }
 
     private var showsAutomaticBoundsRulers: Bool {
@@ -3020,7 +3025,7 @@ private struct ProjectMainViewContent: View {
         (SceneOccurrenceID, ViewportSelectionIntent) -> Void
     )? {
         switch selectedTool {
-        case .select where selectionScope == .object:
+        case .select where selectionScope == .object && !runningCommandTakesViewportClicks:
             return handlePresentationOccurrencePick
         case .mesh:
             return { occurrenceID, _ in
@@ -3033,7 +3038,8 @@ private struct ProjectMainViewContent: View {
 
     private var presentationOccurrenceHoverHandler: ((SceneOccurrenceID?) -> Void)? {
         guard selectedTool == .select,
-              selectionScope == .object else {
+              selectionScope == .object,
+              !runningCommandTakesViewportClicks else {
             return nil
         }
         return handlePresentationOccurrenceHover
@@ -5776,6 +5782,30 @@ private struct ProjectMainViewContent: View {
 
     private func canvasToolIdentifier(for tool: ModelingTool) -> String {
         "CanvasTool.\(tool.rawValue)"
+    }
+
+    /// Whether `handleViewportPick` hands clicks to a running command rather than to selection:
+    /// then a click on an object must reach it, not select the object.
+    private var runningCommandTakesViewportClicks: Bool {
+        if viewAlignedConstructionPlaneRequest != nil { return true }
+        guard selectedTool == .select else { return false }
+        return curvePickCommand != nil || cutCurveSession != nil || booleanSession != nil
+            || bodyCutSession != nil || deformSession != nil
+            || (slotProfileCommandState.isCurveOffsetActive && slotProfileCommandState.isFreestyle)
+    }
+
+    /// What a click reaches: a running command that picks by clicking decides it (Deform faces,
+    /// Cut's cutters), in the order `handleViewportPick` hands clicks to them; otherwise the
+    /// selection scope does.
+    private var viewportSelectionHitPolicy: ViewportSelectionHitPolicy {
+        if selectedTool == .select, viewAlignedConstructionPlaneRequest == nil, curvePickCommand == nil {
+            if let cutCurveSession { return cutCurveSession.viewportHitPolicy }
+            if booleanSession == nil {
+                if let bodyCutSession { return bodyCutSession.viewportHitPolicy }
+                if let deformSession { return deformSession.viewportHitPolicy }
+            }
+        }
+        return selectionScope.viewportSelectionHitPolicy
     }
 
     private func handleViewportPick(_ target: ViewportCanvasTarget) {
@@ -10172,9 +10202,12 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// The selected objects' mass from their materials' densities, measured when the selection or
-    /// the document changes; a selection that cannot be measured shows no mass.
+    /// The selected objects' mass from their materials' densities, measured off the main actor
+    /// when the selection or the document changes (`SelectionMassMeasurement`); no mass shows
+    /// until the measurement for the current selection arrives, and a selection that cannot be
+    /// measured shows none.
     private func refreshSelectionMass() {
+        selectionMass = nil
         guard !snapshot.selection.wholeSceneNodeIDs.isEmpty else {
             selectionMassMeasurement.cancel()
             return

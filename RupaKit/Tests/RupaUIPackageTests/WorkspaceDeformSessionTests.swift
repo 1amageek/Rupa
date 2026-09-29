@@ -1,5 +1,6 @@
 import RupaCore
 import SwiftCAD
+import RupaRendering
 import Testing
 @testable import RupaUI
 
@@ -46,4 +47,11 @@ import Testing
     }
     #expect(targets == [body] && referenceFace == reference && targetFace == target && options.keepsTools)
     #expect(session.subjectDescription == "1 body")
+}
+
+/// Deform's clicks pick faces whatever the selection scope: the viewport resolves them to faces
+/// only while the dialog runs.
+@Test func theDeformDialogMakesClicksPickFaces() throws {
+    let session = try #require(WorkspaceDeformSession(selectedCurves: [], selectedBodies: [SceneNodeID()]))
+    #expect(session.viewportHitPolicy == .face)
 }

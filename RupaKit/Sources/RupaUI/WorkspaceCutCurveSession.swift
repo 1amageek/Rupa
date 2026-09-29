@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import SwiftCAD
 
 /// Cut Curve's dialog while it runs: the target curves, the cutters, which of the two a click on a
@@ -52,6 +53,12 @@ struct WorkspaceCutCurveSession: Equatable {
     /// The options the cut runs with.
     var options: CutCurveOptions {
         CutCurveOptions(extendsCutter: extendsCutter, usesScreenSpaceDirection: usesScreenSpace, screenDirection: viewDirection)
+    }
+
+    /// What a click reaches whatever the selection scope: curves while picking targets; curves
+    /// and faces while picking cutters.
+    var viewportHitPolicy: ViewportSelectionHitPolicy {
+        picking == .targets ? .object : .all
     }
 
     /// Every curve the dialog holds, which the viewport shows selected.

@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 
 /// Deform's dialog while it runs, on what was selected when it started: sketch curves (Deform
 /// Curve) or body objects (Deform Solid and Sheet), never both. A click picks the reference face
@@ -45,6 +46,9 @@ struct WorkspaceDeformSession: Equatable {
         case .bodies(let bodies): "\(bodies.count) bod\(bodies.count == 1 ? "y" : "ies")"
         }
     }
+
+    /// Every click picks a face, whatever the selection scope.
+    var viewportHitPolicy: ViewportSelectionHitPolicy { .face }
 
     var step: Step {
         if referenceFace == nil { return .referenceFace }

@@ -747,7 +747,15 @@ with sketch curves or body objects selected (not both), starts Deform's dialog
 click picks the reference face, the next the target face (a later click replaces the
 target), the dialog then takes U/V/N scale and offset, Mirror, UV, Normal and Keep Tools,
 and OK, Return or right-click submits `.deformCurves` or `.deformBodies` while Escape
-ends it unchanged (`WorkspaceDeformSessionTests`). Create Outline in the palette, with bodies selected,
+ends it unchanged (`WorkspaceDeformSessionTests`). A running command that takes clicks (Deform, Boolean, Cut,
+Cut Curve, the curve picks, Freestyle Offset, a view-aligned plane) owns the
+viewport's clicks: object selection, the selected bodies' move gizmo and the
+object affordances stand down, so a click on any body, the selected ones
+included, reaches the command, and the command's session names what a click
+resolves to (`viewportHitPolicy`: Deform faces, Cut's cutters curves and faces,
+targets bodies or curves) whatever the selection scope. Before, in Object scope
+a click on a body selected it instead and hits carried no face, so Deform could
+not pick a face at all. Create Outline in the palette, with bodies selected,
 submits `.createBodyOutlines` on the active construction plane and selects the outlines
 with a Move running (`moveCreatedObjects`). J joins two or more selected curves with the inspector's continuity
 (two through `joinSketchCurves`, more through `joinSketchCurveChain`) and

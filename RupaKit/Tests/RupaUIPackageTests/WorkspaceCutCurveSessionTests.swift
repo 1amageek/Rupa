@@ -1,5 +1,6 @@
 import RupaCore
 import SwiftCAD
+import RupaRendering
 import Testing
 @testable import RupaUI
 
@@ -21,6 +22,14 @@ import Testing
         #expect(one.targets == [a] && one.cutters.isEmpty && one.picking == .cutters)
         let three = WorkspaceCutCurveSession(selectedCurves: [a, b, c])
         #expect(three.targets == [a, b] && three.cutters == [c] && three.canCut)
+    }
+
+    /// Clicks reach curves while targets are picked, curves and faces while cutters are.
+    @Test func cuttersArePickedAmongCurvesAndFaces() {
+        let targets = WorkspaceCutCurveSession(selectedCurves: [])
+        #expect(targets.viewportHitPolicy == .object)
+        let cutters = WorkspaceCutCurveSession(selectedCurves: [curve()])
+        #expect(cutters.viewportHitPolicy == .all)
     }
 
     @Test func aClickTogglesTheCurveInTheListBeingPicked() throws {

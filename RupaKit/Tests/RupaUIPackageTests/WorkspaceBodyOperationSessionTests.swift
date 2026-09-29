@@ -1,5 +1,6 @@
 import RupaCore
 import SwiftCAD
+import RupaRendering
 import Testing
 @testable import RupaUI
 
@@ -73,6 +74,9 @@ import Testing
             SelectionTarget(sceneNodeID: second),
         ], in: document)
         #expect(cut.targets == [first, second] && cut.cutters == [.curve(line)] && cut.picking == .cutters)
+        // Cutters are clicked among curves and faces; targets among bodies.
+        #expect(cut.viewportHitPolicy == .all)
+        #expect(WorkspaceBodyCutSession(targets: [], cutters: []).viewportHitPolicy == .object)
         var session = cut
         session.extendsCurves = true
         session.viewDirection = Vector3D(x: 0, y: 0, z: 1)
