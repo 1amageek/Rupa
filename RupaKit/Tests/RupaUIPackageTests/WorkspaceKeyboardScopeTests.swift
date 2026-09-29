@@ -1,4 +1,7 @@
 import AppKit
+import RupaCore
+import RupaKit
+import RupaProject
 import SwiftUI
 import Testing
 @testable import RupaUI
@@ -152,4 +155,49 @@ struct WorkspaceKeyboardScopeTests {
         #expect(mounted.record.events == ["submit:x"])
         #expect(textField.currentEditor()?.string == "g")
     }
+
+    @Test func inspectorReturnRestoresWorkspaceShortcutsInMainView() async throws {
+        let session = EditorSession()
+        _ = try #require(session.createDefaultExtrudedRectangle())
+        let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(document: session.document)
+        _ = try await workspace.evaluate()
+        let body = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body
+        })
+        _ = try await workspace.applySelection(.replace(SelectionModel(
+            selectedTargets: [SelectionTarget(sceneNodeID: body.id)])))
+        let host = NSHostingView(rootView: MainView(
+            workspace: workspace, operationSequencer: ProjectWorkspaceOperationSequencer()))
+        let window = KeyableWindow(contentRect: NSRect(x: -20000, y: -20000, width: 1200, height: 900),
+                                   styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.contentView = nil; window.close() }
+        func xFields(_ view: NSView) -> [NSTextField] {
+            if let field = view as? NSTextField, field.isEditable, field.placeholderString == "X" {
+                return [field]
+            }
+            return view.subviews.flatMap(xFields)
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while xFields(host).isEmpty {
+            try #require(ContinuousClock.now < deadline)
+            try await settle(host)
+        }
+        let initialCount = xFields(host).count
+        let numeric = try #require(xFields(host).first)
+        #expect(window.makeFirstResponder(numeric))
+        numeric.selectText(nil)
+        let mounted = Mounted(record: Record(), window: window, host: host)
+        try await press("2", keyCode: 19, in: mounted)
+        let beforeReturn = String(describing: window.firstResponder)
+        try await press("\r", keyCode: 36, in: mounted)
+        let afterReturn = String(describing: window.firstResponder)
+        try await press("g", keyCode: 5, in: mounted)
+        // Move adds its own X/Y/Z fields. A lost responder leaves only the inspector.
+        #expect(xFields(host).count == initialCount + 1, Comment(rawValue:
+            "Before Return: \(beforeReturn); after Return: \(afterReturn); after G: \(String(describing: window.firstResponder)); editor: \(numeric.currentEditor()?.string ?? "none")"))
+    }
+
 }

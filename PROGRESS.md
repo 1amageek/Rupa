@@ -402,3 +402,7 @@
 
 - [x] UIE1 Preserve native replacement display continuity and measure edge treatments along their displayed normal; focused native camera/gesture and source-unit checks passed (`fa22787f`). `depends:none` `parallel:none`
 - [x] UIE2 Signed app rebuilt and restarted with matching binary hashes; document 5C035F85 reopened, face thickness drag/Undo and normal-axis Chamfer/Fillet drag/Undo verified, original geometry restored and saved. `depends:UIE1` `parallel:none`
+
+- [x] UIO1 Verified numeric move/Undo/Redo, Move/Rotate/nonuniform Scale, selection switching and perspective; reproduced lost G/R/S after inspector submission and sidebar selection, and ignored Escape after palette activation. `depends:none` `parallel:none`
+- [x] UIO2 Assign numeric submission focus to one host owner and restore workspace focus at shared selection/tool entry points; 11 native input tests passed, including the production MainView regression. `depends:UIO1` `parallel:none`
+- [ ] UIO3 Build and restart the signed app with the preserved document, verify corrected workflows and their interactions, and record exact coverage and remaining limits. `depends:UIO1,UIO2` `parallel:none`

@@ -5,5 +5,6 @@ enum InspectorInputSubmission {
 }
 
 extension EnvironmentValues {
+    @Entry var inspectorInputDidSubmit: (@MainActor () -> Void)?
     @Entry var inspectorInputSequencer: ProjectWorkspaceOperationSequencer?
 }

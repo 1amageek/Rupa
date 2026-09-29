@@ -7,6 +7,7 @@ struct InspectorNumericInput: View {
     let onChange: (Double) -> Void
     var axisField: Bool = false
 
+    @Environment(\.inspectorInputDidSubmit) private var didSubmit
     @Environment(\.inspectorInputSequencer) private var sequencer
     @State private var edit = InspectorNumericEdit()
     @State private var controlID = UUID()
@@ -67,7 +68,11 @@ struct InspectorNumericInput: View {
                 }))
                 .textFieldStyle(.plain)
                 .focused($isFocused)
-                .onSubmit { isFocused = false }
+                .onSubmit {
+                    // One owner chooses the next responder. A local reset would compete
+                    // with the host's focus request in the same SwiftUI update.
+                    if let didSubmit { didSubmit() } else { isFocused = false }
+                }
                 .foregroundStyle(.primary)
                 .accessibilityLabel(title + (activeMapping.unit.isEmpty ? "" : " (\(activeMapping.unit))"))
         }

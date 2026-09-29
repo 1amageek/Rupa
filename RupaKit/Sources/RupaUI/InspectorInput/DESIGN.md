@@ -48,6 +48,10 @@ Project snapshot ---------------------------------> idle display
 - Waiting for acknowledgement does not cancel source work or add queue barriers.
 - Selection/document identity changes discard transient input, not queued work.
 - Explicit operation drafts remain local until their Apply action.
+- Return delegates the next responder to `inspectorInputDidSubmit` when a host
+  provides it. Otherwise it releases local focus. These are exclusive owners:
+  a local reset must not compete with the host's focus request in the same update.
+  Numeric controls do not synthesize a workspace command.
 
 ## State, Ownership, and Lifecycle
 

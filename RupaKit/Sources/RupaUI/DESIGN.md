@@ -1346,7 +1346,15 @@ their text until that Return, and all of them become one motion through
 `WorkspaceTransformSession.typedMotion` — X 10 and Y 20 move by (10, 20, 0); a
 value field bound per keystroke would apply 1 and then 10 for a typed 10. Placing a
 section returns focus to the canvas as well. `WorkspaceKeyboardScopeTests`
-mount the scope with a field in a window and send it key events;
+mount the scope with a field in a window and send it key events. The workspace
+composition also returns focus to this scope after an inspector submission,
+accepted object selection, or explicit tool activation. Those transitions must
+work when the previous responder was outside the canvas column; they must not
+require a canvas click, which could change the selection or create geometry.
+Inspector submission transfers focus without synthesizing a canvas Return, so
+it does not finish an unrelated running command. The mounted MainView check
+covers inspector submission followed immediately by G; signed-app checks cover
+sidebar selection and palette activation after inspector editing.
 `WorkspaceTransformSessionTests` cover the typed fields.
 
 ## State, Ownership, and Lifecycle

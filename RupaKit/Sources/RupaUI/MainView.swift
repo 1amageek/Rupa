@@ -906,6 +906,7 @@ private struct ProjectMainViewContent: View {
         completion: @escaping @MainActor @Sendable (ProjectViewSnapshot) -> Void = { _ in }
     ) {
         selectedSharedDefinitionID = nil
+        isWorkspaceFocused = true
         reportFailure(of: selectionSubmitter.queue(mutation, completion: completion))
     }
 
@@ -972,6 +973,7 @@ private struct ProjectMainViewContent: View {
         selectedSharedDefinitionID = nil
         do {
             reportFailure(of: try selectionSubmitter.submit(update))
+            isWorkspaceFocused = true
             return true
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
@@ -2488,6 +2490,7 @@ private struct ProjectMainViewContent: View {
             .id(snapshot.selection.selectedReferences)
         }
             .environment(\.inspectorInputSequencer, operationSequencer)
+            .environment(\.inspectorInputDidSubmit, { isWorkspaceFocused = true })
             .frame(
                 maxWidth: .infinity,
                 maxHeight: .infinity,
@@ -5831,6 +5834,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func activateTool(_ tool: ModelingTool) {
+        isWorkspaceFocused = true
         measurementSeed = tool == .measure ? selectedCurveMeasurementSeed() : nil
         let hasTransientModelingOperation = modelingDraft != nil
             || meshDraft != nil
