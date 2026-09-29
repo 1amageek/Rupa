@@ -10290,12 +10290,16 @@ private struct ProjectMainViewContent: View {
     private func refreshTransformFrame() {
         guard var transform = transformSession else { return }
         do {
-            let document = snapshot.document.document
+            // A transform a command's completion starts moves what the command made, which only
+            // the workspace's latest published view holds yet: this view value still holds the
+            // one before it.
+            let view = workspace.view ?? snapshot
+            let document = view.document.document
             let bounds: MeasurementResult.Bounds?
             if transform.pickedPivot == nil, transform.pivotMode == .boundingBox {
                 // The pivot bounds what the session moves: its own objects (a Boolean's tools
                 // move while its dialog holds other bodies), or the moved topology.
-                var moved = snapshot.selection
+                var moved = view.selection
                 if transform.topologyTargets.isEmpty {
                     moved = SelectionModel()
                     try moved.selectTargets(transform.sceneNodeIDs.map { SelectionTarget(sceneNodeID: $0) }, in: document)
@@ -10303,10 +10307,10 @@ private struct ProjectMainViewContent: View {
                 bounds = try MeasurementService().measure(
                     document: document,
                     selection: moved,
-                    ruler: snapshot.workspaceState.ruler,
+                    ruler: view.workspaceState.ruler,
                     objectRegistry: objectRegistry,
-                    currentEvaluation: snapshot.cadInteraction,
-                    currentGeneration: snapshot.documentGeneration
+                    currentEvaluation: view.cadInteraction,
+                    currentGeneration: view.documentGeneration
                 ).bounds
             } else {
                 bounds = nil
