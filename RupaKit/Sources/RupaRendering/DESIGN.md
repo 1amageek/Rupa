@@ -909,6 +909,19 @@ as spheres elsewhere.
    and that binding is part of the overlay change key, so a second gate
    beside the frame could only restate or contradict the frame that
    answered.
+   A selected subshape's handle is resolved in the published document's
+   scene (`RawInput.selectionScene`), not in the scene drawn: a fillet,
+   chamfer or face-offset drag draws a preview whose topology no longer
+   carries the selected edge or face, and resolving the selection there
+   failed the overlay mid-drag ("Edge treatment selection is not backed by
+   body topology") and cancelled the drag, so no edge treatment or face
+   move committed in the app
+   (`aPreviewThatRoundsTheSelectedEdgeAwayKeepsItsHandles`). The mounted
+   press fixtures place edge handles by the producer's own rule, the edge
+   frame's anchor and combined outward normal at the anchor's screen scale
+   (`ViewportNativeProfileAffordancePressTests`). A selected edge whose
+   faces give it no frame reports Core's reason through
+   `onAffordanceUnavailable`.
    Each of the three gains a drawn mark, because a prepared handle is
    reachable only through the collision geometry its drawing builds: the
    legacy corner, face and chamfer tests drew nothing and were reachable

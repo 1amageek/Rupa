@@ -2346,7 +2346,8 @@ private struct ProjectMainViewContent: View {
                     recordsFailure: false
                 )
             },
-            onPresentationFailure: reportViewportPresentationFailure
+            onPresentationFailure: reportViewportPresentationFailure,
+            onAffordanceUnavailable: { reason in reportToolStatus(reason, severity: .warning) }
         )
         .onChange(of: slideCommandState.isActive) { _, isActive in
             slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)

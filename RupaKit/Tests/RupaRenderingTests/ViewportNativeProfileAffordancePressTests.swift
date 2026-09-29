@@ -139,6 +139,10 @@ private struct ProfileHandlePressFixture {
     let press: CGPoint
     let worldAnchor: Point3D
     let worldCenter: Point3D
+    /// The world direction an edge handle stands off `worldAnchor`; nil for face and corner.
+    let worldOutward: Vector3D?
+    /// A world direction the view does not foreshorten, along the screen's x.
+    let worldAcross: Vector3D
     let dragEnd: CGPoint
     let emptyPoint: CGPoint
     /// The release point of a gesture on empty space. It lies on the same
@@ -299,6 +303,9 @@ private struct ProfileHandlePressFixture {
         // different sub-shape is reported here rather than read as a miss.
         let anchor: Point3D
         let dragDirection: Vector3D
+        // The world direction an edge handle stands off its anchor; face and corner handles sit
+        // on theirs.
+        var outward: Vector3D?
         switch pressCase.handle {
         case .face:
             let resolvedFace = try resolver.bodyFace(
@@ -372,13 +379,11 @@ private struct ProfileHandlePressFixture {
                     message: "The fixture body topology does not carry the selected edge."
                 )
             }
-            let start = bodyItem.modelTransform.point(sourceEdge.start)
-            let end = bodyItem.modelTransform.point(sourceEdge.end)
-            anchor = Point3D(
-                x: (start.x + end.x) / 2.0,
-                y: (start.y + end.y) / 2.0,
-                z: (start.z + end.z) / 2.0
-            )
+            // The handles stand off the edge's evaluated midpoint along its faces' combined
+            // outward normal, the producer's rule.
+            let placed = try Self.edgeHandleFrame(sourceEdge, item: bodyItem)
+            anchor = placed.anchor
+            outward = placed.outward
             // Edge treatments scrub a length horizontally in the mounted view.
             dragDirection = Vector3D(x: basis.xDirection.dx,
                                      y: basis.yDirection.dx,
@@ -392,13 +397,9 @@ private struct ProfileHandlePressFixture {
                     message: "The selected Boundary Surface edge is absent from the opened body topology."
                 )
             }
-            let displayPoints = sourceEdge.displayPoints.map(bodyItem.modelTransform.point)
-            guard let midpoint = ViewportSpatialOverlayProducer.midpoint(of: displayPoints) else {
-                throw ProfileAffordancePressFixtureError(
-                    message: "The selected Boundary Surface edge has no display midpoint."
-                )
-            }
-            anchor = midpoint
+            let placed = try Self.edgeHandleFrame(sourceEdge, item: bodyItem)
+            anchor = placed.anchor
+            outward = placed.outward
             dragDirection = Vector3D(x: basis.xDirection.dx,
                                      y: basis.yDirection.dx,
                                      z: basis.zDirection.dx)
@@ -417,28 +418,27 @@ private struct ProfileHandlePressFixture {
         }
         worldAnchor = anchor
         worldCenter = edit.worldPoint(edit.centerPoint)
+        worldOutward = outward
+        worldAcross = Vector3D(x: basis.xDirection.dx, y: basis.yDirection.dx, z: basis.zDirection.dx)
         switch pressCase.handle {
         case .face, .corner:
             press = projectedAnchor
             handlePoints = [projectedAnchor]
         case .fillet, .chamfer:
-            let filletPoint = try Self.directedPoint(
-                anchor: projectedAnchor,
-                toward: projectedCenter,
-                points: ProfileMetrics.filletOffsetPoints
+            let filletPoint = try Self.worldDirectedPoint(
+                anchor: anchor, direction: try #require(outward),
+                points: ProfileMetrics.filletOffsetPoints, layout: layout, basis: basis
             )
-            let chamferPoint = try Self.directedPoint(
-                anchor: projectedAnchor,
-                toward: projectedCenter,
-                points: ProfileMetrics.chamferOffsetPoints
+            let chamferPoint = try Self.worldDirectedPoint(
+                anchor: anchor, direction: try #require(outward),
+                points: ProfileMetrics.chamferOffsetPoints, layout: layout, basis: basis
             )
             press = pressCase.handle == .fillet ? filletPoint : chamferPoint
             handlePoints = [filletPoint, chamferPoint]
         case .boundarySurface:
-            let point = try Self.directedPoint(
-                anchor: projectedAnchor,
-                toward: projectedCenter,
-                points: ProfileMetrics.boundarySurfaceOffsetPoints
+            let point = try Self.worldDirectedPoint(
+                anchor: anchor, direction: try #require(outward),
+                points: ProfileMetrics.boundarySurfaceOffsetPoints, layout: layout, basis: basis
             )
             press = point
             handlePoints = [point]
@@ -603,18 +603,60 @@ private struct ProfileHandlePressFixture {
     /// `points` along the screen direction toward the body centre, which is the
     /// offset the spatial resources resolve for a directed placement with no
     /// perpendicular component.
-    static func directedPoint(
-        anchor: CGPoint, toward center: CGPoint, points: CGFloat
-    ) throws -> CGPoint {
-        let dx = center.x - anchor.x
-        let dy = center.y - anchor.y
-        let length = hypot(dx, dy)
-        guard length > 0.0 else {
+    /// An edge handle's world anchor and outward direction, read from the edge's evaluated
+    /// affordance frame as the producer reads it.
+    static func edgeHandleFrame(
+        _ edge: ViewportBodyTopology.Edge, item: ViewportSceneItem
+    ) throws -> (anchor: Point3D, outward: Vector3D) {
+        guard let frame = edge.affordanceFrame, !frame.adjacentFaceNormals.isEmpty else {
             throw ProfileAffordancePressFixtureError(
-                message: "The handle anchor and the body centre project to one point."
+                message: "The fixture edge carries no evaluated affordance frame, so no handle is drawn for it."
             )
         }
-        return CGPoint(x: anchor.x + dx * points / length, y: anchor.y + dy * points / length)
+        var sum = Vector3D.zero
+        for normal in frame.adjacentFaceNormals {
+            sum = sum + item.modelTransform.normal(normal)
+        }
+        guard sum.length > 0 else {
+            throw ProfileAffordancePressFixtureError(message: "The fixture edge's face normals cancel.")
+        }
+        return (item.modelTransform.point(frame.anchor), sum * (1 / sum.length))
+    }
+
+    /// Where a handle drawn `points` screen points from `anchor` along the world `direction`
+    /// lands: the runtime converts the length to meters at the anchor's depth, so the step is
+    /// measured along a world direction the view does not foreshorten.
+    static func worldDirectedPoint(
+        anchor: Point3D, direction: Vector3D, points: CGFloat,
+        layout: ViewportLayout, basis: ViewportProjectionBasis
+    ) throws -> CGPoint {
+        try worldDirectedPoint(
+            anchor: anchor, direction: direction, points: points,
+            across: Vector3D(x: basis.xDirection.dx, y: basis.yDirection.dx, z: basis.zDirection.dx)
+        ) { point in
+            guard let projected = layout.projectedPoint(point)?.point else {
+                throw ProfileAffordancePressFixtureError(message: "A handle point does not project into the fixture viewport.")
+            }
+            return projected
+        }
+    }
+
+    /// The same placement through any projection, the mounted camera's included.
+    static func worldDirectedPoint(
+        anchor: Point3D, direction: Vector3D, points: CGFloat, across: Vector3D,
+        project: (Point3D) throws -> CGPoint
+    ) throws -> CGPoint {
+        let step = 1.0e-4
+        guard across.length > 0 else {
+            throw ProfileAffordancePressFixtureError(message: "The view has no screen-x world direction.")
+        }
+        let origin = try project(anchor)
+        let aside = try project(anchor + across * (step / across.length))
+        let pointsPerMeter = hypot(aside.x - origin.x, aside.y - origin.y) / step
+        guard pointsPerMeter > 0 else {
+            throw ProfileAffordancePressFixtureError(message: "The view does not resolve a screen scale at the handle anchor.")
+        }
+        return try project(anchor + direction * (Double(points) / Double(pointsPerMeter)))
     }
 
     /// The distance from the empty point to the nearest drawn handle.
@@ -996,20 +1038,19 @@ struct ViewportNativeProfileAffordancePressTests {
 
         var press = fixture.press
         if fixture.presentationScene != nil {
-            let anchor = try mounted.project(fixture.worldAnchor, revision: fixture.control.revision)
-            let center = try mounted.project(fixture.worldCenter, revision: fixture.control.revision)
-            press = try ProfileHandlePressFixture.directedPoint(
-                anchor: anchor, toward: center, points: ProfileMetrics.boundarySurfaceOffsetPoints
-            )
+            press = try ProfileHandlePressFixture.worldDirectedPoint(
+                anchor: fixture.worldAnchor, direction: try #require(fixture.worldOutward),
+                points: ProfileMetrics.boundarySurfaceOffsetPoints, across: fixture.worldAcross
+            ) { try mounted.project($0, revision: fixture.control.revision) }
         }
         if objectHover {
             let initialIdentity = try #require(mounted.cache.state.identity)
             try #require(mounted.cache.failure(for: initialIdentity) == nil, "Frame failed before edge hover.")
             let anchor = try mounted.project(fixture.worldAnchor, revision: fixture.control.revision)
-            let center = try mounted.project(fixture.worldCenter, revision: fixture.control.revision)
-            press = try ProfileHandlePressFixture.directedPoint(
-                anchor: anchor, toward: center, points: ProfileMetrics.boundarySurfaceOffsetPoints
-            )
+            press = try ProfileHandlePressFixture.worldDirectedPoint(
+                anchor: fixture.worldAnchor, direction: try #require(fixture.worldOutward),
+                points: ProfileMetrics.boundarySurfaceOffsetPoints, across: fixture.worldAcross
+            ) { try mounted.project($0, revision: fixture.control.revision) }
             try mounted.hover(at: anchor, size: fixture.size)
             try await Task.sleep(for: .milliseconds(500))
             let identity = try #require(mounted.cache.state.identity)

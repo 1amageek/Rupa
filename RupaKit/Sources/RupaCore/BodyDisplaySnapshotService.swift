@@ -176,17 +176,27 @@ public struct BodyDisplaySnapshotService: Sendable {
                       let end = model.vertices[edge.endVertexID]?.point else {
                     continue
                 }
+                // A frame that cannot be built leaves the edge without treatment handles and
+                // says why, rather than dropping them without a word.
+                var affordanceFrame: BodyDisplaySnapshot.Topology.Edge.AffordanceFrame?
+                var affordanceFrameFailure: String?
+                do {
+                    affordanceFrame = try edgeAffordanceFrame(
+                        subshapeID: subshapeID,
+                        adjacentFaces: adjacentFacesByEdgeID[edgeID] ?? [],
+                        in: evaluatedDocument
+                    )
+                } catch {
+                    affordanceFrameFailure = error.localizedDescription
+                }
                 edges.append(BodyDisplaySnapshot.Topology.Edge(
                     componentID: componentID,
                     start: start,
                     end: end,
                     displayPoints: edgeDisplayPointsByID[edgeID] ?? [],
                     openBoundaryLoopID: openBoundaryLoopIDByEdgeID[edgeID],
-                    affordanceFrame: edgeAffordanceFrame(
-                        subshapeID: subshapeID,
-                        adjacentFaces: adjacentFacesByEdgeID[edgeID] ?? [],
-                        in: evaluatedDocument
-                    )
+                    affordanceFrame: affordanceFrame,
+                    affordanceFrameFailure: affordanceFrameFailure
                 ))
             case .vertex(let vertexID):
                 guard let vertex = model.vertices[vertexID] else {
@@ -211,36 +221,37 @@ public struct BodyDisplaySnapshotService: Sendable {
         subshapeID: SubshapeID,
         adjacentFaces: [SubshapeID],
         in document: EvaluatedDocument
-    ) -> BodyDisplaySnapshot.Topology.Edge.AffordanceFrame? {
+    ) throws -> BodyDisplaySnapshot.Topology.Edge.AffordanceFrame? {
+        // An edge no face bounds has nothing to frame it; that is not a failure.
         guard !adjacentFaces.isEmpty else { return nil }
-        do {
-            let tolerance = document.configuration.tolerance
-            let reference = try document.stableSubshapeReference(for: subshapeID)
-            let anchor = try EdgeQueryEvaluator(tolerance: tolerance).midpoint(
-                of: EdgeReference(subshape: reference), in: document
-            ).point
-            let query = SurfaceQueryEvaluator(tolerance: tolerance)
-            var normals: [Vector3D] = []
-            for faceID in adjacentFaces {
-                let faceReference = try document.stableSubshapeReference(for: faceID)
-                // The anchor already belongs to this edge's incident face. Query
-                // its support directly to avoid trim-boundary rounding rejection.
-                let frame = try query.outwardFrame(
-                    nearestTo: anchor,
-                    on: SurfaceReference(subshape: faceReference),
-                    in: document,
-                    options: SurfaceProjectionOptions(respectsTrimBounds: false)
+        let tolerance = document.configuration.tolerance
+        let reference = try document.stableSubshapeReference(for: subshapeID)
+        let anchor = try EdgeQueryEvaluator(tolerance: tolerance).midpoint(
+            of: EdgeReference(subshape: reference), in: document
+        ).point
+        let query = SurfaceQueryEvaluator(tolerance: tolerance)
+        var normals: [Vector3D] = []
+        for faceID in adjacentFaces {
+            let faceReference = try document.stableSubshapeReference(for: faceID)
+            // The anchor already belongs to this edge's incident face. Query
+            // its support directly to avoid trim-boundary rounding rejection.
+            let frame = try query.outwardFrame(
+                nearestTo: anchor,
+                on: SurfaceReference(subshape: faceReference),
+                in: document,
+                options: SurfaceProjectionOptions(respectsTrimBounds: false)
+            )
+            guard (frame.point - anchor).length <= tolerance.distance,
+                  frame.outwardNormal.isFinite,
+                  frame.outwardNormal.length > 0 else {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "The edge's midpoint does not lie on an adjacent face with a defined normal."
                 )
-                guard (frame.point - anchor).length <= tolerance.distance,
-                      frame.outwardNormal.isFinite,
-                      frame.outwardNormal.length > 0 else { return nil }
-                normals.append(frame.outwardNormal * (1 / frame.outwardNormal.length))
             }
-            return .init(anchor: anchor, adjacentFaceNormals: normals)
-        } catch {
-            // Absence suppresses the affordance; never substitute a guessed axis.
-            return nil
+            normals.append(frame.outwardNormal * (1 / frame.outwardNormal.length))
         }
+        return .init(anchor: anchor, adjacentFaceNormals: normals)
     }
 
     private func edgeDisplayPoints(

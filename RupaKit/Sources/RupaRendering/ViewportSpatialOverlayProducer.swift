@@ -440,6 +440,12 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     /// The color and opacity a curve or sketch object draws with when its node names a material;
     /// objects without one keep the canvas's curve and sketch colors.
     var curveColors: [SceneNodeID: SIMD4<Float>] = [:]
+    /// The scene the selection's identities belong to when it is not the scene drawn: a drag
+    /// that previews an edit draws the preview, where the selected subshape may be gone.
+    var selectionScene: ViewportScene?
+
+    /// Where selected subshapes are resolved: the published scene during a previewing drag.
+    var selectionResolutionScene: ViewportScene { selectionScene ?? scene }
 
     init(
         scene: ViewportScene,
@@ -1878,7 +1884,7 @@ enum ViewportSpatialOverlayProducer {
             topologyTargets.append(edgeTreatmentHoverTarget)
         }
         for target in topologyTargets {
-            guard let item = sceneItem(for: target, in: snapshot.scene),
+            guard let item = sceneItem(for: target, in: snapshot.selectionResolutionScene),
                   case .body(let component) = item.kind,
                   let topology = component.topology else {
                 continue

@@ -486,7 +486,9 @@ func onlySelectedUnlockedEdgesEmitTreatmentHandles() throws {
         kind: .body(component: ViewportBodyComponent(sizeXMeters: 2, sizeYMeters: 1,
             sizeZMeters: 2, yMinMeters: 0, yMaxMeters: 1,
             topology: ViewportBodyTopology(edges: [.init(componentID: edgeID,
-                start: Point3D(x: -1, y: 0, z: -1), end: Point3D(x: 1, y: 0, z: -1))]))))
+                start: Point3D(x: -1, y: 0, z: -1), end: Point3D(x: 1, y: 0, z: -1),
+                affordanceFrame: .init(anchor: Point3D(x: 0, y: 0, z: -1),
+                    adjacentFaceNormals: [-Vector3D.unitY, -Vector3D.unitZ]))]))))
     for selected in [false, true] {
         for locked in [false, true] {
             var document = bodyTransformTestDocument([item])
@@ -507,6 +509,82 @@ func onlySelectedUnlockedEdgesEmitTreatmentHandles() throws {
             #expect(raw.selection == selection)
         }
     }
+}
+
+/// A drag that previews a fillet draws the preview, where the selected edge is rounded away:
+/// the edge's handles are resolved in the published scene the selection belongs to, so they stay
+/// and the overlay does not fail while the preview is drawn.
+@Test
+func aPreviewThatRoundsTheSelectedEdgeAwayKeepsItsHandles() throws {
+    let featureID = FeatureID()
+    let nodeID = SceneNodeID()
+    let edgeID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(edgeID))
+    func item(edges: [ViewportBodyTopology.Edge]) -> ViewportSceneItem {
+        ViewportSceneItem(id: "body", featureID: featureID, sceneNodeID: nodeID,
+            modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+            kind: .body(component: ViewportBodyComponent(sizeXMeters: 2, sizeYMeters: 1,
+                sizeZMeters: 2, yMinMeters: 0, yMaxMeters: 1,
+                topology: ViewportBodyTopology(edges: edges))))
+    }
+    let published = item(edges: [.init(componentID: edgeID,
+        start: Point3D(x: -1, y: 0, z: -1), end: Point3D(x: 1, y: 0, z: -1),
+        affordanceFrame: .init(anchor: Point3D(x: 0, y: 0, z: -1),
+            adjacentFaceNormals: [-Vector3D.unitY, -Vector3D.unitZ]))])
+    // The preview's body has other edges: the selected one is gone.
+    let preview = item(edges: [])
+    let document = bodyTransformTestDocument([published])
+    var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+        document: document, scene: ViewportScene(items: [preview]),
+        selection: SelectionModel(selectedTargets: [edgeTarget]),
+        ruler: .standard(for: .meter), enabledRoutes: [.edgeFillet, .profileEdgeChamfer])
+    // Without the published scene the preview cannot back the selection.
+    var records: [ViewportSpatialInteractionRecord] = []
+    #expect(throws: (any Error).self) {
+        _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw, interactionRecords: &records, checkpoint: { _, _, _ in })
+    }
+    raw.selectionScene = ViewportScene(items: [published])
+    records = []
+    _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+        from: raw, interactionRecords: &records, checkpoint: { _, _, _ in })
+    #expect(records.count == 2)
+}
+
+/// The selected edge's highlight is resolved in the published scene too: drawing the preview
+/// alone, where the edge is gone, failed the whole overlay mid-drag.
+@Test
+func aPreviewThatRoundsTheSelectedEdgeAwayKeepsItsHighlight() throws {
+    let featureID = FeatureID()
+    let nodeID = SceneNodeID()
+    let edgeID = SelectionComponentID.generatedTopology(SubshapeID(featureID: featureID, role: "edge", ordinal: 0))
+    let edgeTarget = SelectionTarget(sceneNodeID: nodeID, component: .edge(edgeID))
+    func item(edges: [ViewportBodyTopology.Edge]) -> ViewportSceneItem {
+        ViewportSceneItem(id: "body", featureID: featureID, sceneNodeID: nodeID,
+            modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+            kind: .body(component: ViewportBodyComponent(sizeXMeters: 2, sizeYMeters: 1,
+                sizeZMeters: 2, yMinMeters: 0, yMaxMeters: 1,
+                topology: ViewportBodyTopology(edges: edges))))
+    }
+    let published = item(edges: [.init(componentID: edgeID,
+        start: Point3D(x: -1, y: 0, z: -1), end: Point3D(x: 1, y: 0, z: -1))])
+    let preview = item(edges: [])
+    var snapshot = ViewportSpatialOverlaySemanticSnapshot(
+        scene: ViewportScene(items: [preview]),
+        interaction: .init(selectedFeatureIDs: [featureID], selectedSceneNodeIDs: [nodeID],
+            hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [edgeTarget],
+            selectedSketchEntities: [], previewSketchEntities: [], hoveredSketchEntity: nil,
+            selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
+        editedBodies: [:], world: .init(modelBounds: published.modelBounds), measurement: nil,
+        drawsLegacyBodies: false, drawsDragPreviewBodies: true)
+    #expect(throws: (any Error).self) {
+        _ = try ViewportSpatialOverlayProducer.makeInput(
+            from: snapshot, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1)
+    }
+    snapshot.selectionScene = ViewportScene(items: [published])
+    let input = try ViewportSpatialOverlayProducer.makeInput(
+        from: snapshot, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1)
+    #expect(input.meshes.contains { $0.family == .transform })
 }
 
 @Test

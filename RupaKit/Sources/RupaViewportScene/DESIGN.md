@@ -299,7 +299,8 @@ written together or neither is written, because a run list indexes triangles of
 that mesh and is meaningless without it.
 
 `ViewportBodyTopology.Edge.affordanceFrame` forwards Core's optional evaluated
-edge anchor and adjacent-face normals unchanged; occurrence placement is applied
+edge anchor and adjacent-face normals unchanged, and `affordanceFrameFailure` the
+reason one is missing; occurrence placement is applied
 by Rendering when it composes the world-space direction. See the
 [Core body display contract](../RupaCore/DESIGN.md).
 

@@ -555,6 +555,8 @@ public struct ViewportBodyTopology: Equatable, Sendable {
         public var displayPoints: [Point3D]
         public var openBoundaryLoopID: String?
         public var affordanceFrame: BodyDisplaySnapshot.Topology.Edge.AffordanceFrame?
+        /// Why the edge has no affordance frame although faces bound it (Core's reason).
+        public var affordanceFrameFailure: String?
 
         public init(
             componentID: SelectionComponentID,
@@ -562,12 +564,14 @@ public struct ViewportBodyTopology: Equatable, Sendable {
             end: Point3D,
             displayPoints: [Point3D]? = nil,
             openBoundaryLoopID: String? = nil,
-            affordanceFrame: BodyDisplaySnapshot.Topology.Edge.AffordanceFrame? = nil
+            affordanceFrame: BodyDisplaySnapshot.Topology.Edge.AffordanceFrame? = nil,
+            affordanceFrameFailure: String? = nil
         ) {
             self.componentID = componentID
             self.start = start
             self.end = end
             self.affordanceFrame = affordanceFrame
+            self.affordanceFrameFailure = affordanceFrameFailure
             let resolvedDisplayPoints = displayPoints ?? [start, end]
             self.displayPoints = resolvedDisplayPoints
             self.openBoundaryLoopID = displayPoints != nil
@@ -622,7 +626,8 @@ extension ViewportBodyTopology {
                     end: edge.end,
                     displayPoints: edge.displayPoints,
                     openBoundaryLoopID: edge.openBoundaryLoopID,
-                    affordanceFrame: edge.affordanceFrame
+                    affordanceFrame: edge.affordanceFrame,
+                    affordanceFrameFailure: edge.affordanceFrameFailure
                 )
             },
             vertices: topology.vertices.map { vertex in

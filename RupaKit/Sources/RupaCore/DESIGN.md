@@ -1630,7 +1630,10 @@ geometry or topology identity.
 An edge's optional `affordanceFrame` carries the exact bounded-curve parameter
 midpoint and one outward unit normal per distinct adjacent face at that point.
 `BodyDisplaySnapshotService` resolves these from the same evaluated B-rep using
-kernel edge/surface queries; a missing or failed query omits the frame. Consumers
+kernel edge/surface queries. An edge no face bounds has no frame; one whose query
+fails has none either and carries the reason in `affordanceFrameFailure`, which
+the viewport reports when that edge is selected, so a missing handle is never
+silent (`BodyDisplaySnapshotServiceTests`). Consumers
 must not invent a direction from the body centre. Normals remain separate so
 occurrence inverse-transpose transforms precede normalization and composition.
 The Rendering profile-affordance checks own end-to-end direction assertions.

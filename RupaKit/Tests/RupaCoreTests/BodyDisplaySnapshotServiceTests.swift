@@ -117,3 +117,19 @@ private struct FailingFeatureEvaluator: FeatureEvaluating {
         throw FeatureEvaluationError.invalidGraph("Injected evaluator should not be used.")
     }
 }
+
+/// Every edge of a box is framed by its two faces, and a framed edge carries no failure: a
+/// missing frame is only ever the unbounded case or an explained one.
+@MainActor
+@Test func everyBoxEdgeIsFramedByItsTwoFacesWithoutAFailure() throws {
+    let session = EditorSession()
+    _ = try session.execute(.createExtrudedRectangle(
+        name: "Box", plane: .xy, width: .length(0.06, .meter), height: .length(0.04, .meter),
+        depth: .length(0.02, .meter), direction: .normal
+    ))
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let snapshots = BodyDisplaySnapshotService().snapshots(evaluatedDocument: evaluation)
+    let edges = try #require(snapshots.values.first).topology.edges
+    #expect(edges.count == 12)
+    #expect(edges.allSatisfy { $0.affordanceFrame?.adjacentFaceNormals.count == 2 && $0.affordanceFrameFailure == nil })
+}

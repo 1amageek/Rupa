@@ -116,6 +116,9 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
             public var displayPoints: [Point3D]
             public var openBoundaryLoopID: String?
             public var affordanceFrame: AffordanceFrame?
+            /// Why an edge with adjacent faces has no affordance frame, so its treatment handles
+            /// are missing; nil when it has one or has no faces to frame it.
+            public var affordanceFrameFailure: String?
 
             public init(
                 componentID: SelectionComponentID,
@@ -123,12 +126,14 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
                 end: Point3D,
                 displayPoints: [Point3D]? = nil,
                 openBoundaryLoopID: String? = nil,
-                affordanceFrame: AffordanceFrame? = nil
+                affordanceFrame: AffordanceFrame? = nil,
+                affordanceFrameFailure: String? = nil
             ) {
                 self.componentID = componentID
                 self.start = start
                 self.end = end
                 self.affordanceFrame = affordanceFrame
+                self.affordanceFrameFailure = affordanceFrameFailure
                 let resolvedDisplayPoints = displayPoints ?? [start, end]
                 self.displayPoints = resolvedDisplayPoints
                 self.openBoundaryLoopID = displayPoints != nil

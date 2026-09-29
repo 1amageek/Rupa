@@ -261,6 +261,9 @@ public struct Viewport: View {
     private let onPointPick: ((ViewportPointPick) -> Void)?
     private let onNativeGestureRefusal: ((any Error) -> Void)?
     private let onPresentationFailure: ((any Error) -> Void)?
+    /// Why a selected subshape offers no handle it would otherwise have (an edge whose faces
+    /// give it no frame), so the missing handle is explained rather than silent.
+    private let onAffordanceUnavailable: ((String) -> Void)?
     private let sceneObjectDefinitions: [ObjectTypeDefinition]
     private let presentationInteractionStateResolver: MeshSourcePresentationInteractionStateResolver
     private let selectedPresentationHasExactCADContext: Bool
@@ -459,7 +462,8 @@ public struct Viewport: View {
         onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
         onPointPick: ((ViewportPointPick) -> Void)? = nil,
         onNativeGestureRefusal: ((any Error) -> Void)? = nil,
-        onPresentationFailure: ((any Error) -> Void)? = nil
+        onPresentationFailure: ((any Error) -> Void)? = nil,
+        onAffordanceUnavailable: ((String) -> Void)? = nil
         ) {
         self.controlSession = controlSession
         self._localControlSession = State(
@@ -601,6 +605,7 @@ public struct Viewport: View {
         self.onPointPick = onPointPick
         self.onNativeGestureRefusal = onNativeGestureRefusal
         self.onPresentationFailure = onPresentationFailure
+        self.onAffordanceUnavailable = onAffordanceUnavailable
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
             sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
@@ -996,6 +1001,7 @@ public struct Viewport: View {
             .onChange(of: selection.selectedTargets) { _, _ in
                 edgeTreatmentHoverTarget = nil
                 cancelNativeInputGesture()
+                reportUnframedSelectedEdges()
             }
             .onChange(of: selection.selectedReferences) { _, _ in
                 cancelNativeInputGesture()
@@ -2472,6 +2478,22 @@ public struct Viewport: View {
                 Self.nativeGestureLogger.error("Viewport presentation failed: \(failure.localizedDescription, privacy: .public)")
                 onPresentationFailure?(failure)
             }
+    }
+
+    /// A selected edge whose faces could not frame it gets no fillet, chamfer or boundary
+    /// handle; Core's reason is reported so the handle's absence is not silent.
+    private func reportUnframedSelectedEdges() {
+        guard let onAffordanceUnavailable,
+              onEdgeFilletDrag != nil || onEdgeChamferDrag != nil || onBoundarySurface != nil else { return }
+        let scene = cachedScene(usesDragPreviewDocument: false)
+        for target in selection.selectedTargets {
+            guard case .edge(let componentID) = target.component,
+                  let item = scene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }),
+                  case .body(let component) = item.kind,
+                  let edge = component.topology?.edges.first(where: { $0.componentID == componentID }),
+                  let failure = edge.affordanceFrameFailure else { continue }
+            onAffordanceUnavailable("The selected edge has no fillet, chamfer or boundary handle: \(failure)")
+        }
     }
 
     private func measurementDistanceMeters(
@@ -5908,6 +5930,11 @@ extension Viewport {
                 Float(material.baseColor.r), Float(material.baseColor.g), Float(material.baseColor.b), Float(material.opacity)
             )
         }
+        // A drag that previews an edit draws the preview, whose topology no longer carries the
+        // selected subshape; the selection is resolved against the published document's scene.
+        if rendersDragPreviewDocument {
+            semantic.selectionScene = cachedScene(usesDragPreviewDocument: false)
+        }
         return semantic
     }
 
@@ -6082,6 +6109,11 @@ extension Viewport {
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
         result.bodyPreviewTransforms = presentationScene == nil ? bodyPreviewTransforms : [:]
+        // A drag that previews an edit draws the preview, whose topology no longer carries the
+        // selected subshape; the selection is resolved against the published document's scene.
+        if rendersDragPreviewDocument {
+            result.selectionScene = cachedScene(usesDragPreviewDocument: false)
+        }
         result.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         result.allowsBodyResize = onBodyResizeCommit != nil
         result.transformGizmo = transformGizmo

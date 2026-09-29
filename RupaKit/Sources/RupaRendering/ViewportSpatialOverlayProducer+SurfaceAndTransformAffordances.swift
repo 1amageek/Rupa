@@ -135,7 +135,12 @@ extension ViewportSpatialOverlayProducer {
     struct SurfaceTransformAffordanceSource: Sendable {
         struct RawInput: Sendable {
             let document: DesignDocument
+            /// The scene drawn: during a drag that previews an edit, the preview's.
             let scene: ViewportScene
+            /// The scene the selection's identities belong to, the published document's: a
+            /// preview may round an edge or move a face away, so a selected subshape is resolved
+            /// here and its handle stays where the drag started while the preview changes.
+            var selectionScene: ViewportScene
             let selection: SelectionModel
             var edgeTreatmentHoverTarget: SelectionTarget?
             let editedBodies: [FeatureID: ViewportObjectEditState]
@@ -172,6 +177,7 @@ extension ViewportSpatialOverlayProducer {
             ) {
                 self.document = document
                 self.scene = scene
+                self.selectionScene = scene
                 self.selection = selection
                 self.editedBodies = editedBodies
                 self.ruler = ruler
@@ -3439,17 +3445,18 @@ private extension ViewportSpatialOverlayProducer {
         }
     }
 
+    /// The body item a selected target names, in the scene the selection belongs to.
     static func sceneItem(
         for target: SelectionTarget,
         input: SurfaceTransformAffordanceSource.RawInput
     ) -> ViewportSceneItem? {
-        if let item = input.scene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }) {
+        if let item = input.selectionScene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }) {
             return item
         }
         guard let featureID = input.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID else {
             return nil
         }
-        return input.scene.items.first { $0.featureID == featureID }
+        return input.selectionScene.items.first { $0.featureID == featureID }
     }
 
     static func polySplinePatchDescriptors(

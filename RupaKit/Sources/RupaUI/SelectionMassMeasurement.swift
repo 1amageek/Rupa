@@ -1,5 +1,4 @@
 import RupaCore
-import RupaCoreTypes
 
 /// The selected objects' mass, measured off the main actor: the exact volume of a body of many
 /// spline spans can take long, and the workspace must stay responsive while it is measured.
