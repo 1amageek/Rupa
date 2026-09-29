@@ -1374,6 +1374,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .createInvoluteGear(name, gear):
+            var updated = document
+            try updated.createInvoluteGear(name: name, gear: gear, objectRegistry: objectRegistry)
+            document = updated
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .setInvoluteGear(featureID, gear):
+            var updated = document
+            let sourceValidation = try validatedSource ?? document.validate(objectRegistry: objectRegistry)
+            let updatedValidation = try updated.setInvoluteGear(featureID: featureID,
+                gear: gear, validatedDocument: sourceValidation)
+            document = updated
+            try commitMutation()
+            validatedSource = updatedValidation
+            evaluateCurrentDocument()
         case let .createSpatialPath(name, path):
             var updatedDocument = document
             try updatedDocument.createSpatialPath(name: name, path: path, objectRegistry: objectRegistry)

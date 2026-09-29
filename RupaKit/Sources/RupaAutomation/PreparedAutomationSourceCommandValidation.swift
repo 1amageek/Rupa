@@ -76,6 +76,8 @@ enum PreparedAutomationSourceCommandValidation {
              .createArcSketch,
              .createSplineSketch,
              .createSpatialPath,
+             .createInvoluteGear,
+             .setInvoluteGear,
              .editSpatialPath,
              .convertSketchToSpatialPath,
              .createRectangleSketch,

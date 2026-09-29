@@ -73,6 +73,8 @@ that distinction; unit, constraint and geometry errors propagate. Explicit curve
 element selections retain curve intent. Exact section evaluation remains the
 authority for ambiguity, bounds and output validity.
 
+[GearEditing](GearEditing/DESIGN.md) owns native gear source creation and replacement.
+
 [SceneCloning](SceneCloning/DESIGN.md) owns copying product objects: scene fragments,
 their insertion at placements, and the independent-copy pattern outputs built on them.
 `createPatternArrayFromSceneNodes` arrays selected objects in one command: the

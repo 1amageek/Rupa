@@ -86,6 +86,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspaceCurveRefinementPlanner.swift",
         "Sources/RupaUI/Modeling/FeatureLengthDraft.swift",
         "Sources/RupaUI/Modeling/LoftFeatureDraft.swift",
+        "Sources/RupaUI/Modeling/InvoluteGearDraft.swift",
         "Sources/RupaUI/WorkspaceTransformMatrix.swift",
     ]
 
@@ -122,6 +123,7 @@ enum ProductionMainViewActionManifest {
         "createExtrudedCircle",
         "createExtrudedRectangle",
         "createPatternArrayFromSceneNodes",
+        "createInvoluteGear",
         "createLoft",
         "createSavedView",
         "createViewAlignedConstructionPlane",
@@ -171,6 +173,7 @@ enum ProductionMainViewActionManifest {
         "setConstrainedSurface",
         "setExtrudeExtents",
         "setFeatureLength",
+        "setInvoluteGear",
         "setLoft",
         "ungroupSceneNode",
         "moveBodyEdges",

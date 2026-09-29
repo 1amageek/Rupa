@@ -129,6 +129,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
     case appendFeatureGraph(FeatureGraphTransaction)
+    case createInvoluteGear(name: String, gear: InvoluteGearFeature)
+    case setInvoluteGear(featureID: FeatureID, gear: InvoluteGearFeature)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
     case createSemanticSketch(
         name: String,
@@ -688,6 +690,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "setConstructionPlane"
         case .appendFeatureGraph:
             "appendFeatureGraph"
+        case .createInvoluteGear:
+            "createInvoluteGear"
+        case .setInvoluteGear:
+            "setInvoluteGear"
         case .createSketch:
             "createSketch"
         case .createSemanticSketch:
@@ -1016,6 +1022,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .renameConstructionPlane,
              .setConstructionPlane,
              .appendFeatureGraph,
+             .createInvoluteGear,
+             .setInvoluteGear,
              .createSketch,
              .createSemanticSketch,
              .createLineSketch,

@@ -8,6 +8,22 @@ not source editing or kernel algorithms.
 
 ## Responsibilities and Boundaries
 
+Gear creation and reediting use [GearEditing](../../RupaCore/GearEditing/DESIGN.md)
+commands and the same preview/apply owner as other feature operations. The form
+retains every native dimensional expression; no generated mesh is authored.
+Unchanged gear fields retain their original expression trees; only edited text
+is parsed. Reformatting a negative constant must not silently rewrite source
+operators or parameter references when another field changes.
+Gear planning receives the displayed document's modeling tolerance together with
+its parameter table. It must not substitute a process-wide tolerance; geometric
+feasibility remains the existing evaluator's responsibility.
+Creation and history reediting share one workspace-owned gear form and draft.
+History forwards the selected source feature rather than retaining a second
+gear form. Opening the gear form cancels the previous modeling operation. The workspace
+discards its gear form on authority-coordinate changes, preventing a draft
+from crossing document replacement or source publication. Cancel clears the
+same draft owner as other modeling operations.
+
 The draft retains user text, units, ordered selection and operation options.
 Planning produces existing `EditorCommand` values. Workspace remains the only
 mutation entry point. Invalid text remains editable and produces a visible

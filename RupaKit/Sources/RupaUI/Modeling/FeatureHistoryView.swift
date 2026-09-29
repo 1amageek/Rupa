@@ -60,6 +60,7 @@ struct FeatureHistoryView: View {
     let isBusy: Bool
     let onSelect: (FeatureID) -> Void
     let onEditConstrainedSurface: (FeatureNode) -> Void
+    let onEditGear: (FeatureNode) -> Void
     let onPreview: (EditorCommand, String) -> Void
 
     init(
@@ -71,6 +72,7 @@ struct FeatureHistoryView: View {
         isBusy: Bool,
         onSelect: @escaping (FeatureID) -> Void,
         onEditConstrainedSurface: @escaping (FeatureNode) -> Void = { _ in },
+        onEditGear: @escaping (FeatureNode) -> Void,
         onPreview: @escaping (EditorCommand, String) -> Void
     ) {
         self.orderedFeatures = orderedFeatures
@@ -81,6 +83,7 @@ struct FeatureHistoryView: View {
         self.isBusy = isBusy
         self.onSelect = onSelect
         self.onEditConstrainedSurface = onEditConstrainedSurface
+        self.onEditGear = onEditGear
         self.onPreview = onPreview
     }
 
@@ -151,6 +154,12 @@ struct FeatureHistoryView: View {
                     if case .loft = feature.operation {
                         Button("Edit Loft…") { loftDraft = LoftFeatureDraft(feature: feature) }
                             .contentShape(Rectangle())
+                    }
+                    if case .involuteGear = feature.operation {
+                        Button("Edit Gear…") {
+                            onEditGear(feature)
+                        }
+                        .contentShape(Rectangle())
                     }
                     if let draft = FeatureLengthDraft(feature: feature, parameters: parameters, unit: displayUnit) {
                         Button("Edit Dimension…") { lengthDraft = draft }

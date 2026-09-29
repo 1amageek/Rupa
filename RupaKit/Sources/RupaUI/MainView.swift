@@ -106,6 +106,7 @@ private struct ProjectMainViewContent: View {
     @State private var isViewportShadingPresented = false
     @State private var selectedSharedDefinitionID: ComponentDefinitionID?
     @State private var modelingDraft: ModelingOperationDraft?
+    @State private var gearDraft: InvoluteGearDraft?
     @State private var solidShape: WorkspaceSolidShape = .box
     @State private var modelingPreview = ModelingPreviewState()
     @State private var modelingTask: Task<Void, Never>?
@@ -413,6 +414,7 @@ private struct ProjectMainViewContent: View {
         .onChange(of: meshDraft) { _, _ in invalidateModelingPreview() }
         .task(id: meshOverlayRequest) { await updateMeshSelectionOverlay() }
         .onChange(of: snapshot.authorityCoordinate) { _, _ in
+            gearDraft = nil
             if modelingPreview.phase != .applying { invalidateModelingPreview() }
             if let draft = meshDraft,
                snapshot.document.document.authoredMeshAssets[draft.sourceID]?.contentIdentity != draft.contentIdentity {
@@ -484,6 +486,7 @@ private struct ProjectMainViewContent: View {
         invalidateModelingPreview()
         modelingDraft = nil
         meshDraft = nil
+        gearDraft = nil
         historyPreviewTitle = nil
         if selectedTool == .mesh { selectedTool = .select }
     }
@@ -521,6 +524,14 @@ private struct ProjectMainViewContent: View {
             .filter { $0.reference == .body(feature.id) }
         let selected = occurrences.first { snapshot.selection.wholeSceneNodeIDs.contains($0.id) }
         modelingDraft?.constrainedSceneNodeID = selected?.id ?? (occurrences.count == 1 ? occurrences.first?.id : nil)
+    }
+
+    private func beginGearEditing(_ feature: FeatureNode? = nil) {
+        cancelModelingOperation()
+        selectedTool = .select
+        gearDraft = InvoluteGearDraft(feature: feature,
+            parameters: snapshot.document.document.cadDocument.parameters,
+            unit: snapshot.workspaceState.ruler.displayUnit)
     }
 
     private func previewModelingOperation() {
@@ -1563,6 +1574,7 @@ private struct ProjectMainViewContent: View {
                         }
                     },
                     onEditConstrainedSurface: { beginConstrainedSurfaceEditing($0) },
+                    onEditGear: { beginGearEditing($0) },
                     onPreview: { command, title in previewHistoryOperation(command, title: title) }
                 )
             }
@@ -3949,11 +3961,20 @@ private struct ProjectMainViewContent: View {
             .help("New Document")
 
             Menu {
+                Button("Surface Creation…") { beginSurfaceModelingOperation() }
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("Modeling.begin.surfaceCreation")
+                Divider()
                 ForEach(ModelingOperationDraft.Kind.allCases) { kind in
                     Button(kind.rawValue) { beginModelingOperation(kind) }
                         .contentShape(Rectangle())
                         .accessibilityIdentifier("Modeling.begin.\(kind.rawValue)")
                 }
+                Button("Involute Gear…") {
+                    beginGearEditing()
+                }
+                .contentShape(Rectangle())
+                .accessibilityIdentifier("Modeling.begin.involuteGear")
                 Divider()
                 Button("Edit Mesh Elements") {
                     cancelModelingOperation()
@@ -3976,6 +3997,24 @@ private struct ProjectMainViewContent: View {
             }
             .disabled(modelingPreview.isBusy)
             .accessibilityIdentifier("WorkspaceCommand.model")
+            .sheet(item: $gearDraft) { draft in
+                InvoluteGearEditorView(draft: draft,
+                    parameters: snapshot.document.document.cadDocument.parameters,
+                    tolerance: snapshot.document.document.modelingSettings.tolerance,
+                    onCancel: { gearDraft = nil }, onPreview: { command in
+                        gearDraft = nil
+                        previewHistoryOperation(command, title: draft.featureID == nil ? "Create Gear" : "Edit Gear")
+                    })
+            }
+
+            Button {
+                toggleSectionAnalysis()
+            } label: {
+                Image(systemName: isSectionAnalysisShown ? "square.split.diagonal.fill" : "square.split.diagonal")
+                    .contentShape(Rectangle())
+            }
+            .help(isSectionAnalysisShown ? "Remove Section Analysis" : "Section Analysis")
+            .accessibilityIdentifier("WorkspaceCommand.sectionAnalysis")
 
             Button {
                 isPreviewExpanded.toggle()
