@@ -478,17 +478,18 @@ final class MeshSourcePresentationPlanCache {
         identity: RealityViewportPreparationRequest.Identity,
         scene: UniversalViewportScene?,
         fallbackOrigin: Point3D,
-        capture: () throws -> (@Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output)
+        capture: () throws -> ViewportSpatialOverlayProducer.Builders
     ) {
         guard !Task.isCancelled else { return }
         do {
-            let spatialOverlay = try capture()
+            let builders = try capture()
             try Task.checkCancellation()
             let request = RealityViewportPreparationRequest(
                 identity: identity,
                 scene: scene,
                 fallbackOrigin: fallbackOrigin,
-                spatialOverlay: spatialOverlay
+                spatialOverlay: builders.full,
+                modelGeometryOverlay: builders.modelGeometry
             )
             guard !Task.isCancelled else { return }
             prepare(request)
@@ -535,19 +536,20 @@ final class MeshSourcePresentationPlanCache {
                 }
                 let first = plan?.occurrences.first?.positions.first
                 let origin = first.map { Point3D(x: $0.x, y: $0.y, z: $0.z) } ?? request.fallbackOrigin
-                // The spatial overlay (handles, labels, analysis) is auxiliary to the geometry. When
-                // it alone exceeds the admission limits the frame is published with the geometry
-                // and no overlay, so selection and hits keep working and the user can reduce what
-                // the overlay draws; the overlay failure is reported, never hidden.
+                // The overlay carries model geometry (curves, sketches) beside auxiliary layers
+                // (handles, labels, analysis, previews). When the whole overlay exceeds the
+                // admission limits, the frame is published with the model geometry alone, so the
+                // model stays whole and selection and hits keep working; the overlay failure is
+                // reported, never hidden. Model geometry that alone exceeds the limits fails the
+                // frame: it is never dropped.
                 let overlay: ViewportSpatialOverlayProducer.Output
                 var overlayFailure: MeshSourcePresentationRenderError?
                 do {
                     overlay = try request.spatialOverlay(origin, plan?.retainedByteCount ?? 0)
                 } catch let error as MeshSourcePresentationRenderError where error.code == .resourceExhausted {
+                    guard let modelGeometryOverlay = request.modelGeometryOverlay else { throw error }
                     overlayFailure = error
-                    overlay = (try RealityViewportSpatialBatch(
-                        renderOrigin: origin, retainedSurfaceByteCount: plan?.retainedByteCount ?? 0
-                    ), [])
+                    overlay = try modelGeometryOverlay(origin, plan?.retainedByteCount ?? 0)
                 }
                 let spatial = overlay.spatialBatch
                 guard spatial.handleCount == overlay.interactionRecords.count,

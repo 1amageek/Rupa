@@ -5634,14 +5634,14 @@ extension Viewport {
         renderOrigin: Point3D,
         topologyRevision: UInt64,
         drawsLegacyBodies: Bool
-    ) throws -> @Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output {
+    ) throws -> ViewportSpatialOverlayProducer.Builders {
         let snapshot = try makeSpatialOverlaySemanticSnapshot(
             scene: scene,
             modelBounds: modelBounds,
             renderOrigin: renderOrigin,
             drawsLegacyBodies: drawsLegacyBodies
         )
-        return ViewportSpatialOverlayProducer.makeBuilder(
+        return ViewportSpatialOverlayProducer.makeBuilders(
             from: snapshot,
             topologyRevision: topologyRevision
         )

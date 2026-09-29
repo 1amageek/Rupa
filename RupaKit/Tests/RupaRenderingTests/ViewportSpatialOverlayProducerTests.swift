@@ -1280,3 +1280,42 @@ func savedMeasurementsDrawResolvedAnchorsAndRefuseAPartialAnnotation() throws {
         )
     }
 }
+
+/// The model-geometry fallback draws the scene's own sketches and the reference axes and nothing
+/// auxiliary: it is what a frame keeps when the whole overlay exceeds the limits.
+@Test(.timeLimit(.minutes(1)))
+func theModelGeometryOverlayKeepsSketchesAndDropsAuxiliaryLayers() throws {
+    let scene = ViewportScene(items: (0..<2).map { index in
+        ViewportSceneItem(id: "sketch-\(index)", featureID: FeatureID(),
+            modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2),
+            kind: .sketch(primitives: [.circle(entityID: SketchEntityID(),
+                center: .zero, radiusMeters: 1, segmentCount: 48)]))
+    })
+    let rulerBounds = try GeometryBounds3D(
+        minimum: GeometryPoint3D(x: -1, y: -1, z: 0),
+        maximum: GeometryPoint3D(x: 1, y: 1, z: 0)
+    )
+    let snapshot = ViewportSpatialOverlaySemanticSnapshot(scene: scene,
+        interaction: .init(selectedFeatureIDs: [], selectedSceneNodeIDs: [],
+            hoveredFeatureIDs: [], hoveredSceneNodeIDs: [], selectedTargets: [],
+            selectedSketchEntities: [], previewSketchEntities: [], hoveredSketchEntity: nil,
+            selectedSketchRegions: [], previewSketchRegions: [], hoveredSketchRegion: nil),
+        editedBodies: [:], world: .init(modelBounds: CGRect(x: -1, y: -1, width: 2, height: 2)),
+        includesGrid: true,
+        measurement: .init(start: nil, end: nil, label: nil, boundsRuler: .init(
+            bounds: rulerBounds,
+            labels: .init(x: "World bounds X: 2 m", y: "World bounds Y: 2 m", z: "World bounds Z: 0 m")
+        ), saved: []),
+        drawsLegacyBodies: true, drawsDragPreviewBodies: false)
+    let full = try ViewportSpatialOverlayProducer.makeInput(
+        from: snapshot, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1)
+    let model = try ViewportSpatialOverlayProducer.makeInput(
+        from: snapshot, renderOrigin: .origin, retainedSurfaceByteCount: 0, topologyRevision: 1,
+        detail: .modelGeometry)
+    #expect(full.activeFamilies.contains(.measurement) && full.boundsRuler != nil)
+    #expect(model.activeFamilies == [.sketch, .axes])
+    #expect(model.boundsRuler == nil && model.interactionRecords.isEmpty)
+    #expect(model.cameraLines.count == full.cameraLines.filter { $0.family == .sketch }.count)
+    #expect(model.cameraLines.count == 2)
+    _ = try ViewportSpatialOverlayProducer.makeBatch(from: model)
+}

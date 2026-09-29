@@ -339,12 +339,24 @@ than using the legacy UI's visible-prefix limits.
 A contour Core reports as interfering, and the hatches filling it, carry that
 flag through the overlay and are drawn red instead of the section yellow.
 
-The spatial overlay (handles, labels, analysis) is auxiliary to the geometry.
-When it alone exceeds the admission limits, `MeshSourcePresentationPlanCache`
-publishes the geometry frame with an empty overlay instead of failing the
-frame, so selection and hits keep resolving and the user can reduce what the
-overlay draws; `overlayFailure(for:)` reports the exhaustion through the same
-presentation-failure reporter. Any other overlay failure still fails the frame.
+The spatial overlay carries two kinds of content with different failure
+contracts. Model geometry — the scene's curves and sketches, and bodies the
+overlay draws itself (`appendScene`: the `body`, `curve` and `sketch`
+families), with the reference grid and axes — is part of the model and is
+never left out. Everything else (handles, labels, analysis, sections,
+measurements, placements, transforms, drag previews) is auxiliary.
+`ViewportSpatialOverlayProducer.makeBuilders` captures one snapshot into a full
+build and a `.modelGeometry` build; when the full overlay exceeds the admission
+limits, `MeshSourcePresentationPlanCache` publishes the frame with the model
+geometry alone, so the model stays whole and selection and hits keep
+resolving, and `overlayFailure(for:)` reports the exhaustion through the same
+presentation-failure reporter. Model geometry that alone exceeds the limits
+fails the frame, and a request without a model-geometry build fails it too,
+since nothing says what may be left out. Any other overlay failure still fails
+the frame (`anOverlayOverItsLimitPublishesTheGeometryFrameAndReportsTheOverlay`,
+`theModelGeometryOverlayKeepsSketchesAndDropsAuxiliaryLayers`). Before, an
+exhausted overlay was replaced by an empty one, which removed the curves and
+sketches along with the handles.
 
 While Section Analysis places its plane, the viewport offers the
 `sectionAnalysisDistance` native axis route: an arrow on the section plane along

@@ -358,5 +358,5 @@
   - [x] RF1 UI operations: a mutation that committed but whose view failed is never replayed; the committed view is rebuilt in the same queue slot, and when it cannot be the workspace refuses further edits and says so. `depends:none` `parallel:none`
   - [x] RF2 Command lifetimes: one owner moves each dialog command through editing, submitting and ended; a submitted command cannot submit again, and a completion changes only the command instance that submitted it. `depends:RF1` `parallel:none`
   - [x] RF3 Shared shape and placement: 4fe28dae (codex/shared-shape-selection) reconciled with main and integrated; geometry edits are shared, placement and visibility edits stay with each placement. `depends:RF2` `parallel:none`
-  - [ ] RF4 Essential geometry and auxiliary overlay: curves and sketches draw outside the omissible overlay, so an overlay over its limit never removes model geometry. `depends:RF3` `parallel:none`
+  - [x] RF4 Essential geometry and auxiliary overlay: curves and sketches draw outside the omissible overlay, so an overlay over its limit never removes model geometry. `depends:RF3` `parallel:none`
   - [ ] RF5 Integration: affected suites, app rebuild and restart. `depends:RF1,RF2,RF3,RF4` `parallel:none`

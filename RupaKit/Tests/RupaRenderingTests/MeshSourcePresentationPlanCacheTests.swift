@@ -2148,13 +2148,37 @@ func anOverlayOverItsLimitPublishesTheGeometryFrameAndReportsTheOverlay() async 
     let scene = try planCacheScene(suffix: "overlay-exhausted")
     let cache = MeshSourcePresentationPlanCache { scene in try MeshSourcePresentationRenderPlan(scene: scene) }
     let identity = planCacheIdentity(scene)
+    let modelGeometryBuilds = Mutex(0)
     cache.prepare(.init(identity: identity, scene: scene, fallbackOrigin: .origin, spatialOverlay: { _, _ in
         throw MeshSourcePresentationRenderError(code: .resourceExhausted, message: "Spatial overlay exceeds 640 items.")
+    }, modelGeometryOverlay: { origin, charge in
+        modelGeometryBuilds.withLock { $0 += 1 }
+        return (try RealityViewportSpatialBatch(renderOrigin: origin, retainedSurfaceByteCount: charge), [])
     }))
     try await settlePlanCache(cache)
     #expect(cache.failure(for: identity) == nil, "An auxiliary overlay failure does not fail the frame.")
     #expect(cache.surface(for: identity) != nil, "The geometry frame stays queryable for selection and hits.")
     #expect(cache.overlayFailure(for: identity)?.code == .resourceExhausted)
+    // The frame draws the model's own curves and sketches instead of no overlay at all.
+    #expect(modelGeometryBuilds.withLock { $0 } == 1)
+
+    // Model geometry that alone exceeds the limits fails the frame rather than being dropped.
+    let heavy = planCacheIdentity(scene, overlayRevision: 2)
+    cache.prepare(.init(identity: heavy, scene: scene, fallbackOrigin: .origin, spatialOverlay: { _, _ in
+        throw MeshSourcePresentationRenderError(code: .resourceExhausted, message: "Spatial overlay exceeds 640 items.")
+    }, modelGeometryOverlay: { _, _ in
+        throw MeshSourcePresentationRenderError(code: .resourceExhausted, message: "Model geometry exceeds 640 items.")
+    }))
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: heavy)?.code == .resourceExhausted)
+
+    // Without a model-geometry build nothing says what may be left out: the frame fails.
+    let unsplit = planCacheIdentity(scene, overlayRevision: 3)
+    cache.prepare(.init(identity: unsplit, scene: scene, fallbackOrigin: .origin, spatialOverlay: { _, _ in
+        throw MeshSourcePresentationRenderError(code: .resourceExhausted, message: "Spatial overlay exceeds 640 items.")
+    }))
+    try await settlePlanCacheFailure(cache)
+    #expect(cache.failure(for: unsplit)?.code == .resourceExhausted)
 
     // Any other overlay failure is still a frame failure.
     let other = planCacheIdentity(scene, overlayRevision: 1)

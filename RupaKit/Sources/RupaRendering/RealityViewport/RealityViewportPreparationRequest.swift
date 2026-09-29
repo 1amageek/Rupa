@@ -31,4 +31,9 @@ struct RealityViewportPreparationRequest: Sendable {
     let scene: UniversalViewportScene?
     let fallbackOrigin: Point3D
     let spatialOverlay: @Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output
+    /// The same overlay with only the model's own geometry (curves, sketches, overlay-drawn bodies)
+    /// and the reference grid and axes: what a frame draws when its auxiliary layers (handles,
+    /// labels, analysis, previews) exceed the limits. Without it, an overlay over its limits
+    /// fails the frame, since nothing says which part may be left out.
+    var modelGeometryOverlay: (@Sendable (Point3D, Int) throws -> ViewportSpatialOverlayProducer.Output)? = nil
 }

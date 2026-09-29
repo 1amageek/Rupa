@@ -502,16 +502,44 @@ enum ViewportSpatialOverlayProducer {
     /// inside the closure, after the immutable snapshot has crossed the
     /// isolation boundary.  Camera-only callers retain this builder and do not
     /// invoke it again.
-    static func makeBuilder(
+    /// How much of the overlay a build draws.
+    enum Detail: Sendable {
+        /// The model's geometry and every auxiliary layer.
+        case full
+        /// Only the model's own geometry (the scene's curves, sketches and overlay-drawn bodies)
+        /// and the reference grid and axes: no handles, labels, analysis, sections,
+        /// measurements, placements, transforms or drag previews.
+        case modelGeometry
+    }
+
+    /// The full overlay and its model-geometry-only fallback, built from one captured snapshot.
+    struct Builders: Sendable {
+        let full: @Sendable (Point3D, Int) throws -> Output
+        let modelGeometry: @Sendable (Point3D, Int) throws -> Output
+    }
+
+    static func makeBuilders(
         from snapshot: ViewportSpatialOverlaySemanticSnapshot,
         topologyRevision: UInt64
+    ) -> Builders {
+        Builders(
+            full: makeBuilder(from: snapshot, topologyRevision: topologyRevision),
+            modelGeometry: makeBuilder(from: snapshot, topologyRevision: topologyRevision, detail: .modelGeometry)
+        )
+    }
+
+    static func makeBuilder(
+        from snapshot: ViewportSpatialOverlaySemanticSnapshot,
+        topologyRevision: UInt64,
+        detail: Detail = .full
     ) -> @Sendable (Point3D, Int) throws -> Output {
         { renderOrigin, retainedSurfaceByteCount in
             let input = try makeInput(
                 from: snapshot,
                 renderOrigin: renderOrigin,
                 retainedSurfaceByteCount: retainedSurfaceByteCount,
-                topologyRevision: topologyRevision
+                topologyRevision: topologyRevision,
+                detail: detail
             )
             return (try makeBatch(from: input), input.interactionRecords)
         }
@@ -521,7 +549,8 @@ enum ViewportSpatialOverlayProducer {
         from snapshot: ViewportSpatialOverlaySemanticSnapshot,
         renderOrigin: Point3D,
         retainedSurfaceByteCount: Int,
-        topologyRevision: UInt64
+        topologyRevision: UInt64,
+        detail: Detail = .full
     ) throws -> ViewportSpatialOverlayInput {
         try Task.checkCancellation()
         guard renderOrigin.isFinite else {
@@ -559,11 +588,6 @@ enum ViewportSpatialOverlayProducer {
             admittedPositions = nextPositions.partialValue
             admittedVisits = nextVisits.partialValue
         }
-        let pattern = try snapshot.patternSource.flatMap {
-            try makePatternAffordanceSource(from: $0, checkpoint: checkpoint)
-        }
-        let analysis = try materializeAnalysis(from: snapshot.analysisSource, checkpoint: checkpoint)
-        let section = try materializeSection(from: snapshot.sectionSource, checkpoint: checkpoint)
         try Task.checkCancellation()
         try appendScene(
             snapshot,
@@ -573,6 +597,32 @@ enum ViewportSpatialOverlayProducer {
             cameraLines: &cameraLines,
             activeFamilies: &activeFamilies
         )
+        guard detail == .full else {
+            activeFamilies.insert(.axes)
+            return ViewportSpatialOverlayInput(
+                activeFamilies: activeFamilies,
+                meshes: meshes,
+                paths: paths,
+                labels: labels,
+                markers: markers,
+                cameraLines: cameraLines,
+                cameraPaths: cameraPaths,
+                interactionRecords: [],
+                boundsRuler: nil,
+                gridPlacement: nil,
+                includesGrid: snapshot.includesGrid,
+                includesAxes: true,
+                renderOrigin: renderOrigin,
+                retainedSurfaceByteCount: retainedSurfaceByteCount,
+                topologyRevision: topologyRevision
+            )
+        }
+        let pattern = try snapshot.patternSource.flatMap {
+            try makePatternAffordanceSource(from: $0, checkpoint: checkpoint)
+        }
+        let analysis = try materializeAnalysis(from: snapshot.analysisSource, checkpoint: checkpoint)
+        let section = try materializeSection(from: snapshot.sectionSource, checkpoint: checkpoint)
+        try Task.checkCancellation()
         try appendMeshSelection(
             snapshot,
             meshes: &meshes,
