@@ -393,12 +393,12 @@
   - [x] ARF4 Essential geometry and auxiliary overlay: an overlay over its limits falls back to a model-geometry build (curves, sketches), and geometry that alone exceeds them fails the frame instead of being dropped. `depends:ARF3` `parallel:none`
   - [x] ARF5 Integration: affected suites, app rebuild and restart. `depends:ARF1,ARF2,ARF3,ARF4` `parallel:none`
 
-- [ ] HPF Hot-path efficiency: work already done for a document generation (validation, evaluation, hierarchy, analyses) is reused instead of repeated per hover, per render or per selected target. `depends:none` `parallel:none`
+- [x] HPF Hot-path efficiency: work already done for a document generation (validation, evaluation, hierarchy, analyses) is reused instead of repeated per hover, per render or per selected target. `depends:none` `parallel:none`
   - [x] HPF1 Topology snapshots and generated-topology resolution reuse the current evaluation: no kernel evaluation or full validation per selected target, per edge or per hover. `depends:none` `parallel:none`
   - [x] HPF2 The workspace view computes surface and section analyses once per document generation and selection, not several times per render, and without re-validating the document. `depends:HPF1` `parallel:none`
   - [x] HPF3 Shared-definition selections are built for every definition in one hierarchy and occurrence pass per metadata, not per definition per render. `depends:HPF2` `parallel:none`
   - [x] HPF4 The overlay producer indexes scene items and topology once per snapshot instead of scanning them per target. `depends:HPF3` `parallel:none`
-  - [ ] HPF5 Integration: whole package suite, app rebuild and restart. `depends:HPF1,HPF2,HPF3,HPF4` `parallel:none`
+  - [x] HPF5 Integration: whole package suite, app rebuild and restart. `depends:HPF1,HPF2,HPF3,HPF4` `parallel:none`
 
 - [x] UIE1 Preserve native replacement display continuity and measure edge treatments along their displayed normal; focused native camera/gesture and source-unit checks passed (`fa22787f`). `depends:none` `parallel:none`
 - [x] UIE2 Signed app rebuilt and restarted with matching binary hashes; document 5C035F85 reopened, face thickness drag/Undo and normal-axis Chamfer/Fillet drag/Undo verified, original geometry restored and saved. `depends:UIE1` `parallel:none`
