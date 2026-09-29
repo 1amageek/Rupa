@@ -65,8 +65,8 @@ final class MeshSourcePresentationPlanCache {
     /// identity is mounted, and otherwise the mounted frame the display is
     /// still showing for the same scene and snapshot, whose ordered handle
     /// indexes name its own prepared record table. A recorded failure for this
-    /// identity keeps the display but withdraws its authority, and a changed
-    /// scene or snapshot withdraws both.
+    /// identity keeps the display but withdraws its authority. A changed scene or
+    /// snapshot withdraws query authority; document replacement withdraws both.
     private func queryAuthority(for identity: RealityViewportPreparationRequest.Identity) -> RealityViewport? {
         queryFrame(for: identity)?.surface
     }
@@ -419,6 +419,12 @@ final class MeshSourcePresentationPlanCache {
               current == identity else {
             return nil
         }
+        if let displayed = self.current,
+           displayed.identity.sharesDisplayContext(with: identity),
+           (displayed.identity.scene != identity.scene || displayed.identity.snapshotID != identity.snapshotID) {
+            return .init(code: error.code, message:
+                "Showing the previous geometry; viewport selection is unavailable. " + error.message)
+        }
         return error
     }
 
@@ -600,7 +606,7 @@ final class MeshSourcePresentationPlanCache {
             if current?.surface.root.scene == nil { precedingMountedFrame?.surface.invalidateCamera() }
             precedingMountedFrame = nil
             current?.surface.invalidateCamera()
-            current = nil
+            if current?.identity.sharesDisplayContext(with: identity) != true { current = nil }
         }
         state = .failed(identity: identity, error: error)
     }
@@ -652,7 +658,7 @@ final class MeshSourcePresentationPlanCache {
                 }
             case let .failure(error):
                 guard requested == identity else { return }
-                if displaySurface(for: identity) == nil { self.current = nil }
+                if current?.identity.sharesDisplayContext(with: identity) != true { self.current = nil }
                 state = .failed(identity: identity, error: error)
             }
         }

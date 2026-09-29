@@ -750,6 +750,19 @@ public struct Viewport: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(viewportBackground)
                 .contentShape(Rectangle())
+                .overlay(alignment: .top) {
+                    if case .failed = presentationPlanCache.state,
+                       let identity = preparationIdentity,
+                       presentationPlanCache.displayCandidate(for: identity) != nil {
+                        Text("Display update failed. Showing previous geometry; viewport selection is unavailable. Undo the edit or reduce geometry detail.")
+                            .font(.caption)
+                            .padding(8)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                            .padding(8)
+                            .allowsHitTesting(false)
+                            .accessibilityIdentifier("Viewport.previousGeometryWarning")
+                    }
+                }
                 .background {
                     presentationFailureReporter(
                         error: presentationFailure,

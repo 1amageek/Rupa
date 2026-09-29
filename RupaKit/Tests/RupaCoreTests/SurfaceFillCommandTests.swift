@@ -394,7 +394,15 @@ struct SurfaceFillCommandTests {
         #expect(direct.cadDocument.designGraph == beforeFailure.cadDocument.designGraph)
         var copied = session.document
         let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
-            definition: ComponentDefinition(name: "Sources", rootSceneNodeIDs: boundaries.map(\.sceneNodeID)),
+            definition: ComponentDefinition(
+                name: "Sources", rootSceneNodeIDs: boundaries.map(\.sceneNodeID),
+                rootPlacements: Dictionary(uniqueKeysWithValues: try boundaries.map { boundary in
+                    let node = try #require(copied.productMetadata.sceneNodes[boundary.sceneNodeID])
+                    return (boundary.sceneNodeID, ComponentDefinition.RootPlacement(
+                        transform: node.localTransform, isVisible: node.isVisible
+                    ))
+                })
+            ),
             metadata: copied.productMetadata, cadDocument: copied.cadDocument, authoredMeshAssets: copied.authoredMeshAssets)
         let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
             fragment: fragment,

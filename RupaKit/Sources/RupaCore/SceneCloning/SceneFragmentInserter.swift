@@ -107,6 +107,13 @@ struct SceneFragmentInserter: Sendable {
                 attachment: .child(of: documentRootID, at: documentRoot.childIDs.count), naming: .copy,
                 metadata: &updatedMetadata, cadDocument: &updatedDocument, authoredMeshAssets: &updatedMeshAssets
             )
+            let rootPlacements = try Dictionary(uniqueKeysWithValues: zip(carried.content.roots, content.rootSceneNodeIDs).map { source, id in
+                guard let sourceNode = carried.content.sceneNodes[source.sceneNodeID] else {
+                    throw EditorError(code: .referenceUnresolved, message: "A copied definition root is missing.")
+                }
+                return (id, ComponentDefinition.RootPlacement(transform: source.placement,
+                    isVisible: sourceNode.isVisible))
+            })
             for rootID in content.rootSceneNodeIDs { updatedMetadata.sceneNodes[rootID]?.isVisible = false }
             let taken = Set(updatedMetadata.componentDefinitions.values.map(\.name))
             var name = carried.name
@@ -115,7 +122,7 @@ struct SceneFragmentInserter: Sendable {
                 name = "\(carried.name) \(ordinal)"
                 ordinal += 1
             }
-            var definition = ComponentDefinition(name: name, rootSceneNodeIDs: content.rootSceneNodeIDs)
+            var definition = ComponentDefinition(name: name, rootSceneNodeIDs: content.rootSceneNodeIDs, rootPlacements: rootPlacements)
             definition.properties = carried.properties
             updatedMetadata.componentDefinitions[definition.id] = definition
             definitionIDMap[definitionID] = definition.id

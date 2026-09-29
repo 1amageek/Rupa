@@ -38,6 +38,41 @@ import Testing
     }
 
     @MainActor
+    @Test func sharedShapeSelectionKeepsSourceAndInstancePlacementsIndependent() throws {
+        let (session, box, _) = try boxUnderMovedParent()
+        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [.identity], output: .componentInstance, boolean: nil))
+        let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+        let instanceNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .componentInstance
+        }).id
+        let before = try SceneNodeHierarchy(metadata: session.document.productMetadata).resolvedOccurrences()
+        let occurrence = try #require(before.first { $0.sceneNodeID == instanceNode && $0.sourceSceneNodeID == box })
+
+        _ = try session.execute(.setSceneNodeTransform(id: box,
+            localTransform: Transform3D.translation(Vector3D(x: 2, y: 0, z: 0))))
+        _ = try session.execute(.setSceneNodeVisibility(id: box, isVisible: false))
+        let metadata = session.document.productMetadata
+        let after = try SceneNodeHierarchy(metadata: metadata).resolvedOccurrences()
+        let unchanged = try #require(after.first { $0.id == occurrence.id })
+        #expect(unchanged.worldTransform.isApproximately(occurrence.worldTransform))
+        #expect(unchanged.isVisible == occurrence.isVisible)
+        let shared = try SharedDefinitionSelection(definitionID: definition.id, metadata: metadata)
+        #expect(shared.contentNodeIDs == [box])
+        #expect(Set(shared.placementNodeIDs) == Set([box, instanceNode]))
+
+        _ = try session.execute(.placeSceneNodes(ids: [box], placements: [.identity], output: .componentInstance, boolean: nil))
+        let latest = try SceneNodeHierarchy(metadata: session.document.productMetadata).resolvedOccurrences()
+        let newCopy = try #require(latest.first {
+            $0.sourceSceneNodeID == box && $0.sceneNodeID != box && $0.sceneNodeID != instanceNode
+        })
+        #expect(try newCopy.worldTransform.isApproximately(world(box, in: session.document)))
+        #expect(session.document.productMetadata.componentDefinitions.count == 1)
+        _ = try session.execute(.setSceneNodeObjectProperty(id: box,
+            propertyID: .init(rawValue: "corner.radius"), value: .length(0.005)))
+        #expect(try session.document.boxCornerRadius(#require(session.document.productMetadata.sceneNodes[box]?.reference?.featureID)) == 0.005)
+    }
+
+    @MainActor
     @Test func duplicateCopiesInPlaceBesideTheSourceAndIsOneUndoStep() throws {
         let (session, box, parent) = try boxUnderMovedParent()
         let before = session.document

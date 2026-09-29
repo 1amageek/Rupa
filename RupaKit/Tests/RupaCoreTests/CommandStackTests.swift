@@ -4439,7 +4439,12 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     )
 
     var metadata = session.document.productMetadata
+    let secondBody = try #require(metadata.sceneNodes[secondBodySceneNodeID])
+    // A definition's roots and their owned placements change together.
     metadata.componentDefinitions[definition.id]?.rootSceneNodeIDs = [secondBodySceneNodeID]
+    metadata.componentDefinitions[definition.id]?.rootPlacements = [
+        secondBodySceneNodeID: .init(transform: secondBody.localTransform, isVisible: secondBody.isVisible),
+    ]
     _ = try session.execute(.replaceProductMetadata(metadata))
     let staleSummary = PatternArraySummaryService().summarize(
         document: session.document,

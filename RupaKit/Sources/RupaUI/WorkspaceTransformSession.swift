@@ -26,8 +26,6 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     /// A pivot the user placed with V; it overrides the pivot mode.
     var pickedPivot: SceneTransformFrame?
     var constraint: Constraint?
-    /// Transform instances inversely: component instances of moved definitions stay in place.
-    var compensatesInstances = false
     /// Whether drags snap to the increments.
     var snapsToIncrements = true
     /// The point pick the session is waiting for, if any.
@@ -297,7 +295,9 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     /// or Scale by the whole motion.
     func command(worldDelta: Transform3D) throws -> EditorCommand {
         guard !topologyTargets.isEmpty else {
-            return .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: compensatesInstances)
+            // Definition-owned root placements keep instances where they are; the command's
+            // legacy compensation argument changes nothing.
+            return .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: false)
         }
         if mode != .move {
             let local = try topologyBodyWorldTransform.inverse().composed(with: worldDelta.composed(with: topologyBodyWorldTransform))
@@ -345,7 +345,7 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         return .transformSceneNodes(
             ids: targets.map(\.sceneNodeID),
             worldDelta: delta,
-            compensatingInstances: compensatesInstances
+            compensatingInstances: false
         )
     }
 

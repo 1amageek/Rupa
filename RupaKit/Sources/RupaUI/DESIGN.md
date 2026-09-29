@@ -584,8 +584,7 @@ Pasted objects are always independent copies.
 
 Move (G), Rotate (R) and Scale (S) run a `WorkspaceTransformSession` on the
 whole-object selection. The session holds the mode, pivot mode, orientation,
-a picked pivot, the constraint, the instance-inverse option, increment
-snapping and freestyle picks; it resolves its frame through Core's
+a picked pivot, the constraint, increment snapping and freestyle picks; it resolves its frame through Core's
 [SceneTransform](../RupaCore/SceneTransform/DESIGN.md) resolver from the
 selection's measured bounds and hands the viewport a
 `ViewportTransformGizmoConfiguration`, refreshed whenever the document
@@ -596,12 +595,14 @@ surface normal gives the pivot axes) and Option-V removes it. F collects
 freestyle points through the viewport point pick: Move takes a start and end,
 Rotate an axis start and end, a reference and a target, Scale an axis start
 and end and a ratio point. The context panel is the command dialog: orientation
-and pivot menus, the instance-inverse and snap options, and typed values that
+and pivot menus, the snap option, and typed values that
 each apply one motion in the frame (Move XYZ, Rotate angle about a typed axis,
 Scale factors, and once a freestyle Scale axis is picked, its ratio, a target
 length and uniform scaling). Every drag, freestyle and typed motion commits one
-`transformSceneNodes` command with the session's instance-inverse option, so
-each is one undo step. Return or Escape ends the session; leaving the select
+`transformSceneNodes` command, so each is one undo step. It offers no
+instance-inverse option: a component definition owns its roots' placements
+([SceneCloning](../RupaCore/SceneCloning/DESIGN.md#shared-definition-content-and-individual-placements)),
+so moving a source placement never moves an instance. Return or Escape ends the session; leaving the select
 tool or changing the selection ends it too.
 
 With edges, faces or vertices of one body selected in their own scope, G, R
@@ -1733,3 +1734,8 @@ WorkspaceCurveRefinementPlanner consumes Core's spline subdivision index plan.
 It offers open and closed source splines, keeps surface selection when no curve
 CVs are produced, and reports an invalid plan through the command action. It
 never derives control-point identities using a fixed degree.
+
+Shared-definition selection is owned by the
+[Outliner contract](Outliner/DESIGN.md#shared-definition-selection). MainView
+keeps the selected definition separate from the placement selection; shared
+shape editing never routes through the multi-placement transform inspector.

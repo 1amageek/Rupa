@@ -297,8 +297,11 @@ The display-only candidate accessor is separate from `displaySurface(for:)`,
 which retains the existing scene/snapshot query-admission contract. Viewport may
 mount a same-context completed candidate, but all picking, projection, handles,
 markers and frame callbacks continue to require the requested scene/snapshot.
-An old picture never acquires new-source input authority. Camera and appearance
-updates remain native-host responsibilities. No cross-document candidate is
+An old picture never acquires new-source input authority. If preparation fails,
+the last complete picture in the same document context remains displayed and
+the failure and a visible canvas notice identify it as the previous geometry. All failed-frame
+queries remain refused; a document replacement withdraws the retained picture.
+Camera and appearance updates remain native-host responsibilities. No cross-document candidate is
 admitted. `planCacheContinuousPropertyUpdatesDoNotCancelRunningFrame` and the
 continuous-progress cache tests own this scheduling contract; native mount and
 query-refusal tests own its composition with the host. Preparation timings do

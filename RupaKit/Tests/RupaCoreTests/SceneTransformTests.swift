@@ -122,8 +122,10 @@ import Testing
         }
     }
 
+    /// A definition owns its roots' placements, so moving the source placement never moves an
+    /// instance, and the legacy compensation argument changes nothing.
     @MainActor
-    @Test func instancesCanBeHeldInPlaceWhileTheirSourceMoves() throws {
+    @Test func movingTheSourcePlacementLeavesInstancesInPlace() throws {
         let (session, first, _) = try twoBoxes()
         let definition = try session.execute(.createComponentDefinition(name: "Part", rootSceneNodeIDs: [first]))
         let definitionID = try #require(definition.generatedIdentities.componentDefinitionIDs.first)
@@ -137,11 +139,9 @@ import Testing
         let before = try instanceWorld()
         let shift = try Transform3D.translation(Vector3D(x: 0, y: 0, z: 2))
 
-        _ = try session.execute(.transformSceneNodes(ids: [first], worldDelta: shift, compensatingInstances: true))
-        #expect(zip(try instanceWorld().matrix.values, before.matrix.values).allSatisfy { abs($0 - $1) < tolerance })
-
-        _ = try session.execute(.transformSceneNodes(ids: [first], worldDelta: shift, compensatingInstances: false))
-        let followed = try shift.composed(with: before)
-        #expect(zip(try instanceWorld().matrix.values, followed.matrix.values).allSatisfy { abs($0 - $1) < tolerance })
+        for compensating in [true, false] {
+            _ = try session.execute(.transformSceneNodes(ids: [first], worldDelta: shift, compensatingInstances: compensating))
+            #expect(zip(try instanceWorld().matrix.values, before.matrix.values).allSatisfy { abs($0 - $1) < tolerance })
+        }
     }
 }

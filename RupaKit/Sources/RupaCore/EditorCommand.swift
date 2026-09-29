@@ -67,8 +67,11 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case ungroupSceneNode(id: SceneNodeID)
     /// Removes `ids` and everything that cannot outlive them, or nothing at all.
     case deleteSceneNodes(ids: [SceneNodeID])
-    /// Moves `ids` together as one body, `worldDelta` being the motion in world space; with
-    /// `compensatingInstances`, instances of a moved component definition stay in place.
+    /// Moves `ids` together as one body, `worldDelta` being the motion in world space. Instances
+    /// of a component definition keep their definition-owned root placements, so they stay in
+    /// place whatever `compensatingInstances` says: the argument is deprecated, kept only so
+    /// recorded commands and agent requests still decode, and goes when the command's schema
+    /// next changes.
     case transformSceneNodes(ids: [SceneNodeID], worldDelta: Transform3D, compensatingInstances: Bool)
     /// Mirror the selected objects across a world plane with the dialog's options.
     case mirrorSceneNodes(ids: [SceneNodeID], plane: SceneMirrorPlane, options: SceneMirrorOptions)

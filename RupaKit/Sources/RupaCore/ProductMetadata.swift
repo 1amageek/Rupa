@@ -43,7 +43,16 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     ) {
         self.sceneNodes = sceneNodes
         self.rootSceneNodeIDs = rootSceneNodeIDs
-        self.componentDefinitions = componentDefinitions
+        self.componentDefinitions = componentDefinitions.mapValues { definition in
+            guard definition.rootPlacements == nil else { return definition }
+            var upgraded = definition
+            upgraded.rootPlacements = definition.rootSceneNodeIDs.reduce(into: [:]) { placements, id in
+                if let node = sceneNodes[id] {
+                    placements[id] = ComponentDefinition.RootPlacement(transform: node.localTransform, isVisible: node.isVisible)
+                }
+            }
+            return upgraded
+        }
         self.componentInstances = componentInstances
         self.patternArrays = patternArrays
         self.materialLibrary = materialLibrary

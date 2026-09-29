@@ -77,12 +77,14 @@ import Testing
         if !shared {
             try document.updatePatternArray(id: id, distribution: distribution)
             #expect(document.productMetadata.patternArrays[id]?.outputSceneNodeIDs == array.outputSceneNodeIDs)
+            // Moving the source's own placement changes no other use of its definition: the
+            // definition owns its roots' placements, so the copies keep their identity and outputs.
             try document.setSceneNodeTransform(id: body, localTransform: .translation(Vector3D(x: 0.4, y: 0, z: 0)))
             try document.updatePatternArray(id: id)
             let updated = try #require(document.productMetadata.patternArrays[id])
-            #expect(updated.definitionIdentity != array.definitionIdentity)
-            #expect(Set(updated.outputFeatureIDs).isDisjoint(with: array.outputFeatureIDs))
-            #expect(array.outputFeatureIDs.allSatisfy { document.cadDocument.designGraph.nodes[$0] == nil })
+            #expect(updated.definitionIdentity == array.definitionIdentity)
+            #expect(updated.outputFeatureIDs == array.outputFeatureIDs)
+            #expect(array.outputFeatureIDs.allSatisfy { document.cadDocument.designGraph.nodes[$0] != nil })
             #expect(document.productMetadata.componentInstances == before.productMetadata.componentInstances)
             _ = try document.validate()
         }

@@ -190,7 +190,8 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
             try PatternArrayDefinitionSceneNodeIdentity(
                 sceneNodeID: rootSceneNodeID,
                 metadata: metadata,
-                featureTokenByID: featureTokenByID
+                featureTokenByID: featureTokenByID,
+                rootPlacement: try definition.rootPlacement(for: rootSceneNodeID)
             )
         }
         features = try orderedFeatureIDs.map { featureID in
@@ -234,7 +235,8 @@ private struct PatternArrayDefinitionSceneNodeIdentity: Encodable {
     init(
         sceneNodeID: SceneNodeID,
         metadata: ProductMetadata,
-        featureTokenByID: [FeatureID: String]
+        featureTokenByID: [FeatureID: String],
+        rootPlacement: ComponentDefinition.RootPlacement? = nil
     ) throws {
         guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
             throw EditorError(
@@ -254,9 +256,9 @@ private struct PatternArrayDefinitionSceneNodeIdentity: Encodable {
                 featureTokenByID: featureTokenByID
             )
         }
-        isVisible = sceneNode.isVisible
+        isVisible = rootPlacement?.isVisible ?? sceneNode.isVisible
         isLocked = sceneNode.isLocked
-        localTransform = sceneNode.localTransform.matrix.values
+        localTransform = (rootPlacement?.transform ?? sceneNode.localTransform).matrix.values
         materialID = sceneNode.materialID?.description
         children = try sceneNode.childIDs.map { childID in
             try PatternArrayDefinitionSceneNodeIdentity(

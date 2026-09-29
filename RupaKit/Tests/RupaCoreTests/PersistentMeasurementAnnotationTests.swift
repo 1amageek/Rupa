@@ -67,9 +67,10 @@ import Testing
         #expect(try worldPoint(onNode, in: document).isApproximatelyEqual(
             to: Point3D(x: 15.5, y: 0.25, z: 0.5), tolerance: tolerance
         ))
-        // The occurrence composes the moved instance (13) with the moved definition root (5).
+        // The occurrence composes the moved instance (13) with the definition's own root
+        // placement (2, captured at creation): moving the source's placement (5) leaves it.
         #expect(try worldPoint(onOccurrence, in: document).isApproximatelyEqual(
-            to: Point3D(x: 18.5, y: 0.25, z: 0.5), tolerance: tolerance
+            to: Point3D(x: 15.5, y: 0.25, z: 0.5), tolerance: tolerance
         ))
         #expect(throws: EditorError.self) {
             _ = try MeasurementAnchor.picked(picked, under: .occurrence(SceneOccurrenceID(rawValue: "scene.missing")), in: hierarchy)

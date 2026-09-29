@@ -65,18 +65,23 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
     ) throws -> SceneFragment {
         let hierarchy = try SceneNodeHierarchy(metadata: metadata)
         let sourceIDs = definition.rootSceneNodeIDs.flatMap { hierarchy.subtreeIDs(of: $0) }
+        let definitionFragment = try SceneFragmentExtractor().extract(rootSceneNodeIDs: definition.rootSceneNodeIDs,
+            frame: .definition(definition), metadata: metadata, cadDocument: cadDocument,
+            authoredMeshAssets: authoredMeshAssets)
         guard sourceIDs.contains(where: { metadata.sceneNodes[$0]?.reference?.kind == .componentInstance }) else {
-            return try SceneFragmentExtractor().extract(rootSceneNodeIDs: definition.rootSceneNodeIDs,
-                frame: .parentOfFirstRoot, metadata: metadata, cadDocument: cadDocument,
-                authoredMeshAssets: authoredMeshAssets)
+            return definitionFragment
         }
-        let inverseFrame = try hierarchy.parentWorldTransform(of: definition.rootSceneNodeIDs[0]).inverse()
+        guard let documentRoot = metadata.rootSceneNodeIDs.first else {
+            throw EditorError(code: .referenceUnresolved, message: "Definition realization requires a document root.")
+        }
+        let frame = try hierarchy.worldTransform(of: documentRoot)
+        let inverseFrame = try frame.inverse()
         var temporary = DesignDocument(cadDocument: cadDocument, productMetadata: metadata,
             authoredMeshAssets: authoredMeshAssets)
         // The temporary copies are not generated outputs. Array metadata may be midway
         // through creation here; it does not own anything in this private realization.
         temporary.productMetadata.patternArrays = [:]
-        var roots = try temporary.duplicateSceneNodes(ids: definition.rootSceneNodeIDs)
+        var roots = try temporary.pasteSceneFragment(definitionFragment, placements: [frame])
         while true {
             let current = try SceneNodeHierarchy(metadata: temporary.productMetadata)
             let ids = roots.flatMap { current.subtreeIDs(of: $0) }

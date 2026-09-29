@@ -60,8 +60,14 @@ import Testing
         #expect(result.bodyCount == 2)
         #expect(Set(result.bodies.compactMap(\.occurrenceID)).count == 2)
         #expect(result.intersectingBodyCount == 1 && result.frontBodyCount == 1)
+        // Hiding the source placement hides only it: the instance keeps its definition-owned
+        // visibility.
         document.productMetadata.sceneNodes[node]?.isVisible = false
-        #expect(try section(document).bodyCount == 0)
+        let hidden = try section(document)
+        #expect(hidden.bodyCount == 1)
+        let instanceOccurrence = try #require(try SceneNodeHierarchy(metadata: document.productMetadata)
+            .resolvedOccurrences().first { $0.componentInstanceID != nil })
+        #expect(hidden.bodies.map(\.occurrenceID) == [instanceOccurrence.id])
     }
 
     @Test func meshesAndCADParticipateInTheSameInterferenceAnalysis() throws {

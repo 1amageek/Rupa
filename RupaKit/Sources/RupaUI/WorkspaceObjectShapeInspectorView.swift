@@ -3,6 +3,7 @@ import RupaCore
 
 struct WorkspaceObjectShapeInspectorView: View {
     var shapes: [InspectorObjectShape]?
+    var showsPlacement: Bool = true
     var displayUnit: LengthDisplayUnit
     var positionSliderMetersRange: ClosedRange<Double>
     var sizeSliderMetersRange: ClosedRange<Double>
@@ -34,9 +35,9 @@ struct WorkspaceObjectShapeInspectorView: View {
                 $0.definition?.generatedRepresentation(for: $0.properties).title ?? "Unknown"
             })
         )
-        if shapes.allSatisfy({ $0.center != nil }) {
+        if showsPlacement, shapes.allSatisfy({ $0.center != nil }) {
             objectCenterControls(shapes)
-        } else {
+        } else if showsPlacement {
             workspaceInspectorValueRow("World Center", "No evaluated occurrence")
         }
         if shapes.allSatisfy({ $0.size != nil }) {

@@ -41,11 +41,14 @@ extension DesignDocument {
         }
 
         let componentSourceIDs = componentDefinitionSourceSceneNodeIDs(in: productMetadata)
+        for id in selectedIDs where componentSourceIDs.contains(id) {
+            throw sceneMoveCommandError("Move the shared definition's complete root instead of its internal geometry.")
+        }
         for id in selectedSubtreeIDs {
             if let reason = sceneMoveOwnershipReason(
                 for: id,
                 metadata: productMetadata,
-                componentSourceIDs: componentSourceIDs
+                componentSourceIDs: []
             ) {
                 throw sceneMoveCommandError(reason)
             }
@@ -74,7 +77,7 @@ extension DesignDocument {
             if let reason = sceneMoveOwnershipReason(
                 for: parentID,
                 metadata: productMetadata,
-                componentSourceIDs: componentSourceIDs
+                componentSourceIDs: componentSourceIDs.union(productMetadata.componentDefinitions.values.flatMap(\.rootSceneNodeIDs))
             ) {
                 throw sceneMoveCommandError("Scene node move destination is source-owned: " + reason)
             }
@@ -220,7 +223,9 @@ private func componentDefinitionSourceSceneNodeIDs(
     var result: Set<SceneNodeID> = []
     for definition in metadata.componentDefinitions.values {
         for rootID in definition.rootSceneNodeIDs {
-            collectSceneMoveSubtreeIDs(rootID, metadata: metadata, into: &result)
+            for childID in metadata.sceneNodes[rootID]?.childIDs ?? [] {
+                collectSceneMoveSubtreeIDs(childID, metadata: metadata, into: &result)
+            }
         }
     }
     return result

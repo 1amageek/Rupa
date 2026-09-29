@@ -106,9 +106,8 @@ import Testing
         move.frame = try SceneTransformFrame(origin: pivot, normal: .unitX)
         let motion = try move.typedMove(Vector3D(x: 0, y: 0, z: 0.5))
         #expect(try (motion.applied(to: .origin) - Point3D(x: 0.5, y: 0, z: 0)).length < 1e-12)
-        move.compensatesInstances = true
-        guard case .transformSceneNodes(let ids, _, true) = try move.command(worldDelta: motion) else {
-            Issue.record("A transform submits transformSceneNodes with its instance option.")
+        guard case .transformSceneNodes(let ids, _, false) = try move.command(worldDelta: motion) else {
+            Issue.record("A transform submits transformSceneNodes without the legacy compensation.")
             return
         }
         #expect(ids == move.sceneNodeIDs)

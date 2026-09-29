@@ -53,17 +53,18 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
   expressions) and every material referenced by a node or binding is included.
 - Roots are the selected nodes minus any whose ancestor is also selected, in
   scene order. Each root carries its placement in the extraction reference
-  frame (world for Duplicate, Place and Copy; the first root's parent frame for
-  pattern definitions).
+  frame (world for Duplicate, Place and Copy; definition-owned root placements for
+  pattern definitions and instance realization).
 - A closure feature presented by a node outside the selected subtrees is
   carried as a hidden node under the first copied root, keeping its placement
   relative to the copy, so every copied feature keeps one presenting node and
   no copy is drawn unplaced.
 - A copied component instance is a new instance of the same definition with
   the same instance transform. The fragment carries each instance's definition
-  with its content (extracted in the world frame); where the destination lacks
-  the definition, the content is inserted hidden at its world placement under
-  the first document root and a new definition with a unique name names it.
+  with its content in the definition frame; where the destination lacks
+  the definition, the content is inserted hidden under the first document root.
+  A new definition retains the carried root placements and visibility independently
+  of those hidden authoring nodes.
   A copied authored mesh (a mesh object or a mesh representation of any copied
   object) is a new asset with the same mesh under a new source identity, and
   the copy's representations and selection name the new asset and fresh
@@ -136,9 +137,9 @@ SceneFragment ──SceneFragmentInserter(placements, parent)──▶ copies in
 Realize Instances (`realizeComponentInstances`) turns each selected component
 instance node into an independent copy of its definition, inserted right after
 the instance among its siblings, and deletes the instance. An instance shows
-each definition root at W(instance node) ∘ L(instance) ∘ L(root), whatever that
+each definition root at W(instance node) ∘ L(instance) ∘ D(root), whatever that
 root's parent is, so the roots are extracted in the `.definition` frame (each at
-L(root), its placement in its own parent) and placed together by
+D(root), its definition-owned placement) and placed together by
 W(instance node) ∘ L(instance); every copy appears exactly where the instance
 showed its root, even when the roots' parents are placed differently. The
 definition and its other instances are untouched. A node that is not a
@@ -157,3 +158,28 @@ refuses a conflicting parameter without mutation; refused selections throw;
 copied instances and authored meshes get new identities and share nothing.
 Pattern array tests continue to own independent-copy outputs. A change here
 re-checks pattern arrays, Duplicate, Place and Paste.
+
+### Shared definition content and individual placements
+
+A component definition owns a persisted root placement (transform and visibility)
+for each referenced root. Scene roots remain the single geometry presenters;
+their live scene transform and visibility belong to the individual direct
+placement. Instance expansion uses the definition-owned root placements, not
+those live scene values. Descendant transforms describe the shared assembly.
+Creation captures the current root values. Product metadata decoding captures
+legacy definitions once, preserving the current appearance, and subsequent
+saves retain that independent baseline. Missing roots or incomplete baselines
+are validation failures. CAD features and presentation identities are unchanged.
+
+Copy, realization and pattern-definition identity consume the same baseline.
+An individual root placement change must neither move nor hide another use.
+Shared shape changes continue to reach every occurrence through the same CAD
+feature. UI shared-definition selection includes the direct source roots and
+all scene placements whose definition closure uses the selected definition;
+this is a selection projection, not a source mutation. Editing shared shape
+uses the definition's geometry nodes once, independently of placement count.
+
+Verification: inspect root-state persistence, occurrence expansion, realization
+and copy paths; in the signed app create two uses, edit each placement, hide one,
+select the shared definition and change its Corner. Only the shared shape edit
+may affect both. Automated tests are not part of this user-requested run.

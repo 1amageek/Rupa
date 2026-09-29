@@ -182,7 +182,12 @@ import Testing
 
     @Test func componentOccurrencesRetainIndependentPlacementAndRejectRecursion() throws {
         var fixture = try SceneNodeHierarchyFixture()
-        let definition = ComponentDefinition(name: "Part", rootSceneNodeIDs: [fixture.innerID])
+        let inner = try #require(fixture.metadata.sceneNodes[fixture.innerID])
+        // A definition owns its roots' placements (here the root's own, as creation captures it).
+        let definition = ComponentDefinition(
+            name: "Part", rootSceneNodeIDs: [fixture.innerID],
+            rootPlacements: [fixture.innerID: .init(transform: inner.localTransform, isVisible: inner.isVisible)]
+        )
         let instance = ComponentInstance(
             definitionID: definition.id, name: "Copy",
             localTransform: try .translation(Vector3D(x: 0, y: 0, z: 3))
@@ -199,7 +204,13 @@ import Testing
         #expect(try copy.worldTransform.applied(to: .origin).isApproximatelyEqual(
             to: Point3D(x: 0, y: 2, z: 3), tolerance: tolerance
         ))
+        // The definition now holds its own instance: the roots and their placements change
+        // together, so the recursion is what fails.
+        let sibling = try #require(fixture.metadata.sceneNodes[fixture.siblingID])
         fixture.metadata.componentDefinitions[definition.id]?.rootSceneNodeIDs = [fixture.siblingID]
+        fixture.metadata.componentDefinitions[definition.id]?.rootPlacements = [
+            fixture.siblingID: .init(transform: sibling.localTransform, isVisible: sibling.isVisible),
+        ]
         #expect(throws: EditorError.self) {
             try SceneNodeHierarchy(metadata: fixture.metadata).resolvedOccurrences()
         }

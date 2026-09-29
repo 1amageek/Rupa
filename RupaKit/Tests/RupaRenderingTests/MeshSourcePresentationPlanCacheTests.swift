@@ -1355,17 +1355,29 @@ func planCacheDiscardsAStaleFailure() async throws {
 @Test(.timeLimit(.minutes(1)))
 func planCachePublishesAMatchingFailure() async throws {
     let scene = try planCacheScene(suffix: "failure")
-    let cache = MeshSourcePresentationPlanCache { _ in
+    let previous = try planCacheScene(suffix: "previous", projectID: scene.projectID, revision: 1)
+    let cache = MeshSourcePresentationPlanCache { candidate in
+        if candidate.snapshotID == previous.snapshotID {
+            return try MeshSourcePresentationRenderPlan(scene: candidate)
+        }
         throw MeshSourcePresentationRenderError(
             code: .resourceExhausted,
             message: "Presentation plan exceeded its ceiling."
         )
     }
 
+    cache.prepare(for: previous)
+    try await settlePlanCache(cache)
+    let displayed = try #require(cache.surface(for: previous))
     cache.prepare(for: scene)
     try await settlePlanCacheFailure(cache)
 
+    #expect(cache.displayCandidate(for: planCacheIdentity(scene)) === displayed)
+    #expect(cache.surface(for: scene) == nil)
+    #expect(cache.displaySurface(for: planCacheIdentity(scene)) == nil)
+    #expect(cache.hasReadyCamera(for: planCacheIdentity(scene), revision: 0) == false)
     let failure = try #require(cache.failure(for: scene))
+    #expect(failure.message.contains("Showing the previous geometry"))
     #expect(failure.code == .resourceExhausted)
     #expect(cache.plan(for: scene) == nil)
     #expect(cache.isPreparing(scene) == false)

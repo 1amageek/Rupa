@@ -141,6 +141,7 @@ public struct SceneNodeHierarchy: Sendable {
         parentID: SceneOccurrenceID?,
         parentTransform: Transform3D,
         localPrefix: Transform3D,
+        rootPlacement: ComponentDefinition.RootPlacement? = nil,
         ownerID: SceneNodeID?,
         instanceID: ComponentInstanceID?,
         isVisible: Bool,
@@ -153,9 +154,9 @@ public struct SceneNodeHierarchy: Sendable {
         }
         let id = SceneOccurrenceID(rawValue: prefix.map { "\($0)/\(nodeID.description)" }
             ?? "scene.\(nodeID.description)")
-        let local = try localPrefix.composed(with: node.localTransform)
+        let local = try localPrefix.composed(with: rootPlacement?.transform ?? node.localTransform)
         let world = try parentTransform.composed(with: local)
-        let visible = isVisible && node.isVisible
+        let visible = isVisible && (rootPlacement?.isVisible ?? node.isVisible)
         result.append(Occurrence(
             id: id, parentID: parentID, sourceSceneNodeID: nodeID,
             sceneNodeID: ownerID ?? nodeID, componentInstanceID: instanceID,
@@ -176,7 +177,8 @@ public struct SceneNodeHierarchy: Sendable {
             for rootID in definition.rootSceneNodeIDs {
                 try appendOccurrences(
                     rootID, prefix: id.rawValue, parentID: id, parentTransform: world,
-                    localPrefix: instance.localTransform, ownerID: ownerID ?? nodeID,
+                    localPrefix: instance.localTransform, rootPlacement: try definition.rootPlacement(for: rootID),
+                    ownerID: ownerID ?? nodeID,
                     instanceID: instanceID ?? childInstanceID,
                     isVisible: visible && instance.isVisible, definitionPath: path, result: &result
                 )
