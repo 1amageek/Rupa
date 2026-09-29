@@ -925,7 +925,10 @@ as spheres elsewhere.
    against one topology snapshot per build, made from the published
    evaluation the viewport hands it (`RawInput.evaluation` and
    `evaluationGeneration`); it had evaluated the whole document once per
-   selected target on every hover.
+   selected target on every hover. It finds a target's scene item through
+   `ViewportScene.firstItem(sceneNodeID:)` and `firstItem(featureID:)`, an
+   index the scene keeps with its items, instead of scanning the items once
+   per selected target.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

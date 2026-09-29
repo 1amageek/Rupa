@@ -2347,9 +2347,7 @@ enum ViewportSpatialOverlayProducer {
         for target: SelectionTarget,
         in scene: ViewportScene
     ) -> ViewportSceneItem? {
-        scene.items.first { item in
-            item.sceneNodeID == target.sceneNodeID
-        }
+        scene.firstItem(sceneNodeID: target.sceneNodeID)
     }
 
     static func midpoint(_ first: Point3D, _ second: Point3D) -> Point3D {

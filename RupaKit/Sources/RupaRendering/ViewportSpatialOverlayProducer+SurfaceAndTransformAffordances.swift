@@ -2306,9 +2306,7 @@ private extension ViewportSpatialOverlayProducer {
                     source: source,
                     input: input
                 )
-                let occurrenceItem = input.scene.items.first {
-                    $0.sceneNodeID == target.sceneNodeID
-                }
+                let occurrenceItem = input.scene.firstItem(sceneNodeID: target.sceneNodeID)
                 let occurrenceID = occurrenceItem?.id
                 let occurrenceModelTransform = occurrenceItem?.modelTransform ?? .identity
                 let originIdentity: ViewportSpatialHandleIdentity? = input.interactiveRoutes.contains(.constructionPlane)
@@ -2577,15 +2575,15 @@ private extension ViewportSpatialOverlayProducer {
                 interactionRecords: &interactionRecords, checkpoint: checkpoint,
                 worldLines: &worldLines, cameraLines: &cameraLines, cameraPaths: &cameraPaths, markers: &markers)
         }
+        let selectedObjectNodeIDs = Set(input.selection.selectedTargets.lazy
+            .filter { $0.component == .object }.map(\.sceneNodeID))
         let bodyItems = input.scene.items.filter { item in
-            guard case .body = item.kind else { return false }
-            return input.selection.selectedTargets.contains { target in
-                target.component == .object && target.sceneNodeID == item.sceneNodeID
-            }
+            guard case .body = item.kind, let sceneNodeID = item.sceneNodeID else { return false }
+            return selectedObjectNodeIDs.contains(sceneNodeID)
         }
         let sketchItems = input.selection.selectedTargets.compactMap { target -> ViewportSceneItem? in
             guard target.component == .object,
-                  let item = input.scene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }),
+                  let item = input.scene.firstItem(sceneNodeID: target.sceneNodeID),
                   case .sketch = item.kind else { return nil }
             return item
         }
@@ -3432,13 +3430,13 @@ private extension ViewportSpatialOverlayProducer {
         for target: SelectionTarget,
         input: SurfaceTransformAffordanceSource.RawInput
     ) -> ViewportSceneItem? {
-        if let item = input.selectionScene.items.first(where: { $0.sceneNodeID == target.sceneNodeID }) {
+        if let item = input.selectionScene.firstItem(sceneNodeID: target.sceneNodeID) {
             return item
         }
         guard let featureID = input.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID else {
             return nil
         }
-        return input.selectionScene.items.first { $0.featureID == featureID }
+        return input.selectionScene.firstItem(featureID: featureID)
     }
 
     static func polySplinePatchDescriptors(

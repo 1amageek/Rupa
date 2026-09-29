@@ -718,12 +718,49 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
 }
 
 public struct ViewportScene: Equatable, Sendable {
-    public var items: [ViewportSceneItem]
+    public var items: [ViewportSceneItem] {
+        didSet { lookup = Lookup(items) }
+    }
     public var failure: EditorError?
+    /// Where the first item of each scene node and feature sits, kept with `items`: the overlay
+    /// resolves a selected target to its item once per target, and a scan per target made that
+    /// quadratic in the selection.
+    private var lookup: Lookup
+
+    private struct Lookup: Sendable {
+        var bySceneNodeID: [SceneNodeID: Int] = [:]
+        var byFeatureID: [FeatureID: Int] = [:]
+
+        init(_ items: [ViewportSceneItem]) {
+            for (index, item) in items.enumerated() {
+                if let sceneNodeID = item.sceneNodeID, bySceneNodeID[sceneNodeID] == nil {
+                    bySceneNodeID[sceneNodeID] = index
+                }
+                if byFeatureID[item.featureID] == nil {
+                    byFeatureID[item.featureID] = index
+                }
+            }
+        }
+    }
 
     public init(items: [ViewportSceneItem], failure: EditorError? = nil) {
         self.items = items
         self.failure = failure
+        lookup = Lookup(items)
+    }
+
+    public static func == (lhs: ViewportScene, rhs: ViewportScene) -> Bool {
+        lhs.items == rhs.items && lhs.failure == rhs.failure
+    }
+
+    /// The first item presenting `sceneNodeID`, as `items.first { $0.sceneNodeID == sceneNodeID }`.
+    public func firstItem(sceneNodeID: SceneNodeID) -> ViewportSceneItem? {
+        lookup.bySceneNodeID[sceneNodeID].map { items[$0] }
+    }
+
+    /// The first item of `featureID`, as `items.first { $0.featureID == featureID }`.
+    public func firstItem(featureID: FeatureID) -> ViewportSceneItem? {
+        lookup.byFeatureID[featureID].map { items[$0] }
     }
 
     public var modelBounds: CGRect? {
