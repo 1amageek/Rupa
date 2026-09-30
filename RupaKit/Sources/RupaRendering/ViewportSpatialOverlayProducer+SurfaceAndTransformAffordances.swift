@@ -164,6 +164,11 @@ extension ViewportSpatialOverlayProducer {
             /// for every selected target.
             var evaluation: DocumentEvaluationContext?
             var evaluationGeneration: DocumentGeneration?
+            /// What the producer derives from `document` alone (parent frames, poly-spline
+            /// patches): the owner passes the memo it keeps for `document`'s identity, so builds
+            /// that differ only in selection or hover derive them once. It is never another
+            /// document's.
+            var documentMemo: ViewportDocumentOverlayMemo
 
             init(
                 document: DesignDocument,
@@ -194,6 +199,7 @@ extension ViewportSpatialOverlayProducer {
                 self.modifierControl = modifierControl
                 self.objectRegistry = objectRegistry
                 self.constructionFaceTarget = constructionFaceTarget
+                self.documentMemo = ViewportDocumentOverlayMemo(document: document)
             }
         }
 
@@ -1496,7 +1502,7 @@ private extension ViewportSpatialOverlayProducer {
             || input.interactiveRoutes.contains(.polySplineSurfaceVertexSlide)
             || input.interactiveRoutes.contains(.surfaceControlPointSlide)
         let patches = needsPatches
-            ? try polySplinePatchDescriptors(document: input.document, checkpoint: checkpoint)
+            ? try input.documentMemo.polySplinePatches(checkpoint: checkpoint)
             : [:]
 
         if input.interactiveRoutes.contains(.polySplineSurfaceVertex) {
@@ -2595,7 +2601,7 @@ private extension ViewportSpatialOverlayProducer {
         // and sketch items alike commit a scene node's local frame within its
         // parent's world frame, so a second walk would be a chance to disagree about
         // the frame a released gesture measured from.
-        let parentFrames = try ViewportSceneNodeParentFrames(document: input.document)
+        let parentFrames = try input.documentMemo.parentFrames()
         if drawsBodyGizmo {
             let isGroup = bodyItems.count > 1
             let featureID = bodyItems.last?.featureID ?? bodyItems[0].featureID
@@ -3438,7 +3444,11 @@ private extension ViewportSpatialOverlayProducer {
         }
         return input.selectionScene.firstItem(featureID: featureID)
     }
+}
 
+extension ViewportSpatialOverlayProducer {
+    /// The supported poly-spline patches of `document`, keyed by feature. A function of the
+    /// document alone; builds read it through `ViewportDocumentOverlayMemo`.
     static func polySplinePatchDescriptors(
         document: DesignDocument,
         checkpoint: (Int, Int, Int) throws -> Void

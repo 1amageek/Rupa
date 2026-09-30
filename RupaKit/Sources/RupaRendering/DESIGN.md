@@ -321,7 +321,13 @@ revision advances only when the key changes in more than hover: the hovered
 selection target and reference, the hovered handle and hit, the edge-treatment
 hover target, snap feedback and the placement highlight
 (`ViewportSpatialOverlayChangeKey.withoutHover`). The preparation identity
-carries both, and an identity without a base revision claims nothing. The producer
+carries both, and an identity without a base revision claims nothing. What the
+producer derives from the document alone (scene-node parent frames, supported
+poly-spline patches) is derived once per `ViewportSourceIdentity`: the viewport
+keeps one `ViewportDocumentOverlayMemo` for the identity it presents and hands it
+to every capture, and the first build that needs a value derives it off the main
+actor. A build that reuses a value charges the admission its derivation charged,
+and a derivation that fails is not remembered. The producer
 passes the source resize frame's three linear axes with black face and gray
 corner markers. These are the same box-frame axes used for their anchors and
 resize mutations, not camera or world reference axes. Native marker rendering

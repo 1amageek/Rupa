@@ -13,7 +13,7 @@ extension ViewportSpatialOverlayProducer {
         guard let scene = input.presentationScene, !input.selection.selectedTargets.isEmpty,
               input.selection.selectedTargets.allSatisfy({ $0.component == .object }) else { return nil }
         let selected = Set(input.selection.selectedTargets.map(\.sceneNodeID))
-        let frames = try ViewportSceneNodeParentFrames(document: input.document)
+        let frames = try input.documentMemo.parentFrames()
         var members: [ViewportObjectTransformMember] = []
         var admitted: Set<SceneNodeID> = []
         for item in scene.items {

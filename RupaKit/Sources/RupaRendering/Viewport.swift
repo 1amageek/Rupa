@@ -152,6 +152,7 @@ public struct Viewport: View {
         var ruler: RulerConfiguration
     }
     @State private var overlayRevision = ViewportSpatialOverlayRevision()
+    @State private var documentOverlayMemo = ViewportDocumentOverlayMemoCache()
     @State private var gridFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var nativeGridReadout: (rendererID: ObjectIdentifier, value: ViewportProjectedGrid.ScaleReadout)?
     @State private var nativeBoundsRulerAxes: (rendererID: ObjectIdentifier, disabled: Set<ViewportMeasurementRulerAxis>)?
@@ -6015,6 +6016,7 @@ extension Viewport {
         }
         result.evaluation = currentEvaluation
         result.evaluationGeneration = sceneDocumentGeneration
+        result.documentMemo = documentOverlayMemo.memo(for: sourceIdentity, document: document)
         result.edgeTreatmentHoverTarget = edgeTreatmentHoverTarget
         result.allowsBodyResize = onBodyResizeCommit != nil
         result.transformGizmo = transformGizmo
