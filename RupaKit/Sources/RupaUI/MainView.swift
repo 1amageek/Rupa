@@ -2362,6 +2362,7 @@ private struct ProjectMainViewContent: View {
             onSelectionDragPreview: viewportSelectionDragPreviewHandler,
             onBodyPlacementCommit: viewportBodyPlacementCommitHandler,
             onBodyResizeCommit: viewportBodyResizeCommitHandler,
+            onTopologyTransformCommit: viewportTopologyTransformCommitHandler,
             onVertexDrag: viewportVertexDragHandler,
             onFaceDrag: viewportFaceDragHandler,
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -2549,6 +2550,20 @@ private struct ProjectMainViewContent: View {
         }
         return { target in
             try await handleViewportBodyPlacementCommit(target)
+        }
+    }
+
+    /// A released gizmo drag on edges, faces or vertices moves them through the Move, Rotate or
+    /// Scale session's direct edit, which stays open on the moved targets for the next drag.
+    private var viewportTopologyTransformCommitHandler: ((Transform3D) -> Void)? {
+        guard let transformSession, !transformSession.topologyTargets.isEmpty else { return nil }
+        return { worldDelta in
+            guard let session = self.transformSession, !session.topologyTargets.isEmpty else { return }
+            do {
+                submitTransformCommand(try session.command(worldDelta: worldDelta))
+            } catch {
+                reportToolStatus(error.localizedDescription, severity: .warning)
+            }
         }
     }
 
@@ -10857,9 +10872,10 @@ private struct ProjectMainViewContent: View {
             let view = workspace.view ?? snapshot
             let document = view.document.document
             let bounds: MeasurementResult.Bounds?
-            if transform.pickedPivot == nil, transform.pivotMode == .boundingBox {
+            if (transform.pickedPivot == nil && transform.pivotMode == .boundingBox) || !transform.topologyTargets.isEmpty {
                 // The pivot bounds what the session moves: its own objects (a Boolean's tools
-                // move while its dialog holds other bodies), or the moved topology.
+                // move while its dialog holds other bodies), or the moved topology, whose gizmo
+                // stands about those bounds whatever the pivot.
                 var moved = view.selection
                 if transform.topologyTargets.isEmpty {
                     moved = SelectionModel()

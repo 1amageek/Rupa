@@ -1067,6 +1067,17 @@ as spheres elsewhere.
    the handles were drawn in, rounds it to the configured distance, angle and
    factor increments, and commits through the same placement batch. Without a
    configuration the gizmo keeps its combined world-aligned form unchanged.
+   A configuration with `topology` stands the mode's handles on edges, faces or
+   vertices of one body instead: the producer draws them about the world box it
+   carries, with no occurrence members and no box outline, and the records'
+   `.objectTransform` targets carry no members (the one admitted memberless case,
+   which offers no box resize). The press, the measured mutation and its frame,
+   pivot and increments are the objects' own, and the route is enabled by
+   `onTopologyTransformCommit` rather than by object affordances. Each update
+   previews the body through `BodyTopologyWorldMotion.apply` on a copy of the
+   document (`setDragPreviewDocument`, a refused motion showing its refusal), and
+   the release hands the world motion to `onTopologyTransformCommit` rather than
+   to the placement batch.
    A body scene item carrying no scene-node address matches no selected target
    in the producer and therefore draws no transform gizmo; with the legacy
    selector gone it also receives no transform input, so this route no longer

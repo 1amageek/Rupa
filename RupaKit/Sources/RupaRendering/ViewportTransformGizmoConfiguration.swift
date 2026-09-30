@@ -8,7 +8,25 @@ import RupaViewportScene
 /// handles only, in the resolved frame, adding the plane, screen and uniform handles the mode owns;
 /// a constraint narrows them to one axis, one plane, the screen or uniform scale. A mode scales
 /// about its pivot, so one-sided scale belongs to the combined gizmo only.
+///
+/// With `topology`, the gizmo stands on edges, faces or vertices of one body rather than on
+/// objects: it is drawn about the box around them, and a drag previews and commits their direct
+/// edit (`BodyTopologyWorldMotion`) instead of moving objects. Handles, frame, constraint and
+/// increments are the objects' own.
 public struct ViewportTransformGizmoConfiguration: Equatable, Sendable {
+    /// The edges, faces or vertices a gizmo moves, and the world box around them.
+    public struct Topology: Equatable, Sendable {
+        public var motion: BodyTopologyWorldMotion
+        public var lower: Point3D
+        public var upper: Point3D
+
+        public init(motion: BodyTopologyWorldMotion, lower: Point3D, upper: Point3D) {
+            self.motion = motion
+            self.lower = lower
+            self.upper = upper
+        }
+    }
+
     public enum Mode: String, Equatable, Sendable {
         case move, rotate, scale
     }
@@ -39,12 +57,16 @@ public struct ViewportTransformGizmoConfiguration: Equatable, Sendable {
     public var frame: SceneTransformFrame
     public var constraint: Constraint?
     public var increments: Increments?
+    public var topology: Topology?
 
-    public init(mode: Mode, frame: SceneTransformFrame, constraint: Constraint? = nil, increments: Increments? = nil) {
+    public init(
+        mode: Mode, frame: SceneTransformFrame, constraint: Constraint? = nil, increments: Increments? = nil, topology: Topology? = nil
+    ) {
         self.mode = mode
         self.frame = frame
         self.constraint = constraint
         self.increments = increments
+        self.topology = topology
     }
 
     func shows(_ action: ViewportAffordanceAction) -> Bool {

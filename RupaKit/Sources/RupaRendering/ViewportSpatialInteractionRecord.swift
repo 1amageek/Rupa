@@ -11,8 +11,11 @@ struct ViewportSpatialInteractionRecord: Sendable {
 
     init(target: ViewportSpatialPreparedInteractionTarget,
          occurrenceID: String? = nil, modelTransform: ScenePlacement = .identity) throws {
-        if case .objectTransform(let action, let members, _) = target {
-            guard !members.isEmpty, members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount,
+        if case .objectTransform(let action, let members, let bounds) = target {
+            // A gizmo standing on edges, faces or vertices moves no occurrence: its drags commit
+            // their direct edit, so it carries no members and offers no box resize.
+            let standsOnTopology = members.isEmpty && bounds.transformGizmo?.topology != nil
+            guard standsOnTopology || !members.isEmpty, members.count <= MeshSourcePresentationPlanLimits.standard.maxPositionCount,
                   Set(members.map(\.sceneNodeID)).count == members.count,
                   Set(members.map(\.occurrenceID)).count == members.count,
                   members.allSatisfy({ !$0.occurrenceID.isEmpty }) else {
@@ -22,7 +25,7 @@ struct ViewportSpatialInteractionRecord: Sendable {
             case .translate, .rotate, .centerScale, .oneSidedScale,
                  .translatePlane, .translateScreen, .uniformScale, .rotateScreen, .scalePlane: break
             case .faceMove, .vertexMove:
-                guard members.count == 1, members[0].handleResize != nil else {
+                guard standsOnTopology == false, members.count == 1, members[0].handleResize != nil else {
                     throw RealityViewportSpatialBatch.invalid("Box resize requires one editable source occurrence.")
                 }
             default: throw RealityViewportSpatialBatch.invalid("Object placement received a topology action.")

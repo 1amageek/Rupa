@@ -46,6 +46,8 @@ struct WorkspaceTransformSession: Equatable, Sendable {
     var topologyKind: BodyTopologyMoveKind = .edges
     /// The world transform of the targets' body, to express a world motion in its frame.
     var topologyBodyWorldTransform = Transform3D.identity
+    /// The world box around the moved edges, faces or vertices, which the gizmo is drawn about.
+    var topologyBounds: MeasurementResult.Bounds?
 
     init(sceneNodeIDs: [SceneNodeID], mode: Mode) {
         self.sceneNodeIDs = sceneNodeIDs
@@ -58,6 +60,7 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         constructionPlane: SketchPlane?,
         selectionBounds: MeasurementResult.Bounds?
     ) throws {
+        if !topologyTargets.isEmpty { topologyBounds = selectionBounds }
         frame = try SceneTransformFrameResolver().frame(
             .init(
                 sceneNodeIDs: sceneNodeIDs,
@@ -71,13 +74,21 @@ struct WorkspaceTransformSession: Equatable, Sendable {
         )
     }
 
-    /// The gizmo the viewport draws, once a frame is resolved and no point pick is pending.
+    /// The gizmo the viewport draws, once a frame is resolved and no point pick is pending: on
+    /// edges, faces or vertices it stands about the box around them, and its drags move them
+    /// through their direct edit.
     func gizmo(distanceStepMeters: Double) -> ViewportTransformGizmoConfiguration? {
-        // FIXME(INCOMPLETE_IMPLEMENTATION): Move Edges, Faces and Vertices have no gizmo drag; the
-        // viewport's transform gizmo previews whole-object placement only. Production path: typed
-        // values and freestyle points reach `command(worldDelta:)`. Done when a gizmo drag
-        // previews the moved body and commits the direct edit.
-        guard let frame, pendingPoint == nil, topologyTargets.isEmpty else { return nil }
+        guard let frame, pendingPoint == nil else { return nil }
+        var topology: ViewportTransformGizmoConfiguration.Topology?
+        if !topologyTargets.isEmpty {
+            // A topology gizmo needs the box its handles stand about; without it none is drawn.
+            guard let bounds = topologyBounds else { return nil }
+            topology = .init(
+                motion: topologyMotion(pivot: frame.origin),
+                lower: Point3D(x: bounds.minX, y: bounds.minY, z: bounds.minZ),
+                upper: Point3D(x: bounds.maxX, y: bounds.maxY, z: bounds.maxZ)
+            )
+        }
         let increments = snapsToIncrements
             ? ViewportTransformGizmoConfiguration.Increments(
                 distanceMeters: distanceStepMeters,
@@ -85,7 +96,9 @@ struct WorkspaceTransformSession: Equatable, Sendable {
                 factor: 0.05
             )
             : nil
-        return ViewportTransformGizmoConfiguration(mode: mode, frame: frame, constraint: constraint, increments: increments)
+        return ViewportTransformGizmoConfiguration(
+            mode: mode, frame: frame, constraint: constraint, increments: increments, topology: topology
+        )
     }
 
     /// Switches to `mode`; the key of the current mode toggles that mode's own constraint instead
@@ -299,28 +312,20 @@ struct WorkspaceTransformSession: Equatable, Sendable {
             // legacy compensation argument changes nothing.
             return .transformSceneNodes(ids: sceneNodeIDs, worldDelta: worldDelta, compensatingInstances: false)
         }
-        if mode != .move {
-            let local = try topologyBodyWorldTransform.inverse().composed(with: worldDelta.composed(with: topologyBodyWorldTransform))
-            return .transformBodyTopology(
-                kind: topologyKind, targets: topologyTargets, motion: try TopologyMotionDecomposition.motion(local)
-            )
-        }
-        let pivot = try requiredFrame().origin
-        let world = try worldDelta.applied(to: pivot) - pivot
-        let local = try topologyBodyWorldTransform.inverseApplyingLinearPart(to: world)
-        guard local.length > ModelingTolerance.standard.distance else {
-            throw EditorError(code: .commandInvalid, message: "\(topologyKind.title) needs a motion.")
-        }
-        let direction = try local.normalized(tolerance: ModelingTolerance.standard.distance)
-        let distance = CADExpression.length(local.length, .meter)
-        switch topologyKind {
-        case .edges:
-            return .moveBodyEdges(targets: topologyTargets, direction: direction, distance: distance)
-        case .faces:
-            return .moveBodyFaces(targets: topologyTargets, direction: direction, distance: distance)
-        case .vertices:
-            return .moveBodyVertices(targets: topologyTargets, direction: direction, distance: distance)
-        }
+        return try topologyMotion().command(worldDelta: worldDelta)
+    }
+
+    /// The motion of the session's edges, faces or vertices a world motion makes: a Move by how
+    /// far it carries the frame's origin, a Rotate or Scale by the whole motion.
+    func topologyMotion() throws -> BodyTopologyWorldMotion {
+        topologyMotion(pivot: try requiredFrame().origin)
+    }
+
+    private func topologyMotion(pivot: Point3D) -> BodyTopologyWorldMotion {
+        BodyTopologyWorldMotion(
+            kind: topologyKind, targets: topologyTargets, bodyWorldTransform: topologyBodyWorldTransform,
+            pivot: pivot, form: mode == .move ? .translation : .transform
+        )
     }
 
     /// The command a gizmo drag commits: the one world motion every dragged node received,

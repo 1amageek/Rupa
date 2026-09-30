@@ -613,9 +613,15 @@ freestyle translation, in the body's frame, commits one `moveBodyEdges`,
 `transformBodyTopology` with the motion read in the body's frame. The moved targets become
 the selection and the session's targets again. Changing the scope or selecting
 something else ends it.
-FIXME(INCOMPLETE_IMPLEMENTATION): these moves show no gizmo, because the
-viewport's transform gizmo previews whole-object placement only; proportional
-editing of edges is not available either.
+The session's gizmo stands on the targets too: `gizmo(distanceStepMeters:)`
+carries a `ViewportTransformGizmoConfiguration.Topology` with the session's
+`BodyTopologyWorldMotion` and the measured world box around the targets (the
+frame always measures that box for them, whatever the pivot), and draws the
+mode's own handles, constraint and increments as it does for objects. A drag
+previews the body with the targets moved through that motion's direct edit, and
+its release reaches `onTopologyTransformCommit`, which submits the session's
+command for the drag's world motion; the session stays open on the moved
+targets for the next drag. Proportional editing of edges is not available.
 
 Mirror (Option-X, Edit menu) runs a `WorkspaceMirrorSession` on the
 whole-object selection. The plane starts at the construction plane's positive

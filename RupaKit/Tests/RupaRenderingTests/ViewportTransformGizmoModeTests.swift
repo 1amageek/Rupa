@@ -80,6 +80,44 @@ import Testing
             == [.scalePlane(.z)])
     }
 
+    @Test func aGizmoOnEdgesDrawsItsHandlesWithoutObjectsAndMeasuresTheSameMotion() throws {
+        let nodeID = SceneNodeID()
+        let edge = SelectionTarget(sceneNodeID: nodeID, component: .edge(SelectionComponentID(rawValue: "edge")))
+        let topology = ViewportTransformGizmoConfiguration.Topology(
+            motion: BodyTopologyWorldMotion(kind: .edges, targets: [edge], bodyWorldTransform: .identity, pivot: pivot, form: .translation),
+            lower: pivot + Vector3D(x: 0, y: 0, z: -0.1), upper: pivot + Vector3D(x: 0, y: 0, z: 0.1)
+        )
+        let gizmo = ViewportTransformGizmoConfiguration(mode: .move, frame: try tiltedFrame(), topology: topology)
+        var raw = ViewportSpatialOverlayProducer.SurfaceTransformAffordanceSource.RawInput(
+            document: bodyTransformTestDocument([]),
+            scene: ViewportScene(items: []),
+            selection: SelectionModel(selectedTargets: [edge]),
+            ruler: .standard(for: .meter),
+            enabledRoutes: [.bodyTransform],
+            interactiveRoutes: [.bodyTransform]
+        )
+        raw.transformGizmo = gizmo
+        var interactionRecords: [ViewportSpatialInteractionRecord] = []
+        _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw, interactionRecords: &interactionRecords, checkpoint: { _, _, _ in }
+        )
+        let handles = interactionRecords.compactMap { record -> (ViewportAffordanceAction, ViewportSpatialInteractionRecord)? in
+            guard case .objectTransform(let action, let members, let bounds) = record.target,
+                  members.isEmpty, bounds.transformGizmo?.topology == topology else { return nil }
+            return (action, record)
+        }
+        #expect(handles.count == 7)
+        #expect(handles.contains { $0.0 == .translateScreen })
+
+        // A drag along the frame's Z arrow measures the same motion an object's gizmo does.
+        let frame = try tiltedFrame()
+        let measure = try ViewportOrthographicAffordanceMeasure.isometric(at: pivot)
+        let arrow = try #require(handles.first { $0.0 == .translate(.z) }?.1)
+        let moved = try #require(try ViewportBodyTransformInput(record: arrow)).mutation(
+            from: measure.projected(pivot), to: measure.projected(pivot + frame.axis(.z) * 0.3), measure: measure)
+        #expect(try close(moved.applied(to: .origin), .origin + frame.axis(.z) * 0.3))
+    }
+
     private func input(
         _ action: ViewportAffordanceAction, gizmo: ViewportTransformGizmoConfiguration
     ) throws -> ViewportBodyTransformInput {

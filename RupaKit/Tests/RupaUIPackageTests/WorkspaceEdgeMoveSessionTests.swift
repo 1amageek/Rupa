@@ -22,8 +22,19 @@ import Testing
         moving.pivotMode = .median
         try moving.resolveFrame(metadata: document.productMetadata, constructionPlane: nil, selectionBounds: nil)
 
+        // Without the box around the edge there is nothing to stand the gizmo on.
         #expect(moving.gizmo(distanceStepMeters: 0.01) == nil)
         #expect(moving.title == "Move Edge")
+        // With it, the gizmo stands on the edge and carries the motion its drags commit.
+        try moving.resolveFrame(
+            metadata: document.productMetadata, constructionPlane: nil,
+            selectionBounds: MeasurementResult.Bounds(minX: 0.1, minY: 0.1, minZ: 0, maxX: 0.1, maxY: 0.1, maxZ: 0.1)
+        )
+        let gizmo = try #require(moving.gizmo(distanceStepMeters: 0.01))
+        let topology = try #require(gizmo.topology)
+        #expect(topology.motion == (try moving.topologyMotion()))
+        #expect(topology.lower == Point3D(x: 0.1, y: 0.1, z: 0) && topology.upper == Point3D(x: 0.1, y: 0.1, z: 0.1))
+        #expect(gizmo.mode == .move)
 
         let command = try moving.command(worldDelta: try Transform3D.translation(Vector3D(x: 0, y: 0.01, z: 0)))
         guard case .moveBodyEdges(let targets, let direction, let distance) = command else {

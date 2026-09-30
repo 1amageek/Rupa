@@ -226,6 +226,9 @@ public struct Viewport: View {
     private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
     private let onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)?
     private let onBodyResizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)?
+    /// Receives the world motion a released gizmo drag gives the edges, faces or vertices the
+    /// transform gizmo stands on (`ViewportTransformGizmoConfiguration.topology`).
+    private let onTopologyTransformCommit: ((Transform3D) -> Void)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -428,6 +431,7 @@ public struct Viewport: View {
         onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onBodyPlacementCommit: (([ViewportBodyPlacementDragTarget]) async throws -> ViewportSourceIdentity)? = nil,
         onBodyResizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)? = nil,
+        onTopologyTransformCommit: ((Transform3D) -> Void)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -570,6 +574,7 @@ public struct Viewport: View {
         self.onSelectionDragPreview = onSelectionDragPreview
         self.onBodyPlacementCommit = onBodyPlacementCommit
         self.onBodyResizeCommit = onBodyResizeCommit
+        self.onTopologyTransformCommit = onTopologyTransformCommit
         self.onVertexDrag = onVertexDrag
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
@@ -1684,6 +1689,7 @@ public struct Viewport: View {
         if onBodyResizeCommit != nil { key.availableRoutes |= 1 << 27 }
         if onBoundarySurface != nil { key.availableRoutes |= 1 << 28 }
         if onSketchCornerTreatmentDrag != nil { key.availableRoutes |= 1 << 29 }
+        if onTopologyTransformCommit != nil { key.availableRoutes |= 1 << 30 }
         return key
     }
 
@@ -4118,7 +4124,9 @@ public struct Viewport: View {
     }
 
     private var bodyTransformRouteEnabled: Bool {
-        onBodyPlacementCommit != nil && (presentationScene != nil || allowsObjectAffordances
+        // A gizmo on edges, faces or vertices commits their direct edit, not placements.
+        if transformGizmo?.topology != nil { return onTopologyTransformCommit != nil }
+        return onBodyPlacementCommit != nil && (presentationScene != nil || allowsObjectAffordances
             || (!selection.selectedTargets.isEmpty && selection.selectedTargets.allSatisfy {
                 $0.component == .object
                     && document.productMetadata.sceneNodes[$0.sceneNodeID]?.reference?.kind == .sketch
@@ -4140,6 +4148,9 @@ public struct Viewport: View {
         do {
             press.mutation = try press.input.mutation(from: press.start, to: current, measure: affordanceMeasure())
             nativeInputGesture = .bodyTransform(press)
+            if let topology = press.input.bounds.transformGizmo?.topology, let mutation = press.mutation {
+                updateTopologyTransformPreview(topology, mutation: mutation)
+            }
         } catch {
             if !ViewportNativeQueryFailure.isTransient(error) {
                 reportNativeGestureFailure(error)
@@ -4148,9 +4159,50 @@ public struct Viewport: View {
         }
     }
 
+    /// Shows the body with the gizmo's edges, faces or vertices moved by `mutation`, through the
+    /// same direct edit a release commits; a motion the kernel refuses shows its refusal.
+    private func updateTopologyTransformPreview(_ topology: ViewportTransformGizmoConfiguration.Topology, mutation: Transform3D) {
+        guard let target = topology.motion.targets.first else { return }
+        let still = zip(mutation.matrix.values, Transform3D.identity.matrix.values).allSatisfy { abs($0 - $1) <= 1e-12 }
+        guard still == false else {
+            clearDragPreviewDocument()
+            return
+        }
+        do {
+            var preview = document
+            try topology.motion.apply(
+                worldDelta: mutation, to: &preview, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: sceneDocumentGeneration
+            )
+            setDragPreviewDocument(preview, target: target)
+        } catch {
+            clearDragPreviewDocument()
+            previewEvaluationCache.fail(revision: dragPreviewRevision, message: error.localizedDescription)
+        }
+    }
+
     private func resumeBodyTransformFinish() {
         guard case .bodyTransform(let press) = nativeInputGesture, let finish = press.finish else { return }
         guard bodyTransformBaselineMatches(press) else { cancelNativeInputGesture(); return }
+        if press.input.bounds.transformGizmo?.topology != nil {
+            // Edges, faces or vertices: the release hands its motion to their direct edit.
+            let mutation: Transform3D
+            do {
+                let identity = try presentationPreparation.get()
+                if let failure = presentationPlanCache.failure(for: identity) { throw failure }
+                guard presentationPlanCache.hasReadyCamera(for: identity, revision: finish.revision) else { return }
+                mutation = try press.input.mutation(from: press.start, to: finish.point, measure: affordanceMeasure())
+            } catch {
+                reportNativeGestureFailure(error)
+                clearPendingCanvasInteractionTargets()
+                activeCanvasDrag = nil
+                return
+            }
+            clearPendingCanvasInteractionTargets()
+            activeCanvasDrag = nil
+            onTopologyTransformCommit?(mutation)
+            return
+        }
         let targets: [ViewportBodyPlacementDragTarget]
         let resizeTarget: ViewportBodyResizeDragTarget?
         let mutation: Transform3D

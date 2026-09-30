@@ -154,6 +154,12 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   `TopologyTransformFeature` translation, so a vertex they share moves once.
   `transformBodyTopology` (Rotate or Scale Edges, Faces or Vertices) appends one
   `TopologyTransformFeature` with any `TopologyMotion`.
+  `BodyTopologyWorldMotion` is the one reading of a world motion as these edits:
+  a Move by how far it carries the pivot, in the body's frame, a Rotate or Scale
+  by the whole motion conjugated into the body's frame. The Move/Rotate/Scale
+  session builds its commands from it (`command(worldDelta:)`) and the viewport
+  previews a gizmo drag by applying it to a copy of the document
+  (`apply(worldDelta:to:)`), so a drag previews exactly what it commits.
   `TopologyMotionDecomposition` reads a body-frame affine motion as a
   translation, a rotation about its fixed axis, or a scale along the eigenvectors
   of its symmetric linear part about its fixed point. It refuses shears, mirrors

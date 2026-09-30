@@ -2567,6 +2567,20 @@ private extension ViewportSpatialOverlayProducer {
         meshes: inout [SurfaceTransformAffordanceSource.Mesh]
     ) throws {
         guard input.enabledRoutes.contains(.bodyTransform) else { return }
+        if let topology = input.transformGizmo?.topology {
+            // Moving edges, faces or vertices: the mode's handles stand about the box around them
+            // and carry no object members, so a drag previews and commits their direct edit.
+            let bounds = ViewportObjectEditState(
+                xMin: CGFloat(topology.lower.x), xMax: CGFloat(topology.upper.x),
+                yMin: CGFloat(topology.lower.y), yMax: CGFloat(topology.upper.y),
+                zMin: CGFloat(topology.lower.z), zMax: CGFloat(topology.upper.z), preservesZeroExtents: true)
+            try emitBodyTransform(featureID: nil, selectionTarget: nil, occurrenceID: nil,
+                modelTransform: .identity, edit: bounds, bodyMembers: [], groupEdit: nil,
+                placement: nil, objectMembers: [], input: input,
+                interactionRecords: &interactionRecords, checkpoint: checkpoint,
+                worldLines: &worldLines, cameraLines: &cameraLines, cameraPaths: &cameraPaths, markers: &markers)
+            return
+        }
         if input.enabledRoutes.contains(.bodyTransform), input.presentationScene != nil,
            let members = try presentationTransformMembers(input: input), !members.isEmpty {
             let bounds = ViewportObjectEditState(
@@ -2772,7 +2786,8 @@ private extension ViewportSpatialOverlayProducer {
             (0, 1), (0, 2), (0, 4), (1, 3), (1, 5), (2, 3),
             (2, 6), (3, 7), (4, 5), (4, 6), (5, 7), (6, 7),
         ]
-        for (start, end) in edges {
+        // Edges, faces or vertices show their own selection, not a box around them.
+        for (start, end) in edges where gizmo?.topology == nil {
             if objectMembers != nil {
                 try appendCameraLine(.init(route: .bodyTransform,
                     points: [corners[start], corners[end]].map {
