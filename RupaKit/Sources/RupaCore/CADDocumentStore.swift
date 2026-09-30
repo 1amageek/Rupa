@@ -2882,7 +2882,7 @@ public final class CADDocumentStore {
                     direction: extrusion.direction,
                     resultKind: extrusion.resultKind,
                     operation: extrusion.operation, targets: extrusion.targets, keepTools: extrusion.keepTools,
-                    draftAngle: extrusion.draftAngle,
+                    draftAngle: extrusion.draftAngle, thickness: extrusion.thickness,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument

@@ -129,6 +129,8 @@ struct ModelingOperationDraft: Equatable {
     var extrusionBoolean = ExtrusionBooleanChoice.newBody
     /// The extrusion's draft in degrees: positive narrows the section along the extrusion.
     var draftDegrees = "0"
+    /// A thin extrusion's wall thickness, empty for a whole section.
+    var wallThickness = ""
     var keepsTools = false
     var sheet = false
     var isSurfaceCreation = false
@@ -296,12 +298,18 @@ struct ModelingOperationDraft: Equatable {
                 guard draft.isFinite, abs(draft) < 90 else {
                     throw invalid("Degrees must be under 90.")
                 }
-                guard combines || draft != 0 else {
+                let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
+                    ? nil : try length(wallThickness, label: "Thickness")
+                if thickness != nil, createsSheet {
+                    throw invalid("A thin extrusion makes a solid wall; turn Sheet output off.")
+                }
+                guard combines || draft != 0 || thickness != nil else {
                     return .extrudeSection(name: name, section: section, distance: extrusion.distance,
                         startDistance: extrusion.startDistance, direction: direction, resultKind: extrusion.resultKind)
                 }
                 var drafted = extrusion
                 drafted.draftAngle = draft == 0 ? nil : .angle(draft, .degree)
+                drafted.thickness = thickness.map { .length($0, .meter) }
                 guard combines else { return .createExtrusion(name: name, source: drafted) }
                 guard createsSheet == false else {
                     throw invalid("A Boolean extrusion makes a solid; turn Sheet output off.")

@@ -275,9 +275,9 @@ public struct MeasurementService {
                 try appendEvaluatedSheet(sourceFeatureID: extrude.section.featureID, node: node, featureID: featureID)
                 return
             }
-            // A Boolean or drafted extrusion is measured as the body it evaluates to, not as its
-            // profile's area times its depth.
-            if extrude.operation != .newBody || extrude.draftAngle != nil {
+            // A Boolean, drafted or thin extrusion is measured as the body it evaluates to, not as
+            // its profile's area times its depth.
+            if extrude.operation != .newBody || extrude.draftAngle != nil || extrude.thickness != nil {
                 var reason: String?
                 guard let values = try measureEvaluatedBodySolids(featureID: featureID,
                     featureName: node.name, sourceFeatureID: extrude.section.featureID,

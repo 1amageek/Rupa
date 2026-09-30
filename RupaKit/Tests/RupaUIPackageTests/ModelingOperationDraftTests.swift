@@ -322,6 +322,26 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func aThinExtrusionCarriesItsWallThickness() throws {
+        var document = DesignDocument.empty()
+        let profile = try addProfile(to: &document, z: 0)
+        var draft = makeDraft(.extrude, targets: [profile.target])
+        draft.distance = "5 mm"
+        draft.wallThickness = "1 mm"
+        guard case .createExtrusion(_, let source) = try draft.command(in: document) else {
+            Issue.record("A thin extrusion is one authored extrusion.")
+            return
+        }
+        #expect(source.thickness == .length(0.001, .meter))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The 4 × 12 mm rectangle's 1 mm wall, 5 mm tall.
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.004 * 0.012 - 0.002 * 0.010) * 0.005) < 1e-12)
+        draft.sheet = true
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test(arguments: ModelingOperationDraft.ExtrusionDirectionChoice.allCases)
     func curveExtrusionDirectionEvaluates(direction: ModelingOperationDraft.ExtrusionDirectionChoice) throws {
         var document = DesignDocument.empty()

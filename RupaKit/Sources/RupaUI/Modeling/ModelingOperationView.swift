@@ -233,6 +233,9 @@ struct ModelingOperationView: View {
             }
             TextField("Degrees", text: $draft.draftDegrees)
                 .accessibilityIdentifier("Modeling.extrusionDraftDegrees")
+            if !draft.createsSheet {
+                lengthField("Thickness", text: $draft.wallThickness)
+            }
             if !draft.isSurfaceCreation {
                 Toggle("Sheet output", isOn: $draft.sheet)
                 Picker("Boolean", selection: $draft.extrusionBoolean) {
