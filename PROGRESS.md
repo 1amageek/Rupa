@@ -426,8 +426,8 @@
   - [x] DF9 The two failures that predate DF1 follow their current contracts (23a8663b). `depends:none` `parallel:none`
   - [x] DF10 Parent frames and poly-spline patches are derived once per document identity instead of in every overlay build; a hover's overlay computation fell from 1.6 ms to 0.56 ms (cef75117). `depends:DF7` `parallel:none`
   - [x] DF11 Integration: every RupaKit suite passes, app rebuilt and restarted, pushed. `depends:DF9,DF10` `parallel:none`
-  - [x] RV1 An unpublished candidate's evaluation snapshot has an identity of its own: every preview of a source transaction carries a candidate token in its EvaluationSnapshotID, so a snapshot ID names one evaluated content and the scene, plan, press and document-overlay caches keyed by it cannot serve another draft. `depends:none` `parallel:none`
-  - [x] RV2 The transform oracle has one route: the dead seeded initial/final oracle is removed and the benchmark design describes the self-contained oracle the runner uses. `depends:none` `parallel:none`
-  - [x] RV3 A hover delta's placement is never dropped: a placement the delta could not complete stays owed by the frame, and the mounted host places and reports it on its next engine frame. `depends:none` `parallel:none`
-  - [x] RV4 Coverage: native suppression and restoration of labels, planar paths, camera lines and camera paths and the sectioned attachment's section bounds; the cache basing a delta on an unpublished hover frame and falling back to a complete frame when the added items do not fit. `depends:RV3` `parallel:none`
-  - [ ] RV5 Integration: RupaKit suites, app rebuild and restart, push. `depends:RV1,RV2,RV3,RV4` `parallel:none`
+  - [x] RV1 A preview candidate's evaluation snapshot has an identity of its own, so every render cache keyed by snapshot identity serves one content (8fdb03fa). `depends:none` `parallel:none`
+  - [x] RV2 The transform oracle has one route, the self-contained one the runner uses (5a3a3b35). `depends:none` `parallel:none`
+  - [x] RV3 A hover delta's placement and section re-application are owed until a camera update completes them, and the mounted host runs that update on its next engine frame (07e9d48c). `depends:none` `parallel:none`
+  - [x] RV4 Coverage of every native kind's suppression, the section containment, and the cache's unpublished-base and exhaustion paths (07e9d48c, ecf5f88c). `depends:RV3` `parallel:none`
+  - [x] RV5 Integration: every RupaKit suite passes, app rebuilt and restarted, pushed. `depends:RV1,RV2,RV3,RV4` `parallel:none`
