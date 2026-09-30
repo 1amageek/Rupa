@@ -877,6 +877,21 @@ and a width or distance that is not positive — Slot, Offset Vertex, Offset Edg
 Fillet's dialog — is refused by Core rather than replaced by a tiny positive
 value.
 
+With faces selected, O starts Offset Face Loop, and I there toggles Individual
+(each face's own outline rather than their shared one); with edges it starts
+Offset Edge over the selected face or the one cap the edges bound. Shift-I starts
+Imprint on what is selected (`WorkspaceImprintSession`): one solid or sheet object
+with sketch curves or curve objects imprints the curves (Method Normal or Vector
+with its direction, Bidirectional and Hide occlusion, and Completion); two objects
+imprint the second onto the first (Complete target, Imprint tool, Complete tool).
+Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
+Subdivide, Count and Param in the dialog) and Option-T Untrim (Tab toggles Keep
+edges). `WorkspaceImprintDialogView` lays the options out in the context panel;
+Return, right-click or OK applies as one source command, a refused one leaving the dialog
+open, and Escape ends it without a change. The palette lists them as Imprint
+(with the Plasticity names Imprint Curve Body and Imprint Body Body), Isoparam and
+Untrim.
+
 ### What the workspace says, and where the canvas stops
 
 The workspace answers the user on three channels, and they stay three because

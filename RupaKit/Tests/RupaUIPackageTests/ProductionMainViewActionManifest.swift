@@ -83,6 +83,7 @@ enum ProductionMainViewActionManifest {
         "Sources/RupaUI/WorkspaceBridgeEdgeSession.swift",
         "Sources/RupaUI/WorkspaceDeformSession.swift",
         "Sources/RupaUI/WorkspaceProjectSession.swift",
+        "Sources/RupaUI/WorkspaceImprintSession.swift",
         "Sources/RupaUI/WorkspaceCurveRefinementPlanner.swift",
         "Sources/RupaUI/Modeling/FeatureLengthDraft.swift",
         "Sources/RupaUI/Modeling/LoftFeatureDraft.swift",
@@ -261,6 +262,12 @@ enum ProductionMainViewActionManifest {
         "raiseSurfaceDegree",
         "toggleCurvatureMeasurement",
         "setMeasurementCombScale",
+        "offsetEdges",
+        "offsetFaceLoops",
+        "imprintCurves",
+        "imprintBodies",
+        "isoparam",
+        "untrimFace",
     ]
 
     static let canvasEditorCommandNames = [

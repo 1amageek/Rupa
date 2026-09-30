@@ -440,6 +440,18 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case toggleCurvatureMeasurement(targets: [SelectionTarget])
     /// A curvature measurement's comb length.
     case setMeasurementCombScale(id: MeasurementAnnotationID, combScale: Double)
+    /// Offset Edge on edges of one object over their support face.
+    case offsetEdges(name: String, targets: [SelectionTarget], supportFace: SelectionTarget, distance: CADExpression, isSymmetric: Bool, gapFill: OffsetCurveGapFill)
+    /// Offset Face Loop on faces of one object.
+    case offsetFaceLoops(name: String, targets: [SelectionTarget], distance: CADExpression, isSymmetric: Bool, gapFill: OffsetCurveGapFill, isIndividual: Bool)
+    /// Imprint Curve Body: curves projected onto a target object.
+    case imprintCurves(name: String, target: SceneNodeID, curves: [SelectionTarget], projection: ImprintProjection, completion: ImprintCompletion)
+    /// Imprint Body Body: a tool object's crossing imprinted on a target object, and optionally the reverse.
+    case imprintBodies(name: String, target: SceneNodeID, tool: SceneNodeID, targetCompletion: ImprintCompletion, imprintsTool: Bool, toolCompletion: ImprintCompletion)
+    /// Isoparam: a face's parameter lines imprinted on it.
+    case isoparam(name: String, face: SelectionTarget, direction: SurfaceParameterDirection, fractions: [Double], subdividesControlNet: Bool)
+    /// Untrim: a sheet of a face's untrimmed surface beside its object.
+    case untrimFace(name: String, face: SelectionTarget, keepsEdges: Bool)
     case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
     case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)
     case createBSplineSurface(
@@ -929,6 +941,18 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "toggleCurvatureMeasurement"
         case .setMeasurementCombScale:
             "setMeasurementCombScale"
+        case .offsetEdges:
+            "offsetEdges"
+        case .offsetFaceLoops:
+            "offsetFaceLoops"
+        case .imprintCurves:
+            "imprintCurves"
+        case .imprintBodies:
+            "imprintBodies"
+        case .isoparam:
+            "isoparam"
+        case .untrimFace:
+            "untrimFace"
         case .createConstrainedSurface:
             "createConstrainedSurface"
         case .setConstrainedSurface:
@@ -1163,6 +1187,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .raiseSurfaceDegree,
              .toggleCurvatureMeasurement,
              .setMeasurementCombScale,
+             .offsetEdges,
+             .offsetFaceLoops,
+             .imprintCurves,
+             .imprintBodies,
+             .isoparam,
+             .untrimFace,
              .createConstrainedSurface,
              .setConstrainedSurface,
              .createBSplineSurface,

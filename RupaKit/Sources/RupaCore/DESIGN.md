@@ -208,6 +208,22 @@ none is, the one start or end cap the edge bounds (`EdgeOffsetSupportFaceResolve
 Because the offset sews the body anew, earlier selections of its edges and faces no
 longer resolve.
 
+Imprint Curve Body (`imprintCurves(name:target:curves:projection:completion:)`)
+appends a Swift-CAD `imprintCurves` feature: the selected sketch curves, or every
+curve of a curve object, are carried into the target's frame by their relative
+placement (`ImprintCurveReference.placement`), and a Vector projection's world
+direction is turned into the target's frame, so each curve lands where it and the
+target are shown. Imprint Body Body (`imprintBodies(name:target:tool:targetCompletion:imprintsTool:toolCompletion:)`)
+appends `imprintBody` with the tool's relative placement and, when the tool is
+imprinted too, a second `imprintBody` on the tool whose tool is the imprinted
+target, placed the other way; the two are one step, undone together. Isoparam
+(`isoparam(name:face:direction:fractions:subdividesControlNet:)`) imprints lines at
+fractions of a face's parameter extent. Each of these keeps the object's name and
+place (`appendFeatureShownByObject`, shared with the offsets). Untrim
+(`untrimFace(name:face:keepsEdges:)`) adds its untrimmed sheet as a new surface
+object beside the body's, placed like it. Instances are refused; realize them
+first. `ImprintCommandTests` own these contracts.
+
 Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
 face and curve cutters and shows every piece as an object of its own. Each
 cutter becomes a sheet kept by a hidden object placed where the cutter is: a face

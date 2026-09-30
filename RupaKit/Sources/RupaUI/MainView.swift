@@ -203,6 +203,9 @@ private struct ProjectMainViewContent: View {
     @State private var bodyCutSession: WorkspaceBodyCutSession?
     @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var deformSession: WorkspaceDeformSession?
+    @State private var imprintSession: WorkspaceImprintSession?
+    /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
+    @State private var faceLoopOffsetIsIndividual = true
     @State private var projectSession: WorkspaceProjectSession?
     @State private var bridgeEdgeSession: WorkspaceBridgeEdgeSession?
     @State private var filletSession: WorkspaceFilletSession?
@@ -2923,6 +2926,7 @@ private struct ProjectMainViewContent: View {
             || filletSession != nil
             || rebuildSession != nil
             || deformSession != nil
+            || imprintSession != nil
             || projectSession != nil
             || bridgeEdgeSession != nil
             || regionOffsetCommandState.isActive
@@ -2956,6 +2960,10 @@ private struct ProjectMainViewContent: View {
         }
         if deformSession != nil {
             confirmDeform()
+            return true
+        }
+        if imprintSession != nil {
+            confirmImprint()
             return true
         }
         if projectSession != nil {
@@ -2994,7 +3002,7 @@ private struct ProjectMainViewContent: View {
             return true
         }
         if edgeOffsetCommandState.isActive {
-            let targets = selectedEdgeTargets
+            let targets = selectedEdgeTargets.isEmpty ? selectedBodyFaceTargets : selectedEdgeTargets
             guard !targets.isEmpty else {
                 edgeOffsetCommandState.deactivate()
                 return true
@@ -4286,6 +4294,10 @@ private struct ProjectMainViewContent: View {
             if let deformSession {
                 workspaceContextDivider
                 deformContextPanelContent(deformSession)
+            }
+            if let imprintSession {
+                workspaceContextDivider
+                imprintContextPanelContent(imprintSession)
             }
             if let projectSession {
                 workspaceContextDivider
@@ -6199,6 +6211,8 @@ private struct ProjectMainViewContent: View {
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
+            hasImprintableSelection: imprintSessionKind() != nil,
+            isImprintSessionActive: imprintSession != nil,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6432,7 +6446,7 @@ private struct ProjectMainViewContent: View {
             )
             return .handled
         case .activateOffsetCommand:
-            if selectedEdgeTargets.isEmpty == false {
+            if selectedEdgeTargets.isEmpty == false || selectedBodyFaceTargets.isEmpty == false {
                 activateEdgeOffsetCommand()
             } else if selectedRegionTargets.isEmpty == false {
                 activateRegionOffsetCommand()
@@ -6570,6 +6584,45 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .confirmDeform:
             confirmDeform()
+            return .handled
+        case .beginImprint:
+            guard let kind = imprintSessionKind() else { return .ignored }
+            imprintSession = WorkspaceImprintSession(kind: kind)
+            reportToolStatus("Imprint: choose the options, then OK, Return or right-click.")
+            return .handled
+        case .beginIsoparam:
+            guard let face = selectedBodyFaceTargets.first, selectedBodyFaceTargets.count == 1 else {
+                reportToolStatus("Isoparam: select one face.", severity: .warning)
+                return .handled
+            }
+            imprintSession = WorkspaceImprintSession(kind: .isoparam(face: face))
+            reportToolStatus("Isoparam: Tab switches U and V, S subdivides; OK, Return or right-click imprints the lines.")
+            return .handled
+        case .beginUntrim:
+            guard let face = selectedBodyFaceTargets.first, selectedBodyFaceTargets.count == 1 else {
+                reportToolStatus("Untrim: select one face.", severity: .warning)
+                return .handled
+            }
+            imprintSession = WorkspaceImprintSession(kind: .untrim(face: face))
+            reportToolStatus("Untrim: Tab keeps the face's edges; OK, Return or right-click makes the sheet.")
+            return .handled
+        case .confirmImprint:
+            confirmImprint()
+            return .handled
+        case .cancelImprint:
+            imprintSession = nil
+            reportToolStatus("Imprint ended.")
+            return .handled
+        case .toggleImprintOption:
+            imprintSession?.toggle()
+            return .handled
+        case .toggleIsoparamSubdivide:
+            guard case .isoparam = imprintSession?.kind else { return .ignored }
+            imprintSession?.subdividesControlNet.toggle()
+            return .handled
+        case .toggleFaceLoopIndividual:
+            faceLoopOffsetIsIndividual.toggle()
+            reportToolStatus(faceLoopOffsetIsIndividual ? "Offset Face Loop: each face's own outline." : "Offset Face Loop: the faces' outline together.")
             return .handled
         case .cancelDeform:
             deformSession = nil
@@ -7577,8 +7630,10 @@ private struct ProjectMainViewContent: View {
         regionOffsetCommandState.activateArrowDrag()
     }
 
+    /// O with edges selected runs Offset Edge; with faces selected, Offset Face Loop, whose I
+    /// switches between each face's own outline and the faces' outline together.
     private func activateEdgeOffsetCommand() {
-        guard selectedEdgeTargets.isEmpty == false else {
+        guard selectedEdgeTargets.isEmpty == false || selectedBodyFaceTargets.isEmpty == false else {
             if selectionScope != .edge {
                 selectionScope = .edge
             }
@@ -8952,6 +9007,7 @@ private struct ProjectMainViewContent: View {
         filletSession = nil
         rebuildSession = nil
         deformSession = nil
+        imprintSession = nil
         if slotProfileCommandState.isFreestyle {
             slotProfileCommandState.deactivate()
         }
@@ -9888,6 +9944,43 @@ private struct ProjectMainViewContent: View {
                             instance: project.instance,
                             running: { projectSession?.instance }, end: { projectSession = nil },
                             done: { reportToolStatus("Project: \(project.curves.count) curve\(project.curves.count == 1 ? "" : "s") projected.") })
+    }
+
+    /// What Shift-I imprints from the selection: curves (sketch curves, or curve objects) onto
+    /// the one solid or sheet object selected, or the second object selected onto the first.
+    private func imprintSessionKind() -> WorkspaceImprintSession.Kind? {
+        let bodies = selectedBodyObjectIDs
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        let curveObjects = snapshot.selection.selectedTargets.filter { target in
+            guard target.component == .object, let reference = nodes[target.sceneNodeID]?.reference else { return false }
+            return reference.kind != .body && reference.featureID != nil
+        }
+        let curves = selectedSketchCurveTargets + curveObjects
+        if bodies.count == 1, let target = bodies.first, curves.isEmpty == false {
+            return .curves(target: target, curves: curves)
+        }
+        if bodies.count == 2, curves.isEmpty {
+            return .bodies(target: bodies[0], tool: bodies[1])
+        }
+        return nil
+    }
+
+    /// Applies the running imprinting dialog as one step; it stays for another try when Core refuses.
+    private func confirmImprint() {
+        guard let imprint = imprintSession else { return }
+        submitDialogCommand([imprint.command()], name: imprint.title, instance: imprint.instance,
+                            running: { imprintSession?.instance }, end: { imprintSession = nil },
+                            done: { reportToolStatus("\(imprint.title) applied.") })
+    }
+
+    /// The imprinting dialog: the options its command takes, and OK.
+    @ViewBuilder
+    private func imprintContextPanelContent(_ imprint: WorkspaceImprintSession) -> some View {
+        workspaceStatusChip(imprint.title, systemImage: "square.split.diagonal", tint: .accentColor)
+        WorkspaceImprintDialogView(
+            dialog: Binding(get: { imprintSession ?? imprint }, set: { imprintSession = $0 })
+        )
+        workspaceIconButton(systemImage: "checkmark", help: imprint.title, accessibilityIdentifier: "WorkspaceImprint.apply", action: { confirmImprint() })
     }
 
     /// Project Curve Body's dialog: Method, Vector's direction and Bidirectional, and OK.
@@ -12448,31 +12541,46 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// Offset Edge on the selected edges over their support face (the selected face, or the cap
+    /// they bound), or Offset Face Loop on the selected faces, as one step.
     private func offsetSelectedEdges(
         _ targets: [SelectionTarget],
         by meters: Double,
         gapFill: OffsetCurveGapFill,
         isSymmetric: Bool = false
     ) {
-        guard targets.count == 1, let target = targets.first else {
-            reportToolStatus(
-                "Offset Edge currently supports one selected edge.",
-                severity: .warning
+        let faces = targets.filter { if case .face = $0.component { return true } else { return false } }
+        let edges = targets.filter { if case .edge = $0.component { return true } else { return false } }
+        let command: EditorCommand
+        if edges.isEmpty, faces.isEmpty == false {
+            command = .offsetFaceLoops(
+                name: "Offset Face Loop", targets: faces, distance: .length(meters, .meter),
+                isSymmetric: isSymmetric, gapFill: gapFill, isIndividual: faceLoopOffsetIsIndividual
             )
+        } else if let first = edges.first {
+            let support: SelectionTarget
+            do {
+                let resolution = try EdgeOffsetSupportFaceResolver().resolve(
+                    edgeTarget: first, selection: snapshot.selection, document: snapshot.document.document,
+                    objectRegistry: objectRegistry, currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+                )
+                guard let target = resolution.supportTarget else {
+                    reportToolStatus(resolution.diagnosticMessage ?? EdgeOffsetSupportFaceResolver.missingSupportFaceMessage, severity: .warning)
+                    return
+                }
+                support = target
+            } catch {
+                reportToolStatus("Offset Edge: \(error.localizedDescription)", severity: .warning)
+                return
+            }
+            command = .offsetEdges(
+                name: "Offset Edge", targets: edges, supportFace: support, distance: .length(meters, .meter),
+                isSymmetric: isSymmetric, gapFill: gapFill
+            )
+        } else {
             return
         }
-        submitSource(
-            .offsetCurve(
-                target: target,
-                // Core refuses a distance that is not positive.
-                distance: .length(meters, .meter),
-                options: OffsetCurveOptions(
-                    isSymmetric: isSymmetric,
-                    gapFill: gapFill
-                ),
-                vertexHandle: nil
-            )
-        ) { result in
+        submitSource(command) { result in
             if result?.didMutate == true {
                 edgeOffsetCommandState.deactivate()
             }

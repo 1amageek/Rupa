@@ -778,3 +778,23 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(isReturn: true), context: cut) == .confirmBodyCut)
     #expect(router.action(for: WorkspaceKeyboardInput(isEscape: true), context: cut) == .cancelBodyCut)
 }
+
+@Test func workspaceKeyboardRouterStartsAndDrivesTheImprintingDialogs() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = [], tab: Bool = false) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers, isTab: tab), context: context)
+    }
+    #expect(action("I", [.shift]) == nil)
+    context.hasImprintableSelection = true
+    #expect(action("I", [.shift]) == .beginImprint)
+    #expect(action("r", [.control]) == nil)
+    #expect(action("t", [.option]) == nil)
+    context.hasBodyFaceSelection = true
+    #expect(action("r", [.control]) == .beginIsoparam)
+    #expect(action("t", [.option]) == .beginUntrim)
+    #expect(action("†", [.option]) == .beginUntrim)
+    context.isImprintSessionActive = true
+    #expect(action("\t", tab: true) == .toggleImprintOption)
+    #expect(action("s") == .toggleIsoparamSubdivide)
+}

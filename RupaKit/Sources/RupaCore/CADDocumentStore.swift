@@ -2987,6 +2987,60 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .offsetEdges(name, targets, supportFace, distance, isSymmetric, gapFill):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.offsetEdges(
+                name: name, targets: targets, supportFace: supportFace, distance: distance, isSymmetric: isSymmetric,
+                gapFill: gapFill, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .offsetFaceLoops(name, targets, distance, isSymmetric, gapFill, isIndividual):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.offsetFaceLoops(
+                name: name, targets: targets, distance: distance, isSymmetric: isSymmetric, gapFill: gapFill,
+                isIndividual: isIndividual, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .imprintCurves(name, target, curves, projection, completion):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.imprintCurves(
+                name: name, target: target, curves: curves, projection: projection, completion: completion,
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .imprintBodies(name, target, tool, targetCompletion, imprintsTool, toolCompletion):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.imprintBodies(
+                name: name, target: target, tool: tool, targetCompletion: targetCompletion, imprintsTool: imprintsTool,
+                toolCompletion: toolCompletion, objectRegistry: objectRegistry
+            ).first
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .isoparam(name, face, direction, fractions, subdividesControlNet):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.isoparam(
+                name: name, face: face, direction: direction, fractions: fractions, subdividesControlNet: subdividesControlNet,
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .untrimFace(name, face, keepsEdges):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.untrimFace(
+                name: name, face: face, keepsEdges: keepsEdges,
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createConstrainedSurface(name, source):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createConstrainedSurface(

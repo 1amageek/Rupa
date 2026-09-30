@@ -41,12 +41,12 @@ extension DesignDocument {
                 throw EditorError(code: .commandInvalid, message: "\(operationName) offsets edges over a support face they bound; an edge does not bound it.")
             }
         }
-        return try appendOffset(
+        return try appendFeatureShownByObject(
             .edgeOffset(EdgeOffsetFeature(
                 target: PatternTargetReference(featureID: object.featureID), edges: edges, supportFace: face,
                 distance: distance, isSymmetric: isSymmetric, gapFill: gapFill.kernelGapFill
             )),
-            name: trimmedName, object: object, objectRegistry: objectRegistry
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
         )
     }
 
@@ -80,12 +80,12 @@ extension DesignDocument {
         // The kernel takes a positive distance and the side apart.
         let size: CADExpression = meters < 0 ? .multiply(distance, .constant(.scalar(-1))) : distance
         let side: FaceLoopOffsetSide = isSymmetric ? .symmetric : (meters > 0 ? .inward : .outward)
-        return try appendOffset(
+        return try appendFeatureShownByObject(
             .faceLoopOffset(FaceLoopOffsetFeature(
                 target: PatternTargetReference(featureID: object.featureID), faces: faces, distance: size,
                 side: side, gapFill: gapFill.kernelGapFill, isIndividual: isIndividual
             )),
-            name: trimmedName, object: object, objectRegistry: objectRegistry
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
         )
     }
 
@@ -119,32 +119,6 @@ extension DesignDocument {
             throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not resolve a selected \(kind == .edge ? "edge" : "face").")
         }
         return reference
-    }
-
-    private mutating func appendOffset(
-        _ operation: FeatureOperation, name: String, object: (nodeID: SceneNodeID, featureID: FeatureID), objectRegistry: ObjectTypeRegistry
-    ) throws -> FeatureID {
-        let previousCADDocument = cadDocument
-        let previousProductMetadata = productMetadata
-        var didCommit = false
-        defer {
-            if didCommit == false {
-                cadDocument = previousCADDocument
-                productMetadata = previousProductMetadata
-            }
-        }
-        let featureID = FeatureID()
-        try appendFeature(try FeatureNodeFactory.make(
-            operation: operation, id: featureID, name: name, in: cadDocument, tolerance: modelingSettings.tolerance
-        ))
-        let node = productMetadata.sceneNodes[object.nodeID]
-        try retargetBodyNode(
-            object.nodeID, to: featureID, name: node?.name ?? name, geometryRole: node?.object?.geometryRole ?? .solid
-        )
-        try cadDocument.validate(tolerance: modelingSettings.tolerance)
-        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-        didCommit = true
-        return featureID
     }
 }
 

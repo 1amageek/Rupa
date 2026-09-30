@@ -241,6 +241,23 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case confirmProject
     /// Escape while Project Curve Body's dialog runs: end it without a change.
     case cancelProject
+    /// I while Offset Face Loop runs: offset each face's own outline, or the faces' outline together.
+    case toggleFaceLoopIndividual
+    /// Shift-I: Imprint by selection — curves and one object to Imprint Curve Body, two objects to
+    /// Imprint Body Body.
+    case beginImprint
+    /// Control-R: Isoparam on the selected face.
+    case beginIsoparam
+    /// Option-T: Untrim on the selected face.
+    case beginUntrim
+    /// Return while an imprinting dialog runs: apply it.
+    case confirmImprint
+    /// Escape while an imprinting dialog runs: end it without a change.
+    case cancelImprint
+    /// Tab while an imprinting dialog runs: Isoparam's direction, or Untrim's Keep edges.
+    case toggleImprintOption
+    /// S while Isoparam runs: subdivide the control net.
+    case toggleIsoparamSubdivide
     /// J: Join by selection — sketch curves to Join Curves, sheets to Join Sheets.
     case join
     /// Option-J: Unjoin by selection — a sketch curve to Unjoin Curve, faces to Unjoin Faces,
@@ -342,6 +359,10 @@ struct WorkspaceKeyboardContext: Sendable {
     var isRebuildSessionActive: Bool = false
     /// Whether Deform Curve's dialog runs.
     var isDeformSessionActive: Bool = false
+    /// Whether Shift-I has something to imprint: curves and one object, or two objects.
+    var hasImprintableSelection: Bool = false
+    /// Whether an imprinting dialog runs.
+    var isImprintSessionActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -436,6 +457,13 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.ownsTextEditingKeys {
             if input.isReturn { return .confirmDeform }
             if input.isEscape { return .cancelDeform }
+        }
+        if context.isImprintSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys {
+            if input.isReturn { return .confirmImprint }
+            if input.isEscape { return .cancelImprint }
+            if input.isTab { return .toggleImprintOption }
+            if input.characters.lowercased() == "s" { return .toggleIsoparamSubdivide }
         }
         if context.isProjectSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {
@@ -823,6 +851,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             }
             return context.isRegionOffsetCommandActive ? .toggleRegionOffsetLockedDistance : nil
         case "i":
+            if context.isEdgeOffsetCommandActive {
+                return .toggleFaceLoopIndividual
+            }
             return context.isRegionOffsetCommandActive ? .toggleCombinedRegions : nil
         case "f":
             return context.isCurveOffsetCommandActive ? .toggleCurveOffsetFreestyle : nil
@@ -912,6 +943,15 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if input.modifiers == [.option], key == "d" || key == "∂" {
             return context.hasProjectableSelection ? .projectToConstructionPlane : nil
+        }
+        if input.modifiers == [.shift], key == "i" {
+            return context.hasImprintableSelection ? .beginImprint : nil
+        }
+        if input.modifiers == [.control], key == "r" {
+            return context.hasBodyFaceSelection ? .beginIsoparam : nil
+        }
+        if input.modifiers == [.option], key == "t" || key == "†" {
+            return context.hasBodyFaceSelection ? .beginUntrim : nil
         }
         if input.modifiers == [.shift], key == "s" {
             let raises = context.selectedSketchTargetCount > 0
