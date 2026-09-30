@@ -407,9 +407,9 @@
 - [x] UIO2 Assign numeric submission focus to one host owner and restore workspace focus at shared selection/tool entry points; 11 native input tests passed, including the production MainView regression (`dd81edde`). `depends:UIO1` `parallel:none`
 - [x] UIO3 Signed app rebuilt and restarted (PID 89011, installed/build dylib SHA-256 matched); preserved document 5C035F85 reopened. Sidebar selection to Move, inspector Return to Rotate, and incomplete numeric input to Sketch/Escape all passed without a canvas click. Position restored with Undo and document saved; coverage is limited to the recorded workflows. `depends:UIO1,UIO2` `parallel:none`
 
-- [ ] HR Second hot-path pass: repeated whole-document work on edits, publications, pointer moves and renders is prepared once per document generation or input. `depends:HPF` `parallel:none`
+- [x] HR Second hot-path pass: repeated whole-document work on edits, publications, pointer moves and renders is prepared once per document generation or input. `depends:HPF` `parallel:none`
   - [x] HR1 Per-publication and per-render scans: CAD context per presented item against one body index, pattern-owned nodes found once per validation or move, the Outliner projection kept per input. `depends:none` `parallel:none`
   - [x] HR2 Pointer path: a snap's document-dependent preparation is made once per published document state instead of up to three times per pointer event, and saved measurements are resolved once per generation instead of per overlay build. `depends:HR1` `parallel:none`
   - [x] HR3 Edit path: body display snapshots sort the subshape table once instead of twice per body, a rebuilt session checks surface frame displays against its own evaluation, and a topology move follows its targets through the published evaluation instead of evaluating again. `depends:HR2` `parallel:none`
   - [x] HR4 Publication path: a publication of the same document state (a selection change) reuses the previous view's validated document, presentation scene and navigation instead of rebuilding them. `depends:HR3` `parallel:none`
-  - [ ] HR5 Integration: whole package suite, app rebuild and restart, push. `depends:HR1,HR2,HR3,HR4` `parallel:none`
+  - [x] HR5 Integration: whole package suite, app rebuild and restart, push. `depends:HR1,HR2,HR3,HR4` `parallel:none`
