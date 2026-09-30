@@ -59,6 +59,7 @@ extension FeatureOperation {
              .removeFillets,
              .removeRedundantTopology,
              .sheetExtend,
+             .surfaceAlign,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -147,6 +148,7 @@ extension FeatureOperation {
              .removeFillets,
              .removeRedundantTopology,
              .sheetExtend,
+             .surfaceAlign,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -267,6 +269,8 @@ extension FeatureOperation {
         // Extend Sheet replaces its sheet when the extensions join it, and adds a sheet otherwise.
         case .sheetExtend(let feature):
             return feature.modifies ? [feature.target.featureID] : []
+        case .surfaceAlign(let feature):
+            return [feature.target.featureID]
         case .imprintCurves(let feature):
             return [feature.target.featureID]
         // Untrim makes a sheet beside its body.

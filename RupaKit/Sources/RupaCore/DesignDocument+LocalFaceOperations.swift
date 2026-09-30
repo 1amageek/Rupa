@@ -261,3 +261,57 @@ extension DesignDocument {
         return featureID
     }
 }
+
+extension DesignDocument {
+    /// Align Surface: the first target, an edge of a sheet object, follows the second, an edge of
+    /// another object where it is shown, with `continuity`, the speed across the edge scaled by
+    /// `tension` and the change faded over `blendRows` further control rows (Swift-CAD
+    /// `surfaceAlign`). The sheet shows the result in its place.
+    @discardableResult
+    public mutating func alignSurface(
+        name: String = "Align Surface",
+        targets: [SelectionTarget],
+        continuity: SurfaceContinuityLevel,
+        tension: Double,
+        blendRows: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Align Surface"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        guard targets.count == 2 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) takes an edge of a sheet, then the reference edge.")
+        }
+        guard tension.isFinite, tension > 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) tension must be positive.")
+        }
+        guard (0...64).contains(blendRows) else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) blends from none to 64 further rows.")
+        }
+        let object = try offsetObject(for: [targets[0]], operationName: operationName)
+        let source = try offsetObject(for: [targets[1]], operationName: operationName)
+        guard productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .surface else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) aligns an edge of a sheet.")
+        }
+        guard source.nodeID != object.nodeID else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) aligns a sheet to an edge of another object.")
+        }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let targetEdge = try stableReference(of: targets[0], kind: .edge, in: topology, operationName: operationName)
+        let referenceEdge = try stableReference(of: targets[1], kind: .edge, in: topology, operationName: operationName)
+        let placement = try relativeRigidPlacement(
+            of: source.nodeID, inFrameOf: object.nodeID, owner: "The reference edge's object", relation: "the aligned sheet"
+        )
+        return try appendFeatureShownByObject(
+            .surfaceAlign(SurfaceAlignFeature(
+                target: PatternTargetReference(featureID: object.featureID), targetEdge: targetEdge,
+                reference: PatternTargetReference(featureID: source.featureID), referenceEdge: referenceEdge,
+                referencePlacement: placement, continuity: continuity, tension: tension, blendRows: blendRows
+            )),
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
+        )
+    }
+}

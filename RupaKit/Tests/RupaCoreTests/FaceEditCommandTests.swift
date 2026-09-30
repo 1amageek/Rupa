@@ -174,4 +174,36 @@ import Testing
             #expect(session.evaluationStatus == .valid)
         }
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func alignSurfaceBringsASheetsEdgeOntoAnotherObjectsEdge() throws {
+        let session = EditorSession()
+        let row = { (y: Double) in [Point3D(x: 0, y: y, z: 0), Point3D(x: 0.05, y: y, z: 0.05), Point3D(x: 0.1, y: y, z: 0)] }
+        _ = try session.execute(.createBSplineSurface(name: "Arch", surface: BSplineSurface3D(
+            uDegree: 2, vDegree: 1, uKnots: [0, 0, 0, 1, 1, 1], vKnots: [0, 0, 1, 1], controlPoints: [row(0), row(0.1)]
+        )))
+        _ = try session.execute(.createBSplineSurface(name: "Flat", surface: .bilinearPatch(
+            bottomLeft: Point3D(x: 0.12, y: 0, z: 0), bottomRight: Point3D(x: 0.2, y: 0, z: 0),
+            topRight: Point3D(x: 0.2, y: 0.1, z: 0), topLeft: Point3D(x: 0.12, y: 0.1, z: 0))))
+        let nodes = session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }
+        let arch = try #require(nodes.first { $0.name.hasPrefix("Arch") }).id
+        let flat = try #require(nodes.first { $0.name.hasPrefix("Flat") }).id
+        func edges(atX x: Double) throws -> [TopologySummaryResult.Entry] {
+            try TopologySnapshotService().snapshot(document: session.document).entries.filter {
+                $0.kind == .edge && abs(($0.start?.x ?? -1) - x) < 1e-9 && abs(($0.end?.x ?? -1) - x) < 1e-9
+            }
+        }
+        let edge = try #require(try edges(atX: 0.12).first { $0.sceneNodeID == flat.description }?.selectionTarget())
+        let reference = try #require(try edges(atX: 0.1).first { $0.sceneNodeID == arch.description }?.selectionTarget())
+        _ = try session.execute(.alignSurface(targets: [edge, reference], continuity: .tangentPlane, tension: 1, blendRows: 1))
+        #expect(session.evaluationStatus == .valid)
+        // The flat sheet's edge now lies on the arch's, and the sheet is still one object.
+        #expect(try edges(atX: 0.12).isEmpty)
+        #expect(Set(try edges(atX: 0.1).map(\.sceneNodeID)) == [arch.description, flat.description])
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 2)
+        // An edge of the sheet itself is no reference to align to.
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.alignSurface(targets: [edge, edge]))
+        }
+    }
 }

@@ -4,7 +4,8 @@ import SwiftCAD
 
 /// The options of the running local face operation (`WorkspaceFaceEditSession`), laid out in the
 /// context panel: Push Face's Distance and Angle Adjacent, Draft Face's Degrees and Offset, Match
-/// Face's Front, and the Grow mode they share; Remove Fillets' Max Radius and Convexity.
+/// Face's Front, and the Grow mode they share; Remove Fillets' Max Radius and Convexity; Align
+/// Surface's Continuity, Tension and Blend rows.
 struct WorkspaceFaceEditDialogView: View {
     @Binding var dialog: WorkspaceFaceEditSession
     var displayUnit: LengthDisplayUnit
@@ -33,6 +34,18 @@ struct WorkspaceFaceEditDialogView: View {
             .accessibilityIdentifier("WorkspaceFaceEdit.extensionShape")
             Toggle("Modify", isOn: $dialog.modifies)
                 .accessibilityIdentifier("WorkspaceFaceEdit.modifies")
+        case .alignSurface:
+            Picker("Continuity", selection: $dialog.continuity) {
+                ForEach(SurfaceContinuityLevel.allCases, id: \.self) { Text("G\($0.rawValue)").tag($0) }
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.continuity")
+            TextField("Tension", value: $dialog.tension, format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceFaceEdit.tension")
+            Stepper("Blend \(dialog.blendRows)", value: $dialog.blendRows, in: 0...64)
+                .fixedSize()
+                .accessibilityIdentifier("WorkspaceFaceEdit.blendRows")
         case .hollow:
             lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
         case .thicken:
@@ -77,6 +90,7 @@ struct WorkspaceFaceEditDialogView: View {
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .draft(faces: [face], neutral: face))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .match(faces: [face], reference: face))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .removeFillets(object: SceneNodeID()))), displayUnit: .millimeter)
+        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .alignSurface(edge: face, reference: face))), displayUnit: .millimeter)
     }
     .padding()
 }

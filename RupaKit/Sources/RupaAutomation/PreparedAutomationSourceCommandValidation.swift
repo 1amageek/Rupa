@@ -115,6 +115,7 @@ enum PreparedAutomationSourceCommandValidation {
              .hollow,
              .thicken,
              .extendSheet,
+             .alignSurface,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

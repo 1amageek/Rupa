@@ -1097,6 +1097,8 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
             case .sheetExtend(let extend):
                 try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: extend.target.featureID, operationName: "Extend Sheet")
+            case .surfaceAlign(let align):
+                try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: align.target.featureID, operationName: "Align Surface")
             case .removeRedundantTopology(let removal):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Delete Redundant Topology")
             case .removeFillets(let removal):

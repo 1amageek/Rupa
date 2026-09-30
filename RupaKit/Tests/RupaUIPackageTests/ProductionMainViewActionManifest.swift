@@ -147,6 +147,7 @@ enum ProductionMainViewActionManifest {
         "hollow",
         "thicken",
         "extendSheet",
+        "alignSurface",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

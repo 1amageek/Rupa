@@ -2086,7 +2086,7 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .hollow, .thicken, .extendSheet:
+        case .hollow, .thicken, .extendSheet, .alignSurface:
             func run() throws {
                 var updatedDocument = document
                 switch command {
@@ -2105,8 +2105,13 @@ public final class CADDocumentStore {
                         targets: targets, distance: distance, shape: shape, modifies: modifies, objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
+                case .alignSurface(let targets, let continuity, let tension, let blendRows):
+                    try updatedDocument.alignSurface(
+                        targets: targets, continuity: continuity, tension: tension, blendRows: blendRows, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
                 default:
-                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken or extendSheet.")
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken, extendSheet or alignSurface.")
                 }
                 document = updatedDocument
                 try commitMutation()

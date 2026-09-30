@@ -904,7 +904,9 @@ Hollow on the selected faces or one solid, with its Thickness; and Thicken (alia
 on one sheet or the selected faces, with its Front and Back, which S locks together. The tool
 palette's Thicken takes Front and Back as well. The palette's Extend dispatches by selection:
 open edges of a sheet open Extend Sheet's dialog (Distance, the Shape Tab steps, Modify); one
-sketch curve extends through Extend Curve's natural shape.
+sketch curve extends through Extend Curve's natural shape. The palette's Align dispatches by
+selection too: an edge of a sheet and then a reference edge open Align Surface's dialog
+(Continuity, which Tab steps, Tension, Blend rows); curve ends align through Align Vertex.
 Delete or Backspace on faces of solids, and the inspector's Delete Face, delete them healing
 (`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before. Delete Redundant
 Topology dispatches by selection: selected solids and sheets merge their redundant faces and

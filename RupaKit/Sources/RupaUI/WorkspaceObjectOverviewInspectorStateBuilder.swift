@@ -629,6 +629,13 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(extend.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Shape", value: extend.shape.rawValue.capitalized),
             ]
+        case .surfaceAlign(let align):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Align Surface"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(align.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Reference", value: WorkspaceInspectorNumberText.shortID(align.reference.featureID)),
+                WorkspaceInspectorTextRow(title: "Continuity", value: "G\(align.continuity.rawValue)"),
+            ]
         case .removeRedundantTopology(let removal):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Delete Redundant Topology"),

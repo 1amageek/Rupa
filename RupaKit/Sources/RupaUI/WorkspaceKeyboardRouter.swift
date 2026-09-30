@@ -271,6 +271,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     /// Extend by selection: a sheet's open edges to Extend Sheet, a sketch curve to Extend Curve
     /// (palette).
     case beginExtend
+    /// Align by selection: an edge of a sheet and a reference edge to Align Surface, curve ends to
+    /// Align Vertex (palette).
+    case beginAlign
     /// S while Thicken runs: lock the back thickness to the front.
     case toggleThickenLock
     /// Applies the running face operation.

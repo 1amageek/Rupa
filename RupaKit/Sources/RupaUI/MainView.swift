@@ -6709,6 +6709,24 @@ private struct ProjectMainViewContent: View {
             }
             reportToolStatus("Extend: select open edges of a sheet, or one sketch curve.", severity: .warning)
             return .handled
+        case .beginAlign:
+            let nodes = snapshot.document.document.productMetadata.sceneNodes
+            let selected = snapshot.selection.selectedTargets
+            let edges = selected.filter { target in
+                guard case .edge = target.component, let node = nodes[target.sceneNodeID] else { return false }
+                return node.reference?.kind == .body
+            }
+            if edges.count == 2, selected.count == 2, nodes[edges[0].sceneNodeID]?.object?.geometryRole == .surface {
+                faceEditSession = WorkspaceFaceEditSession(kind: .alignSurface(edge: edges[0], reference: edges[1]))
+                reportToolStatus("Align Surface: the first edge follows the last; Tab steps the continuity; OK, Return or right-click aligns.")
+                return .handled
+            }
+            if let alignVertexAction {
+                alignVertexAction()
+                return .handled
+            }
+            reportToolStatus("Align: select an edge of a sheet, then the reference edge; or curve ends.", severity: .warning)
+            return .handled
         case .toggleThickenLock:
             guard case .thicken = faceEditSession?.kind else { return .ignored }
             faceEditSession?.locksThicknesses.toggle()
