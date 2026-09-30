@@ -77,7 +77,7 @@ public struct ManufacturingMeshAnalyzer: Sendable {
                     message: "Manufacturing analysis is missing mesh artifact provenance for body \(bodyID.description)."
                 )
             }
-            guard cache.sourceFingerprint == firstCache.sourceFingerprint,
+            guard try cache.sourceFingerprint == firstCache.sourceFingerprint,
                   cache.kernelVersion == firstCache.kernelVersion,
                   cache.tolerance == firstCache.tolerance,
                   cache.tessellationOptions == firstCache.tessellationOptions else {
@@ -88,11 +88,12 @@ public struct ManufacturingMeshAnalyzer: Sendable {
             }
         }
 
+        let firstFingerprint = try firstCache.sourceFingerprint
         let sourceDependency = try SourceDependencyIdentity(
             subject: .cadDocument(evaluatedDocument.document.id),
             contentFingerprint: .init(
-                algorithm: firstCache.sourceFingerprint.algorithm,
-                value: firstCache.sourceFingerprint.value
+                algorithm: firstFingerprint.algorithm,
+                value: firstFingerprint.value
             )
         )
         let sourceDependencies = try SourceDependencySetIdentity(

@@ -13,7 +13,9 @@ public final class CADDocumentEvaluationCache: Sendable {
     package struct Publication: Sendable {
         package let documentID: DocumentID
         package let sourceRevision: DocumentTransactionRevision
-        package let sourceFingerprint: CADDocumentSourceFingerprint
+        /// The CAD document evaluated at `sourceRevision`; a second publication at that revision
+        /// must carry an equal document.
+        package let sourceDocument: CADDocument
         package let configuration: CADGeometryEvaluationConfiguration
         package let evaluatedDocument: EvaluatedDocument
         package let meshSourcesByBodyID: [BodyID: CachedMeshSource]
@@ -38,7 +40,7 @@ public final class CADDocumentEvaluationCache: Sendable {
 
     private struct Entry: Sendable {
         let sourceRevision: DocumentTransactionRevision
-        let sourceFingerprint: CADDocumentSourceFingerprint
+        let sourceDocument: CADDocument
         let evaluatedDocument: EvaluatedDocument
         var meshSourcesByBodyID: [BodyID: CachedMeshSource]
     }
@@ -79,18 +81,11 @@ public final class CADDocumentEvaluationCache: Sendable {
             )
         }
 
-        let sourceFingerprint: CADDocumentSourceFingerprint
-        do {
-            sourceFingerprint = try validatedDocument.sourceFingerprint()
-        } catch {
-            throw CADIntegrationError(
-                code: .invalidEvaluationResult,
-                message: "Seeded CAD evaluation source identity could not be verified: \(error)"
-            )
-        }
+        // The evaluation must be of this very document: compared by value, which a document
+        // and the evaluation made from it answer without hashing either.
         guard let evaluatedCache = evaluatedDocument.caches.brep,
               evaluatedCache.tolerance == configuration.tolerance,
-              evaluatedCache.sourceFingerprint == sourceFingerprint else {
+              evaluatedDocument.document == validatedDocument.document else {
             throw CADIntegrationError(
                 code: .invalidEvaluationResult,
                 message: "Seeded CAD evaluation was produced from different source content."
@@ -100,56 +95,54 @@ public final class CADDocumentEvaluationCache: Sendable {
         try publish(
             documentID: validatedDocument.document.id,
             sourceRevision: sourceRevision,
-            sourceFingerprint: sourceFingerprint,
+            sourceDocument: validatedDocument.document,
             configuration: configuration,
             evaluatedDocument: evaluatedDocument,
             meshSourcesByBodyID: [:]
         )
     }
 
+    /// The entry for `document`'s scope; one at `sourceRevision` must hold an equal document.
     package func lookup(
-        documentID: DocumentID,
+        document: CADDocument,
         sourceRevision: DocumentTransactionRevision,
-        sourceFingerprint: CADDocumentSourceFingerprint,
         configuration: CADGeometryEvaluationConfiguration
     ) throws -> Lookup {
-        try state.withLock { state in
-            let scope = Scope(
-                documentID: documentID,
-                configuration: configuration
-            )
-            guard let entry = state.entries[scope] else {
-                return .empty
-            }
-            if entry.sourceRevision == sourceRevision {
-                guard entry.sourceFingerprint == sourceFingerprint else {
-                    throw CADIntegrationError(
-                        code: .sourceRevisionConflict,
-                        message: "CAD document \(documentID.description) revision "
-                            + "\(sourceRevision.value) identifies different source content."
-                    )
-                }
-                return Lookup(
-                    evaluatedDocument: entry.evaluatedDocument,
-                    isExactRevision: true,
-                    meshSourcesByBodyID: entry.meshSourcesByBodyID
+        let scope = Scope(
+            documentID: document.id,
+            configuration: configuration
+        )
+        guard let entry = state.withLock({ $0.entries[scope] }) else {
+            return .empty
+        }
+        if entry.sourceRevision == sourceRevision {
+            guard entry.sourceDocument == document else {
+                throw CADIntegrationError(
+                    code: .sourceRevisionConflict,
+                    message: "CAD document \(document.id.description) revision "
+                        + "\(sourceRevision.value) identifies different source content."
                 )
-            }
-            guard entry.sourceRevision < sourceRevision else {
-                return .empty
             }
             return Lookup(
                 evaluatedDocument: entry.evaluatedDocument,
-                isExactRevision: false,
+                isExactRevision: true,
                 meshSourcesByBodyID: entry.meshSourcesByBodyID
             )
         }
+        guard entry.sourceRevision < sourceRevision else {
+            return .empty
+        }
+        return Lookup(
+            evaluatedDocument: entry.evaluatedDocument,
+            isExactRevision: false,
+            meshSourcesByBodyID: entry.meshSourcesByBodyID
+        )
     }
 
     package func publish(
         documentID: DocumentID,
         sourceRevision: DocumentTransactionRevision,
-        sourceFingerprint: CADDocumentSourceFingerprint,
+        sourceDocument: CADDocument,
         configuration: CADGeometryEvaluationConfiguration,
         evaluatedDocument: EvaluatedDocument,
         meshSourcesByBodyID: [BodyID: CachedMeshSource]
@@ -158,7 +151,7 @@ public final class CADDocumentEvaluationCache: Sendable {
             Publication(
                 documentID: documentID,
                 sourceRevision: sourceRevision,
-                sourceFingerprint: sourceFingerprint,
+                sourceDocument: sourceDocument,
                 configuration: configuration,
                 evaluatedDocument: evaluatedDocument,
                 meshSourcesByBodyID: meshSourcesByBodyID
@@ -185,8 +178,8 @@ public final class CADDocumentEvaluationCache: Sendable {
                         continue
                     }
                     if currentEntry.sourceRevision == publication.sourceRevision {
-                        guard currentEntry.sourceFingerprint
-                                == publication.sourceFingerprint else {
+                        guard currentEntry.sourceDocument
+                                == publication.sourceDocument else {
                             throw CADIntegrationError(
                                 code: .sourceRevisionConflict,
                                 message: "CAD document \(publication.documentID.description) revision "
@@ -203,7 +196,7 @@ public final class CADDocumentEvaluationCache: Sendable {
                 }
                 stagedEntries[scope] = Entry(
                     sourceRevision: publication.sourceRevision,
-                    sourceFingerprint: publication.sourceFingerprint,
+                    sourceDocument: publication.sourceDocument,
                     evaluatedDocument: publication.evaluatedDocument,
                     meshSourcesByBodyID: publication.meshSourcesByBodyID
                 )

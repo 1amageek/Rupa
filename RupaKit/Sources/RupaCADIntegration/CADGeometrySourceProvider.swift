@@ -206,7 +206,6 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         }
 
         let validatedDocument: ValidatedCADDocument
-        let sourceFingerprint: CADDocumentSourceFingerprint
         do {
             // A validation made at another tolerance does not validate at this one.
             if let validated = source.validatedDocument, validated.tolerance == configuration.tolerance {
@@ -217,18 +216,16 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     tolerance: configuration.tolerance
                 )
             }
-            sourceFingerprint = try validatedDocument.sourceFingerprint()
         } catch {
             throw CADIntegrationError(
                 code: .evaluationFailed,
-                message: "CAD source validation or identity computation failed: \(error)"
+                message: "CAD source validation failed: \(error)"
             )
         }
 
         let lookup = try cache.lookup(
-            documentID: source.document.id,
+            document: validatedDocument.document,
             sourceRevision: sourceRevision,
-            sourceFingerprint: sourceFingerprint,
             configuration: configuration
         )
         try Task.checkCancellation()
@@ -259,8 +256,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             try validate(
                 evaluatedDocument: evaluatedDocument,
                 configuration: configuration,
-                sourceFingerprint: sourceFingerprint,
-                source: source
+                source: validatedDocument.document
             )
         }
 
@@ -373,7 +369,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
             publication: CADDocumentEvaluationCache.Publication(
                 documentID: source.document.id,
                 sourceRevision: sourceRevision,
-                sourceFingerprint: sourceFingerprint,
+                sourceDocument: validatedDocument.document,
                 configuration: configuration,
                 evaluatedDocument: evaluatedDocument,
                 meshSourcesByBodyID: meshSourcesByBodyID
@@ -392,19 +388,19 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         }
     }
 
+    /// The evaluator's result must be of `source` itself, compared by value, and at this
+    /// configuration.
     private func validate(
         evaluatedDocument: EvaluatedDocument,
         configuration: CADGeometryEvaluationConfiguration,
-        sourceFingerprint: CADDocumentSourceFingerprint,
-        source: CADGeometryEvaluationSource
+        source: CADDocument
     ) throws {
-        guard evaluatedDocument.document.id == source.document.id,
+        guard evaluatedDocument.document == source,
               evaluatedDocument.configuration.tolerance == configuration.tolerance,
               evaluatedDocument.configuration.tessellationOptions
                 == configuration.tessellationOptions,
               let brepCache = evaluatedDocument.caches.brep,
               brepCache.tolerance == configuration.tolerance,
-              brepCache.sourceFingerprint == sourceFingerprint,
               Set(evaluatedDocument.meshes.keys)
                 == Set(evaluatedDocument.brep.bodies.keys) else {
             throw CADIntegrationError(
