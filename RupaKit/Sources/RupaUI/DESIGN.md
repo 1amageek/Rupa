@@ -301,7 +301,7 @@ picks to the Boolean's list.
 | `objectSelection` | Object | every object's presentation | click selects the occurrence; hover highlights it |
 | `objectPlacement` | Object; also under a picking command while a Move inside it runs | the selected bodies with an exact CAD context | move, rotate and scale gizmo; one placement command on release |
 | `objectHandles` | Object | the selected box body | resize handles (`WorkspaceBodyResizeCommandPlanner`) |
-| `faceOffset` | Face | a selected face | drag offsets the face (`offsetBodyFace`) |
+| `faceOffset` | Face | a selected face | drag pushes the face (`pushFaces`) |
 | `edgeTreatment` | Edge, Object | a selected edge whose frame its two faces give | drag makes a fillet or chamfer (`createBodyEdgeTreatment`) |
 | `boundarySurface` | Edge, Object | a selected open boundary edge | click starts a boundary surface draft on it |
 | `bodyVertexEditing` | Vertex | a selected body vertex, poly-spline vertex, surface control point, trim point or surface frame | drag moves it, or slides it while Slide runs |
@@ -891,6 +891,14 @@ Return, right-click or OK applies as one source command, a refused one leaving t
 open, and Escape ends it without a change. The palette lists them as Imprint
 (with the Plasticity names Imprint Curve Body and Imprint Body Body), Isoparam and
 Untrim.
+
+The palette's Push Face (alias Offset Face), Draft Face and Match Face start a dialog on the
+selected faces (`WorkspaceFaceEditSession`, laid out by `WorkspaceFaceEditDialogView`): Push
+Face's Distance, in the display unit, and Angle Adjacent; Draft Face's Degrees and neutral
+Offset about the last-selected face; Match Face's Front, onto the last-selected face; and the
+Grow mode Tab steps. Return, right-click or OK applies as one source command, a refused one
+leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
+and a face drag push through the same `pushFaces`.
 
 ### What the workspace says, and where the canvas stops
 

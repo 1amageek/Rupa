@@ -58,7 +58,7 @@ struct SurfaceCreationFoundationTests {
         let node = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference == .body(id) })
         let component = try #require(try GeneratedTopologySelectionResolver().componentID(
             for: node.id, bodyFace: .front, in: session.document))
-        _ = try session.execute(.offsetBodyFace(target: .init(sceneNodeID: node.id, component: .face(component)),
+        _ = try session.execute(.pushFaces(targets: [.init(sceneNodeID: node.id, component: .face(component))],
             distance: .length(0.002, .meter)))
         let measured = try MeasurementService().measure(document: session.document, ruler: .standard(for: .millimeter))
         let body = try #require(measured.solids.first { $0.featureID == id.description })

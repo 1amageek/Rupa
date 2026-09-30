@@ -417,9 +417,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [WorkspaceInspectorTextRow(title: "Operation", value: "Patch Surface")]
         case .faceOffset(let faceOffset):
             return [
-                WorkspaceInspectorTextRow(title: "Operation", value: "Offset Face"),
+                WorkspaceInspectorTextRow(title: "Operation", value: "Push Face"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceOffset.target.featureID)),
-                WorkspaceInspectorTextRow(title: "Face", value: faceOffset.face.subshapeID.role),
+                WorkspaceInspectorTextRow(title: "Faces", value: "\(faceOffset.faces.count)"),
+                WorkspaceInspectorTextRow(title: "Grow", value: faceOffset.grow.rawValue.capitalized),
             ]
         case .faceMove(let faceMove):
             return [
@@ -625,6 +626,13 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(isoparam.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Direction", value: isoparam.direction == .u ? "U" : "V"),
                 WorkspaceInspectorTextRow(title: "Lines", value: "\(isoparam.fractions.count)"),
+            ]
+        case .faceMatch(let match):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Match Face"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(match.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Faces", value: "\(match.faces.count)"),
+                WorkspaceInspectorTextRow(title: "Reference", value: WorkspaceInspectorNumberText.shortID(match.source.featureID)),
             ]
         case .imprintBody(let imprint):
             return [

@@ -258,6 +258,15 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleImprintOption
     /// S while Isoparam runs: subdivide the control net.
     case toggleIsoparamSubdivide
+    /// Push Face, Draft Face or Match Face on the selected faces (palette).
+    case beginPushFace
+    case beginDraftFace
+    case beginMatchFace
+    /// Applies the running face operation.
+    case confirmFaceEdit
+    case cancelFaceEdit
+    /// Tab: the running face operation's next Grow mode.
+    case stepFaceEditGrow
     /// J: Join by selection — sketch curves to Join Curves, sheets to Join Sheets.
     case join
     /// Option-J: Unjoin by selection — a sketch curve to Unjoin Curve, faces to Unjoin Faces,
@@ -363,6 +372,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var hasImprintableSelection: Bool = false
     /// Whether an imprinting dialog runs.
     var isImprintSessionActive: Bool = false
+    /// Whether Push Face's, Draft Face's or Match Face's dialog runs.
+    var isFaceEditSessionActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -464,6 +475,12 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isEscape { return .cancelImprint }
             if input.isTab { return .toggleImprintOption }
             if input.characters.lowercased() == "s" { return .toggleIsoparamSubdivide }
+        }
+        if context.isFaceEditSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys {
+            if input.isReturn { return .confirmFaceEdit }
+            if input.isEscape { return .cancelFaceEdit }
+            if input.isTab { return .stepFaceEditGrow }
         }
         if context.isProjectSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {

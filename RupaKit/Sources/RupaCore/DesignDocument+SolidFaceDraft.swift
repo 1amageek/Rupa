@@ -3,11 +3,16 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    /// Draft Face, isocline: the target faces turn about their crossing with the neutral face's
+    /// plane, moved `neutralOffset` along its outward side, so each makes `angle` with the pull
+    /// direction (its outward normal), a positive angle leaning them out away from the plane.
     @discardableResult
     public mutating func draftBodyFaces(
         targets: [SelectionTarget],
         neutralTarget: SelectionTarget,
         angle: CADExpression,
+        neutralOffset: CADExpression? = nil,
+        grow: FaceEditGrow = .moving,
         name: String = "Draft Face",
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
@@ -33,6 +38,9 @@ extension DesignDocument {
                 code: .commandInvalid,
                 message: "\(operationName) requires at least one generated face target."
             )
+        }
+        if let neutralOffset {
+            _ = try resolvedLengthValue(neutralOffset, owner: "\(operationName) neutral offset")
         }
 
         let topology = try TopologySnapshotService().snapshot(
@@ -93,7 +101,9 @@ extension DesignDocument {
             target: FaceDraftTargetReference(featureID: neutralResolution.featureID),
             faces: targetFaces,
             neutralFace: neutralResolution.face,
-            angle: angle
+            angle: angle,
+            neutralOffset: neutralOffset,
+            grow: grow
         )
         try faceDraft.validate()
 

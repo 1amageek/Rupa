@@ -261,9 +261,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Fillet Vertex on several selected curve ends, each corner once, as one step.
     case applySketchCornerTreatments(vertices: [SelectionTarget], distance: CADExpression, treatment: SketchCornerTreatment)
     case createSlotSketch(target: SelectionTarget, width: CADExpression)
-    case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
+    case pushFaces(targets: [SelectionTarget], distance: CADExpression, adjacentAngle: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case deleteBodyFaces(targets: [SelectionTarget])
-    case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression)
+    case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
+    case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case createBodyEdgeTreatment(name: String, target: SelectionTarget, treatment: BodyEdgeTreatment)
     case createSheetSurfaceEdit(name: String, target: SelectionTarget, edit: SheetSurfaceEdit)
@@ -795,12 +796,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "applySketchCornerTreatments"
         case .createSlotSketch:
             "createSlotSketch"
-        case .offsetBodyFace:
-            "offsetBodyFace"
+        case .pushFaces:
+            "pushFaces"
         case .deleteBodyFaces:
             "deleteBodyFaces"
         case .draftBodyFaces:
             "draftBodyFaces"
+        case .matchFaces:
+            "matchFaces"
         case .chamferBodyEdges:
             "chamferBodyEdges"
         case .createBodyEdgeTreatment:
@@ -1114,9 +1117,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .applySketchCornerTreatment,
              .applySketchCornerTreatments,
              .createSlotSketch,
-             .offsetBodyFace,
+             .pushFaces,
              .deleteBodyFaces,
              .draftBodyFaces,
+             .matchFaces,
              .chamferBodyEdges,
              .createBodyEdgeTreatment,
              .createSheetSurfaceEdit,

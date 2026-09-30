@@ -144,6 +144,7 @@ public struct ParameterSourceUsageService: Sendable {
              .reverseSheet,
              .isoparam,
              .imprintBody,
+             .faceMatch,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -157,8 +158,10 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.distance, path: "edgeOffset.distance")
         case .faceDraft(let feature):
             record(feature.angle, path: "faceDraft.angle")
+            if let neutralOffset = feature.neutralOffset { record(neutralOffset, path: "faceDraft.neutralOffset") }
         case .faceOffset(let feature):
             record(feature.distance, path: "faceOffset.distance")
+            if let adjacentAngle = feature.adjacentAngle { record(adjacentAngle, path: "faceOffset.adjacentAngle") }
         case .faceMove(let feature):
             record(feature.translation.distance, path: "faceMove.translation.distance")
         case .edgeMove(let feature):
@@ -384,6 +387,8 @@ public struct ParameterSourceUsageService: Sendable {
             "isoparam"
         case .imprintBody:
             "imprintBody"
+        case .faceMatch:
+            "faceMatch"
         case .imprintCurves:
             "imprintCurves"
         case .untrimFace:

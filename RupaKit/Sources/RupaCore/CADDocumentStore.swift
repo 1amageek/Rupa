@@ -2018,18 +2018,20 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .offsetBodyFace:
+        case .pushFaces:
             func run() throws {
-                guard case .offsetBodyFace(let target, let distance) = command else {
+                guard case .pushFaces(let targets, let distance, let adjacentAngle, let grow) = command else {
                     throw EditorError(
                         code: .commandInvalid,
-                        message: "Command dispatch expected offsetBodyFace."
+                        message: "Command dispatch expected pushFaces."
                     )
                 }
                 var updatedDocument = document
-                try updatedDocument.offsetBodyFace(
-                    target: target,
+                try updatedDocument.pushFaces(
+                    targets: targets,
                     distance: distance,
+                    adjacentAngle: adjacentAngle,
+                    grow: grow,
                     objectRegistry: objectRegistry,
                     currentEvaluation: currentEvaluation,
                     currentGeneration: generation
@@ -2061,7 +2063,7 @@ public final class CADDocumentStore {
             try run()
         case .draftBodyFaces:
             func run() throws {
-                guard case .draftBodyFaces(let targets, let neutralTarget, let angle) = command else {
+                guard case .draftBodyFaces(let targets, let neutralTarget, let angle, let neutralOffset, let grow) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected draftBodyFaces."
@@ -2072,9 +2074,26 @@ public final class CADDocumentStore {
                     targets: targets,
                     neutralTarget: neutralTarget,
                     angle: angle,
+                    neutralOffset: neutralOffset,
+                    grow: grow,
                     objectRegistry: objectRegistry,
                     currentEvaluation: currentEvaluation,
                     currentGeneration: generation
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .matchFaces:
+            func run() throws {
+                guard case .matchFaces(let targets, let reference, let front, let grow) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected matchFaces.")
+                }
+                var updatedDocument = document
+                try updatedDocument.matchFaces(
+                    targets: targets, reference: reference, front: front, grow: grow,
+                    objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()

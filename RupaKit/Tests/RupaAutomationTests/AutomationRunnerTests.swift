@@ -1772,7 +1772,7 @@ import SwiftCAD
     )
 
     #expect(result.message == "Body face offset applied.")
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(session.evaluationStatus == .valid)
@@ -2517,7 +2517,7 @@ import SwiftCAD
     )
 
     #expect(result.message == "Body face offset applied.")
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(nearlyEqualAutomation(try automationCylinderRadius(forBody: bodyFeatureID, in: session.document), beforeRadius + 0.0015))

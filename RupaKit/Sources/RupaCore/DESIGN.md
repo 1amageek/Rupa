@@ -238,6 +238,21 @@ the cutter sheets and every intermediate slice are consumed, so their objects ar
 removed once the pieces are shown. `CutCommandTests` own normal and slanted curve cuts, Extend, face cutters and
 several cutters in turn.
 
+Push Face (`pushFaces(name:targets:distance:adjacentAngle:grow:)`) pushes faces of one
+object along their outward side. One face of an object showing an extrude of an editable
+rectangle, or of a full solid circle, pushed without an adjacent angle edits that extrude's
+profile or depth, so the object stays editable as that shape; every other push (several faces,
+an adjacent angle, or any other face) appends Swift-CAD `faceOffset`, whose faces are re-solved
+from their surfaces, and the object shows the result in its place. `MeasurementService`
+measures a push's evaluated solid. Draft Face (`draftBodyFaces(targets:neutralTarget:angle:neutralOffset:grow:)`)
+appends `faceDraft`, isocline about the neutral face's plane moved `neutralOffset` along its
+outward side. Match Face (`matchFaces(name:targets:reference:front:grow:)`) appends
+`faceMatch`: the faces take the reference face's surface, of the same object or of another
+where it is shown (its relative placement), facing out as they did or, with `front`, as the
+reference does. Every Grow mode refuses a face running into another wall (Swift-CAD's
+`FIXME(INCOMPLETE_IMPLEMENTATION)`). `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
+`BodyFaceDraftCommandTests` own these contracts.
+
 Face offset operates in the source profile frame. Moving the start cap compensates
 placement along the transformed sketch normal, keeping the opposite cap fixed on
 every construction plane. Cylinder wall offsets retain the center and change the

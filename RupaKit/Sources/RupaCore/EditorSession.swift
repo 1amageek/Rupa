@@ -2066,25 +2066,23 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func offsetBodyFace(
-        target: SelectionTarget,
-        distance: CADExpression
+    public func pushFaces(
+        targets: [SelectionTarget],
+        distance: CADExpression,
+        adjacentAngle: CADExpression? = nil,
+        grow: FaceEditGrow = .moving
     ) -> CommandExecutionResult? {
-        perform(
-            .offsetBodyFace(
-                target: target,
-                distance: distance
-            )
-        )
+        perform(.pushFaces(targets: targets, distance: distance, adjacentAngle: adjacentAngle, grow: grow))
     }
 
     @discardableResult
-    public func offsetSelectedBodyFace(distance: CADExpression) -> CommandExecutionResult? {
-        guard let selectedTarget else {
-            reportToolStatus("Face offset requires a face selection.", severity: .warning)
+    public func pushSelectedFaces(distance: CADExpression) -> CommandExecutionResult? {
+        let faces = selection.selectedTargets.filter { if case .face = $0.component { true } else { false } }
+        guard faces.isEmpty == false else {
+            reportToolStatus("Push Face requires a face selection.", severity: .warning)
             return nil
         }
-        return offsetBodyFace(target: selectedTarget, distance: distance)
+        return pushFaces(targets: faces, distance: distance)
     }
 
     @discardableResult
@@ -2100,13 +2098,17 @@ public final class EditorSession {
     public func draftBodyFaces(
         targets: [SelectionTarget],
         neutralTarget: SelectionTarget,
-        angle: CADExpression
+        angle: CADExpression,
+        neutralOffset: CADExpression? = nil,
+        grow: FaceEditGrow = .moving
     ) -> CommandExecutionResult? {
         perform(
             .draftBodyFaces(
                 targets: targets,
                 neutralTarget: neutralTarget,
-                angle: angle
+                angle: angle,
+                neutralOffset: neutralOffset,
+                grow: grow
             )
         )
     }

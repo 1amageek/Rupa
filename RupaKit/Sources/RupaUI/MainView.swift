@@ -204,6 +204,7 @@ private struct ProjectMainViewContent: View {
     @State private var rebuildSession: WorkspaceRebuildSession?
     @State private var deformSession: WorkspaceDeformSession?
     @State private var imprintSession: WorkspaceImprintSession?
+    @State private var faceEditSession: WorkspaceFaceEditSession?
     /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
     @State private var faceLoopOffsetIsIndividual = true
     @State private var projectSession: WorkspaceProjectSession?
@@ -2927,6 +2928,7 @@ private struct ProjectMainViewContent: View {
             || rebuildSession != nil
             || deformSession != nil
             || imprintSession != nil
+            || faceEditSession != nil
             || projectSession != nil
             || bridgeEdgeSession != nil
             || regionOffsetCommandState.isActive
@@ -2964,6 +2966,10 @@ private struct ProjectMainViewContent: View {
         }
         if imprintSession != nil {
             confirmImprint()
+            return true
+        }
+        if faceEditSession != nil {
+            confirmFaceEdit()
             return true
         }
         if projectSession != nil {
@@ -4298,6 +4304,10 @@ private struct ProjectMainViewContent: View {
             if let imprintSession {
                 workspaceContextDivider
                 imprintContextPanelContent(imprintSession)
+            }
+            if let faceEditSession {
+                workspaceContextDivider
+                faceEditContextPanelContent(faceEditSession)
             }
             if let projectSession {
                 workspaceContextDivider
@@ -6213,6 +6223,7 @@ private struct ProjectMainViewContent: View {
             isDeformSessionActive: deformSession != nil,
             hasImprintableSelection: imprintSessionKind() != nil,
             isImprintSessionActive: imprintSession != nil,
+            isFaceEditSessionActive: faceEditSession != nil,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6619,6 +6630,38 @@ private struct ProjectMainViewContent: View {
         case .toggleIsoparamSubdivide:
             guard case .isoparam = imprintSession?.kind else { return .ignored }
             imprintSession?.subdividesControlNet.toggle()
+            return .handled
+        case .beginPushFace:
+            let faces = selectedBodyFaceTargets
+            guard faces.isEmpty == false else {
+                reportToolStatus("Push Face: select the faces to push.", severity: .warning)
+                return .handled
+            }
+            faceEditSession = WorkspaceFaceEditSession(kind: .push(faces: faces))
+            reportToolStatus("Push Face: set the distance, Tab steps Grow; OK, Return or right-click pushes the faces.")
+            return .handled
+        case .beginDraftFace, .beginMatchFace:
+            let faces = selectedBodyFaceTargets
+            guard faces.count >= 2, let reference = faces.last else {
+                reportToolStatus("\(action == .beginDraftFace ? "Draft Face" : "Match Face"): select the faces, then the reference face last.", severity: .warning)
+                return .handled
+            }
+            let targets = Array(faces.dropLast())
+            faceEditSession = WorkspaceFaceEditSession(
+                kind: action == .beginDraftFace ? .draft(faces: targets, neutral: reference) : .match(faces: targets, reference: reference)
+            )
+            reportToolStatus("\(faceEditSession?.title ?? ""): the last-selected face is the reference; OK, Return or right-click applies.")
+            return .handled
+        case .confirmFaceEdit:
+            confirmFaceEdit()
+            return .handled
+        case .cancelFaceEdit:
+            let title = faceEditSession?.title ?? "Face edit"
+            faceEditSession = nil
+            reportToolStatus("\(title) ended.")
+            return .handled
+        case .stepFaceEditGrow:
+            faceEditSession?.stepGrow()
             return .handled
         case .toggleFaceLoopIndividual:
             faceLoopOffsetIsIndividual.toggle()
@@ -7981,9 +8024,11 @@ private struct ProjectMainViewContent: View {
             return
         }
         submitSource(
-            .offsetBodyFace(
-                target: target.target,
-                distance: .length(target.distance, .meter)
+            .pushFaces(
+                targets: [target.target],
+                distance: .length(target.distance, .meter),
+                adjacentAngle: nil,
+                grow: .moving
             )
         )
     }
@@ -9008,6 +9053,7 @@ private struct ProjectMainViewContent: View {
         rebuildSession = nil
         deformSession = nil
         imprintSession = nil
+        faceEditSession = nil
         if slotProfileCommandState.isFreestyle {
             slotProfileCommandState.deactivate()
         }
@@ -9971,6 +10017,25 @@ private struct ProjectMainViewContent: View {
         submitDialogCommand([imprint.command()], name: imprint.title, instance: imprint.instance,
                             running: { imprintSession?.instance }, end: { imprintSession = nil },
                             done: { reportToolStatus("\(imprint.title) applied.") })
+    }
+
+    /// Applies the running face operation as one step; it stays for another try when Core refuses.
+    private func confirmFaceEdit() {
+        guard let edit = faceEditSession else { return }
+        submitDialogCommand([edit.command()], name: edit.title, instance: edit.instance,
+                            running: { faceEditSession?.instance }, end: { faceEditSession = nil },
+                            done: { reportToolStatus("\(edit.title) applied.") })
+    }
+
+    /// Push Face's, Draft Face's or Match Face's dialog: the options its command takes, and OK.
+    @ViewBuilder
+    private func faceEditContextPanelContent(_ edit: WorkspaceFaceEditSession) -> some View {
+        workspaceStatusChip(edit.title, systemImage: "square.3.layers.3d", tint: .accentColor)
+        WorkspaceFaceEditDialogView(
+            dialog: Binding(get: { faceEditSession ?? edit }, set: { faceEditSession = $0 }),
+            displayUnit: snapshot.workspaceState.ruler.displayUnit
+        )
+        workspaceIconButton(systemImage: "checkmark", help: edit.title, accessibilityIdentifier: "WorkspaceFaceEdit.apply", action: { confirmFaceEdit() })
     }
 
     /// The imprinting dialog: the options its command takes, and OK.
@@ -12512,9 +12577,11 @@ private struct ProjectMainViewContent: View {
         by meters: Double
     ) {
         submitSource(
-            .offsetBodyFace(
-                target: target,
-                distance: .length(meters, .meter)
+            .pushFaces(
+                targets: [target],
+                distance: .length(meters, .meter),
+                adjacentAngle: nil,
+                grow: .moving
             )
         )
     }
@@ -12536,7 +12603,9 @@ private struct ProjectMainViewContent: View {
             .draftBodyFaces(
                 targets: targets,
                 neutralTarget: neutralTarget,
-                angle: .angle(angleDegrees, .degree)
+                angle: .angle(angleDegrees, .degree),
+                neutralOffset: nil,
+                grow: .moving
             )
         )
     }

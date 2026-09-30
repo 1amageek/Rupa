@@ -1065,6 +1065,8 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Isoparam")
             case .imprintBody(let imprint):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .faceMatch(let match):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: match.target.featureID, operationName: "Match Face")
             case .imprintCurves(let imprint):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
             case .untrimFace(let untrim):
@@ -1122,8 +1124,9 @@ public struct MeasurementService {
                 continue
             case .curveTrim:
                 continue
+            case .faceOffset(let offset):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: offset.target.featureID, operationName: "Push Face")
             case .patchSurface,
-                 .faceOffset,
                  .faceMove,
                  .edgeMove,
                  .vertexMove,

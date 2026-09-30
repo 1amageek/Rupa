@@ -1789,9 +1789,11 @@ public struct AutomationRunner: Sendable {
                     throw invalidExecutionDomainError()
                 }
                 let result = try session.execute(
-                    .offsetBodyFace(
-                        target: target,
-                        distance: distance
+                    .pushFaces(
+                        targets: [target],
+                        distance: distance,
+                        adjacentAngle: nil,
+                        grow: .moving
                     )
                 )
                 return commandAutomationResult(
@@ -1825,7 +1827,9 @@ public struct AutomationRunner: Sendable {
                     .draftBodyFaces(
                         targets: targets,
                         neutralTarget: neutralTarget,
-                        angle: angle
+                        angle: angle,
+                        neutralOffset: nil,
+                        grow: .moving
                     )
                 )
                 return commandAutomationResult(

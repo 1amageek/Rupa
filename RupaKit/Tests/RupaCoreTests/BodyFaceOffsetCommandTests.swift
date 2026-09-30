@@ -12,14 +12,13 @@ import Testing
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceRight))
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(2.0, .millimeter)
         )
     )
 
     let afterBounds = try rectangleBounds(forBody: bodyFeatureID, in: session.document)
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
     #expect(nearlyEqual(afterBounds.minX, beforeBounds.minX))
@@ -44,15 +43,14 @@ import Testing
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceFront))
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(1.5, .millimeter)
         )
     )
 
     let afterDepth = try extrudeDepth(for: bodyFeatureID, in: session.document)
     let afterTranslationZ = translationZ(for: bodyNodeID, in: session.document)
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(nearlyEqual(afterDepth, beforeDepth + 0.0015))
     // The default XY sketch extrudes along Z; its opposite face stays at the same world depth.
     #expect(nearlyEqual(afterTranslationZ, beforeTranslationZ - 0.0015))
@@ -80,14 +78,13 @@ import Testing
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(componentID))
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(2.0, .millimeter)
         )
     )
 
     let afterBounds = try rectangleBounds(forBody: bodyFeatureID, in: session.document)
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
     #expect(componentID.generatedTopologySubshapeID != nil)
@@ -139,14 +136,13 @@ import Testing
     let target = SelectionTarget(sceneNodeID: instanceSceneNodeID, component: .face(componentID))
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(2.0, .millimeter)
         )
     )
 
     let afterBounds = try rectangleBounds(forBody: bodyFeatureID, in: session.document)
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(4))
     #expect(componentID.generatedTopologySubshapeID != nil)
@@ -165,13 +161,12 @@ import Testing
     let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceSide))
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(2.0, .millimeter)
         )
     )
 
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
     #expect(nearlyEqual(try cylinderRadius(forBody: bodyFeatureID, in: session.document), beforeRadius + 0.002))
@@ -192,13 +187,12 @@ import Testing
     let target = try #require(faceEntry.selectionTarget())
 
     let result = try session.execute(
-        .offsetBodyFace(
-            target: target,
+        .pushFaces(targets: [target],
             distance: .length(-1.0, .millimeter)
         )
     )
 
-    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.commandName == "pushFaces")
     #expect(result.didMutate)
     #expect(session.generation == DocumentGeneration(2))
     #expect(nearlyEqual(try cylinderRadius(forBody: bodyFeatureID, in: session.document), beforeRadius - 0.001))
@@ -215,8 +209,7 @@ import Testing
 
     do {
         _ = try session.execute(
-            .offsetBodyFace(
-                target: target,
+            .pushFaces(targets: [target],
                 distance: .length(-100.0, .millimeter)
             )
         )

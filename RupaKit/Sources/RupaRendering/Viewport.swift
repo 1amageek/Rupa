@@ -4576,7 +4576,7 @@ public struct Viewport: View {
                 return true
             }
             var preview = document
-            try preview.offsetBodyFace(target: selectionTarget, distance: .length(distance, .meter),
+            try preview.pushFaces(targets: [selectionTarget], distance: .length(distance, .meter),
                                        objectRegistry: objectRegistry,
                                        currentEvaluation: currentEvaluation,
                                        currentGeneration: sceneDocumentGeneration)

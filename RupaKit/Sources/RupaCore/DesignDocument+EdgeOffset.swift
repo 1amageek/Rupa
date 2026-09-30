@@ -90,7 +90,7 @@ extension DesignDocument {
     }
 
     /// The one object every target lies on, which must show a body of its own.
-    private func offsetObject(for targets: [SelectionTarget], operationName: String) throws -> (nodeID: SceneNodeID, featureID: FeatureID) {
+    func offsetObject(for targets: [SelectionTarget], operationName: String) throws -> (nodeID: SceneNodeID, featureID: FeatureID) {
         guard let nodeID = targets.first?.sceneNodeID else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) requires a selection.")
         }
@@ -104,7 +104,7 @@ extension DesignDocument {
     }
 
     /// The stable reference of the edge or face a target selects.
-    private func stableReference(
+    func stableReference(
         of target: SelectionTarget, kind: TopologySummaryResult.Entry.Kind, in topology: TopologySnapshot, operationName: String
     ) throws -> StableSubshapeReference {
         let componentID: SelectionComponentID

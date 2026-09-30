@@ -798,3 +798,12 @@ private func keyboardContext(
     #expect(action("\t", tab: true) == .toggleImprintOption)
     #expect(action("s") == .toggleIsoparamSubdivide)
 }
+
+@Test func workspaceKeyboardRouterDrivesTheFaceEditDialog() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isFaceEditSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .stepFaceEditGrow)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmFaceEdit)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelFaceEdit)
+}

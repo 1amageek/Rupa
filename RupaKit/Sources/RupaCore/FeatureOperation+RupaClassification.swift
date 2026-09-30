@@ -55,6 +55,7 @@ extension FeatureOperation {
              .reverseSheet,
              .isoparam,
              .imprintBody,
+             .faceMatch,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -139,6 +140,7 @@ extension FeatureOperation {
              .reverseSheet,
              .isoparam,
              .imprintBody,
+             .faceMatch,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -247,6 +249,9 @@ extension FeatureOperation {
         case .isoparam(let feature):
             return [feature.target.featureID]
         case .imprintBody(let feature):
+            return [feature.target.featureID]
+        // Match Face reshapes its target in its place; the reference face's body stays.
+        case .faceMatch(let feature):
             return [feature.target.featureID]
         case .imprintCurves(let feature):
             return [feature.target.featureID]

@@ -3,12 +3,89 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    public mutating func offsetBodyFace(
-        target: SelectionTarget,
+    /// Push Face: faces of one object pushed `distance` along their outward side, the faces
+    /// around them re-solved to meet them, with `adjacentAngle` tilting each planar face beside a
+    /// pushed planar face about their shared straight edge (a positive angle leaning it out).
+    /// One face of an extrude of an editable rectangle, or of a full solid circle, pushed without
+    /// an angle edits the extrude's profile or depth, so the object stays editable as that shape;
+    /// every other push appends Swift-CAD `faceOffset`, and the object shows the result in its
+    /// place.
+    public mutating func pushFaces(
+        name: String = "Push Face",
+        targets: [SelectionTarget],
         distance: CADExpression,
+        adjacentAngle: CADExpression? = nil,
+        grow: FaceEditGrow = .moving,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let operationName = "Push Face"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        guard abs(try resolvedLengthValue(distance, owner: "\(operationName) distance")) > 1.0e-12 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) distance must not be zero.")
+        }
+        if let adjacentAngle {
+            guard abs(try resolvedAngleValue(adjacentAngle, owner: "\(operationName) adjacent angle")) < Double.pi / 2 else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) adjacent angle must be smaller than 90 degrees.")
+            }
+        }
+        if targets.count == 1, adjacentAngle == nil, let target = targets.first,
+           try pushEditsProfile(target, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration) {
+            try pushProfileFace(
+                target: target, distance: distance, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
+            return
+        }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let object = try offsetObject(for: targets, operationName: operationName)
+        let faces = try targets.map { try stableReference(of: $0, kind: .face, in: topology, operationName: operationName) }
+        try appendFeatureShownByObject(
+            .faceOffset(FaceOffsetFeature(
+                target: FaceOffsetTargetReference(featureID: object.featureID), faces: faces,
+                distance: distance, adjacentAngle: adjacentAngle, grow: grow
+            )),
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
+        )
+    }
+
+    /// Whether pushing `target` alone edits its extrude's profile: a face of an object showing an
+    /// extrude of a rectangle profile other than a side face, or of a full solid circle.
+    private func pushEditsProfile(
+        _ target: SelectionTarget,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> Bool {
+        guard case .face = target.component,
+              let reference = productMetadata.sceneNodes[target.sceneNodeID]?.reference,
+              reference.kind == .body || reference.kind == .componentInstance else { return false }
+        let resolved = try editableBodyTargetResolution(for: target, operationName: "Push Face")
+        guard case let .extrude(extrude)? = cadDocument.designGraph.nodes[resolved.featureID]?.operation,
+              extrude.section.isProfile,
+              case let .sketch(sketch)? = cadDocument.designGraph.nodes[extrude.section.featureID]?.operation else { return false }
+        if let cylinder = try recognizedCylinderProfile(in: sketch) {
+            return cylinder.inner == nil && cylinder.isFullTurn
+        }
+        guard isRectangleProfile(sketch) else { return false }
+        let face = try editableBodyFace(
+            for: resolved.target, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        return face != .side
+    }
+
+    /// Pushes one face of an extrude of an editable rectangle or full solid circle by editing the
+    /// profile, or the extrude's depth for its caps.
+    private mutating func pushProfileFace(
+        target: SelectionTarget,
+        distance: CADExpression,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         let offsetMeters = try resolvedLengthValue(distance, owner: "Face offset distance")
         guard abs(offsetMeters) > 1.0e-12 else {

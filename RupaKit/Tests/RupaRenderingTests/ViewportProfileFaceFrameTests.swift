@@ -49,7 +49,7 @@ struct ViewportProfileFaceFrameTests {
                 to: measure.projected(scaled.anchor + scaled.direction * 0.004), measure: measure)
             #expect(abs(measured - 0.002) < 1e-9)
             var changed = document
-            try changed.offsetBodyFace(target: target, distance: .length(0.002, .meter))
+            try changed.pushFaces(targets: [target], distance: .length(0.002, .meter))
             let after = try #require(ViewportSceneBuilder().build(document: changed,
                 ruler: .standard(for: .meter), evaluationPolicy: .evaluateOnDemand).items.first { $0.featureID == item.featureID })
             let moved = try ViewportProfileFaceFrame.resolve(item: after, face: face, document: changed)
@@ -61,7 +61,7 @@ struct ViewportProfileFaceFrameTests {
                 #expect(afterSource.sizeY == beforeSource.sizeY)
                 var refused = document
                 #expect(throws: EditorError.self) {
-                    try refused.offsetBodyFace(target: target, distance: .length(-1, .meter))
+                    try refused.pushFaces(targets: [target], distance: .length(-1, .meter))
                 }
                 #expect(refused.productMetadata == document.productMetadata)
             }
