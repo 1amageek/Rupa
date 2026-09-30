@@ -727,3 +727,62 @@ private enum ProjectWorkspaceActionTestError: Error {
     case viewProjectionFailed
     case previewRenderProjectionFailed
 }
+
+/// Every draft staged from one base proposes the same revision, and each still has an evaluation
+/// identity of its own: a render cache keyed by snapshot identity cannot serve one draft's
+/// content for another's.
+@Test(.timeLimit(.minutes(1)))
+func projectWorkspaceSourcePreviewsOfOneBaseHaveTheirOwnSnapshotIdentity() async throws {
+    let controller = try makeActionController(document: .empty(named: "Before"))
+    let workspace = await ProjectWorkspace(project: controller)
+    let snapshot = try await workspace.evaluate()
+    func action(_ name: String) throws -> ProjectWorkspaceAction {
+        try DefaultProjectWorkspaceActionPlanner().source(
+            name: "preview.rename", commands: [.renameDocument(name: name)], from: snapshot
+        )
+    }
+    func preview(_ name: String) async throws -> ProjectSourcePreviewResult {
+        guard case .source(let preview) = try await workspace.preview(try action(name)) else {
+            throw ProjectControllerError(code: .transactionInvalid, message: "A source action must return a source preview.")
+        }
+        return preview
+    }
+    let first = try await preview("First")
+    let second = try await preview("Second")
+    let again = try await preview("First")
+    let ids = [first, second, again].map(\.renderPayload.evaluation.id)
+    #expect(Set(ids.map(\.sourceRevision)) == [first.proposedTransactionRevision])
+    #expect(ids.allSatisfy { $0.candidate != nil })
+    #expect(Set(ids).count == 3)
+
+    let firstPayload = try await workspace.previewRenderPayload(try action("First"))
+    let secondPayload = try await workspace.previewRenderPayload(try action("Second"))
+    #expect(firstPayload.presentationScene.snapshotID.candidate != nil)
+    #expect(firstPayload.presentationScene.snapshotID != secondPayload.presentationScene.snapshotID)
+
+    // A published evaluation is named by its revision alone, before and after a draft is applied.
+    #expect(snapshot.viewport.snapshotID.candidate == nil)
+    _ = try await workspace.perform(try action("Second"))
+    let committed = try #require(await workspace.view)
+    #expect(committed.viewport.snapshotID.candidate == nil)
+    #expect(committed.viewport.snapshotID.sourceRevision == first.proposedTransactionRevision)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func evaluationSnapshotIDEncodesACandidateOnlyWhenItHasOne() throws {
+    let published = EvaluationSnapshotID(
+        projectID: ProjectID(rawValue: "project.snapshot-identity"), purpose: .presentation,
+        sourceRevision: DocumentTransactionRevision(3)
+    )
+    let publishedJSON = try JSONEncoder().encode(published)
+    let keys = try #require(JSONSerialization.jsonObject(with: publishedJSON) as? [String: Any]).keys
+    #expect(Set(keys) == ["projectID", "purpose", "sourceRevision"])
+    #expect(try JSONDecoder().decode(EvaluationSnapshotID.self, from: publishedJSON) == published)
+
+    let candidate = EvaluationSnapshotID(
+        projectID: published.projectID, purpose: .presentation,
+        sourceRevision: DocumentTransactionRevision(3), candidate: UUID()
+    )
+    #expect(candidate != published)
+    #expect(try JSONDecoder().decode(EvaluationSnapshotID.self, from: JSONEncoder().encode(candidate)) == candidate)
+}

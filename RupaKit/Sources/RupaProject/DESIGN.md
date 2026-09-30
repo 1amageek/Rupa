@@ -112,7 +112,11 @@ the isolated source staging path and returns an immutable result to Core/Project
    later transaction at the same proposed revision. A successful source
    preview may return one immutable `ProjectSourcePreviewRenderPayload`
    containing the canonical reconstructed candidate document, its projected
-   source model, and that same presentation evaluation. The payload has no
+   source model, and that same presentation evaluation named as an unpublished
+   candidate: every candidate staged from one base proposes the same revision,
+   so the preview mints a candidate token into its `EvaluationSnapshotID`, and
+   an evaluation snapshot ID names one evaluated content. A published
+   evaluation carries no token. The payload has no
    publication sequence, workspace state, package authority, or
    `ProjectStateSnapshot` identity and is discarded with the preview result.
 3. Commit revalidates the generic project coordinates and executes one source

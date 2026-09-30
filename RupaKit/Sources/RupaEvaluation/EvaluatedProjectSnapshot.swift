@@ -1,3 +1,4 @@
+import Foundation
 import RupaCoreTypes
 import RupaGeometry
 import RupaProjectModel
@@ -18,5 +19,23 @@ public struct EvaluatedProjectSnapshot: Sendable {
         self.projectID = projectID
         self.occurrences = occurrences
         self.copyTelemetry = copyTelemetry
+    }
+}
+
+extension EvaluatedProjectSnapshot {
+    /// This evaluation named as the unpublished candidate `candidate`: the same content under an
+    /// identity no other candidate of the same proposed revision shares.
+    public func identifyingCandidate(_ candidate: UUID) -> EvaluatedProjectSnapshot {
+        EvaluatedProjectSnapshot(
+            id: EvaluationSnapshotID(
+                projectID: id.projectID,
+                purpose: id.purpose,
+                sourceRevision: id.sourceRevision,
+                candidate: candidate
+            ),
+            projectID: projectID,
+            occurrences: occurrences,
+            copyTelemetry: copyTelemetry
+        )
     }
 }

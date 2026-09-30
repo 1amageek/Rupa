@@ -323,7 +323,8 @@ hover target, snap feedback and the placement highlight
 (`ViewportSpatialOverlayChangeKey.withoutHover`). The preparation identity
 carries both, and an identity without a base revision claims nothing. What the
 producer derives from the document alone (scene-node parent frames, supported
-poly-spline patches) is derived once per `ViewportSourceIdentity`: the viewport
+poly-spline patches) is derived once per `ViewportSourceIdentity`, which names one
+document (a presentation's snapshot ID includes a preview candidate's token): the viewport
 keeps one `ViewportDocumentOverlayMemo` for the identity it presents and hands it
 to every capture, and the first build that needs a value derives it off the main
 actor. A build that reuses a value charges the admission its derivation charged,

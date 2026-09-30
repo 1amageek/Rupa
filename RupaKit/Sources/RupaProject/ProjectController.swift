@@ -495,10 +495,12 @@ public actor ProjectController: ProjectOperating {
             ),
             proposedTransactionRevision: staged.source.proposedTransactionRevision,
             proposedDocumentGeneration: staged.source.proposedGeneration,
+            // Every candidate staged from this base proposes the same revision; its own token
+            // keeps a render cache keyed by snapshot identity from serving another draft.
             renderPayload: ProjectSourcePreviewRenderPayload(
                 document: staged.document,
                 evaluationSource: staged.evaluationSource,
-                evaluation: staged.evaluation
+                evaluation: staged.evaluation.identifyingCandidate(UUID())
             ),
             wouldMutate: staged.source.wouldMutate,
             commandResults: staged.source.value.commandResults,
