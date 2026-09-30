@@ -426,6 +426,26 @@ extension DesignDocument {
         return featureID
     }
 
+    /// The curve a selected edge of a body stands for, read from the body as it is now.
+    public func edgeCurveFeature(
+        for target: SelectionTarget,
+        operationName: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> EdgeCurveFeature {
+        let object = try offsetObject(for: [target], operationName: operationName)
+        let role = productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        return EdgeCurveFeature(
+            source: object.featureID,
+            bodyRole: role == .surface ? .sheet : .body,
+            edges: [try stableReference(of: target, kind: .edge, in: topology, operationName: operationName)]
+        )
+    }
+
     /// The section a selected planar face of a body stands for, read from the body as it is now.
     public func faceSectionReference(
         for target: SelectionTarget,

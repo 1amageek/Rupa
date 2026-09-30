@@ -2960,10 +2960,13 @@ public final class CADDocumentStore {
             try run()
         case .createPipes:
             func run() throws {
-                guard case .createPipes(let name, let sources) = command, sources.isEmpty == false else {
+                guard case .createPipes(let name, let sources, let edgeCurves) = command, sources.isEmpty == false else {
                     throw EditorError(code: .commandInvalid, message: "Command dispatch expected createPipes with at least one pipe.")
                 }
                 var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addPipeEdgeCurve(edgeCurve)
+                }
                 for source in sources {
                     primaryFeatureID = try updatedDocument.createPipe(name: name, source: source, objectRegistry: objectRegistry)
                 }

@@ -577,7 +577,8 @@ product publication remain atomic on failure.
 `faceSectionReference`) and refuses one shown away from where it was built.
 
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
-one transaction), refuses a path or target shown away from where it was built, takes a Boolean
+one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve
+features without objects of their own, read with `edgeCurveFeature(for:)`), refuses a path or target shown away from where it was built, takes a Boolean
 pipe's targets' objects away and supersedes them; pipes are measured as their evaluated bodies.
 
 `createSweep` takes a planar face of a body as its section (`faceSectionReference`),

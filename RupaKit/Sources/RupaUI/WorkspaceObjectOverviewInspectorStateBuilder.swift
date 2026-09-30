@@ -727,6 +727,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(wrap.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Keep Tools", value: wrap.keepsTarget ? "On" : "Off"),
             ]
+        case .edgeCurve(let edgeCurve):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Edge Curves"),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(edgeCurve.source)),
+                WorkspaceInspectorTextRow(title: "Edges", value: "\(edgeCurve.edges.count)"),
+            ]
         case .projectCurve(let projectCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Project Curve"),

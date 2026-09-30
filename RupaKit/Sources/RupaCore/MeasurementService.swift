@@ -1195,7 +1195,7 @@ public struct MeasurementService {
                     sourceFeatureID: featureID,
                     operationName: "Primitive"
                 )
-            case .bridgeCurve, .spatialPath:
+            case .bridgeCurve, .spatialPath, .edgeCurve:
                 continue
             case .curveEdit:
                 continue

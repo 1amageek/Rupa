@@ -448,25 +448,40 @@ struct ModelingOperationDraft: Equatable {
                 thickness: thickness.map { .length($0, .meter) }
             )
         case .pipe:
-            // FIXME(INCOMPLETE_IMPLEMENTATION): a pipe follows curve sources only; edges of bodies
-            // are refused until an edge can stand for a path curve. Production path:
-            // ModelingOperationDraft.command(in:) for Pipe. Complete only when a selected edge makes
-            // a pipe along it, verified by a pipe around a box's edge.
-            guard targets.allSatisfy({ $0.component == .object }) else {
-                throw invalid("Pipe follows curves; select whole curve sources, not edges or faces.")
+            // A pipe follows each selected curve and each selected edge of a body; an edge's curve
+            // is added with the pipes.
+            guard targets.allSatisfy({ target in
+                switch target.component {
+                case .object, .edge: true
+                default: false
+                }
+            }) else {
+                throw invalid("Pipe follows curves and edges; select whole curve sources or edges.")
             }
-            var paths = features
+            var edgeCurves: [PipeEdgeCurve] = []
+            for edge in targets where edge.component != .object {
+                edgeCurves.append(PipeEdgeCurve(id: FeatureID(), feature: try document.edgeCurveFeature(
+                    for: edge, operationName: "Pipe", currentEvaluation: nil
+                )))
+            }
+            let edgeOwners = Set(targets.filter { $0.component != .object }.map(\.sceneNodeID))
+            var paths = zip(nodes, features).filter { !edgeOwners.contains($0.0.id) }.map(\.1)
             var bodies: [SweepTargetReference] = []
             if solidBoolean != .newBody {
-                // The bodies to combine with come after the curves.
-                while paths.count > 1, let node = nodes.last(where: { $0.object?.sourceFeatureID == paths.last }),
+                // The bodies to combine with come after the curves, or a pipe along an edge
+                // combines with the edge's own body.
+                while paths.count > (edgeCurves.isEmpty ? 1 : 0), let node = nodes.last(where: { $0.object?.sourceFeatureID == paths.last }),
                       node.object?.geometryRole == .solid, let featureID = paths.last {
                     bodies.insert(SweepTargetReference(featureID: featureID), at: 0)
                     paths.removeLast()
                 }
+                if bodies.isEmpty, let owner = edgeCurves.first?.feature.source {
+                    bodies = [SweepTargetReference(featureID: owner)]
+                }
                 guard !bodies.isEmpty else { throw invalid("Select the curves first, then the bodies to combine with.") }
             }
-            guard !paths.isEmpty else { throw invalid("Select at least one curve for the pipe to follow.") }
+            paths += edgeCurves.map(\.id)
+            guard !paths.isEmpty else { throw invalid("Select at least one curve or edge for the pipe to follow.") }
             let vertices = try number(pipeVertices, label: "Vertices")
             guard vertices == vertices.rounded(), vertices == 0 || (3...256).contains(vertices) else {
                 throw invalid("Vertices is 0 for a circle or 3 to 256 for a polygon.")
@@ -501,7 +516,7 @@ struct ModelingOperationDraft: Equatable {
                 do { try pipe.validate() } catch { throw invalid("The pipe is invalid: \(error).") }
                 return pipe
             }
-            return .createPipes(name: name, sources: pipes)
+            return .createPipes(name: name, sources: pipes, edgeCurves: edgeCurves)
         case .sweep:
             let degrees = try number(twistAngle, label: "Twist angle")
             var options = SweepOptions()

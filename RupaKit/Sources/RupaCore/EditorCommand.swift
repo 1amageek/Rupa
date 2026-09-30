@@ -431,7 +431,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         options: SweepOptions
     )
     /// A pipe along each curve, each persisted as a feature of its own, all in one transaction.
-    case createPipes(name: String, sources: [PipeFeature])
+    /// `edgeCurves` are added first, without objects of their own, for pipes that follow edges.
+    case createPipes(name: String, sources: [PipeFeature], edgeCurves: [PipeEdgeCurve] = [])
     case createLoft(
         name: String,
         sections: [LoftSectionReference],

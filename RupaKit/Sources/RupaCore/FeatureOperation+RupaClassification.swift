@@ -7,6 +7,7 @@ extension FeatureOperation {
         }
         switch self {
         case .spatialPath,
+             .edgeCurve,
              .bridgeCurve,
              .curveEdit,
              .curveOffset,
@@ -83,7 +84,7 @@ extension FeatureOperation {
             return true
         case .importedBRep:
             return true
-        case .sketch, .spatialPath:
+        case .sketch, .spatialPath, .edgeCurve:
             return false
         case .extrude:
             return true
@@ -174,7 +175,7 @@ extension FeatureOperation {
             return []
         case .importedBRep:
             return []
-        case .sketch, .spatialPath:
+        case .sketch, .spatialPath, .edgeCurve:
             return []
         // A Boolean extrusion replaces its targets; Keep Tools keeps only the extruded tool.
         case .extrude(let source):
@@ -182,12 +183,12 @@ extension FeatureOperation {
         // A Boolean revolve replaces its targets, as a Boolean extrusion does.
         case .revolve(let source):
             return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
-        // A Boolean sweep replaces its targets, as a Boolean extrusion does; Keep Tools keeps only
-        // the swept tool.
         // A Boolean pipe replaces its targets, as a Boolean sweep does.
         case .pipe(let feature):
             guard feature.booleanOperation != .newBody else { return [] }
             return Set(feature.targets.map(\.featureID))
+        // A Boolean sweep replaces its targets, as a Boolean extrusion does; Keep Tools keeps only
+        // the swept tool.
         case .sweep(let feature):
             guard feature.options.booleanOperation != .newBody else { return [] }
             return Set(feature.targets.map(\.featureID))

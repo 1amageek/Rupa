@@ -343,7 +343,7 @@ public struct ViewportSceneBuilder {
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .spatialPath, .bridgeCurve, .curveEdit, .curveOffset, .curveTrim,
-                 .curveExtend, .curveMatch, .projectCurve:
+                 .curveExtend, .curveMatch, .projectCurve, .edgeCurve:
                 return evaluatedCurveItem(
                     featureID: featureID,
                     evaluatedDocument: evaluatedDocument

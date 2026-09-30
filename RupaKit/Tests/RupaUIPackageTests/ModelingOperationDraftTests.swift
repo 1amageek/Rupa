@@ -259,7 +259,7 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.pipe, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.pipeDiameter = "10 mm"
         draft.wallThickness = "1 mm"
-        guard case .createPipes(_, let sources) = try draft.command(in: document) else {
+        guard case .createPipes(_, let sources, _) = try draft.command(in: document) else {
             Issue.record("Expected native Pipe source intent.")
             return
         }
@@ -275,6 +275,41 @@ struct ModelingOperationDraftTests {
         draft.pipeVertices = "0"
         draft.solidBoolean = .union
         #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
+    @Test func aPipeFollowsAnEdgeOfABody() throws {
+        var document = DesignDocument.empty()
+        let box = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // A top edge along X, at y = 0 and z = 20 mm.
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.pipe, targets: [edge])
+        draft.pipeDiameter = "4 mm"
+        guard case .createPipes(_, let sources, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(edgeCurves.count == 1 && edgeCurves[0].feature.source == box && sources.map(\.path.featureID) == [edgeCurves[0].id])
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + Double.pi * 0.002 * 0.002 * 0.02)) < 1e-12)
+
+        // Along its edge, a Boolean pipe combines with the edge's own body.
+        draft.solidBoolean = .union
+        guard case .createPipes(_, let combined, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(combined.first?.targets == [SweepTargetReference(featureID: box)])
     }
 
     @Test func facesOfTwoBodiesLoftIntoASolid() throws {
