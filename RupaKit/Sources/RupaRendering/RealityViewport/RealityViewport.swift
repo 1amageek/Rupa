@@ -30,6 +30,11 @@ final class RealityViewport {
     private var spatialResources: RealityViewportSpatialResources?
     /// The hover delta drawn over `spatialResources`, if any (`applySpatialDelta(_:)`).
     private var spatialDelta: RealityViewportSpatialDeltaLayer?
+    /// True while a delta's camera-relative placement or section containment is not complete:
+    /// `applySpatialDelta(_:)` could not finish it for the camera already applied. The next
+    /// `updateSpatialCamera` completes it, and a mounted host runs that update on its next engine
+    /// frame while this frame owes it (`owesSpatialPlacementForAppliedCamera`).
+    private(set) var owesSpatialPlacement = false
     private var spatialCameraState: SpatialCameraState?
     private(set) var spatialCameraUpdateCount = 0
 
@@ -253,11 +258,12 @@ final class RealityViewport {
     /// was. Once applied, the frame draws exactly the prepared overlay minus the withheld items
     /// plus the added ones, and every hit names the complete overlay's records.
     ///
-    /// Camera-relative items are placed at once for the camera already applied, so no rendered
-    /// frame shows the withheld items gone and the added ones unplaced. When that placement
-    /// cannot run, no applied camera state remains recorded, and the frame's next camera update
-    /// (`updateSpatialCamera`, which the view runs for the publication that applied the layer)
-    /// places every item and reports its failure, as it does for a newly mounted frame.
+    /// Camera-relative items are placed and the section is re-applied over the new containment at
+    /// once, for the camera already applied, so no rendered frame shows the withheld items gone
+    /// and the added ones unplaced or clipped by the old containment. When that cannot complete
+    /// (no camera applied yet, no projection yet, or a placement failure), the frame owes it
+    /// (`owesSpatialPlacement`): its next camera update completes it and reports any failure
+    /// through the host that runs it, exactly as for a newly mounted frame.
     func applySpatialDelta(_ layer: RealityViewportSpatialDeltaLayer?) throws {
         guard let base = spatialResources else {
             if layer == nil { return }
@@ -287,30 +293,53 @@ final class RealityViewport {
             fixedBounds.formUnion(added.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
         }
         bounds = fixedBounds
-        guard spatialCameraState != nil, let content else {
-            spatialCameraState = nil
-            return
-        }
-        do {
-            try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
-            _ = try layer?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
-            try updateSectionedBounds()
-        } catch {
-            // Deferred to the camera update, which places and reports; see above.
+        owesSpatialPlacement = true
+        if completesSpatialPlacement(over: base) {
+            owesSpatialPlacement = false
+        } else {
+            // The camera update owed from here on runs in full, never short-circuited by an
+            // unchanged camera state.
             spatialCameraState = nil
         }
     }
 
-    /// Recomputes the section containment from the camera-placed sectioned items.
-    private func updateSectionedBounds() throws {
-        guard let spatialResources,
-              spatialResources.hasSectionedCameraGeometry
-                || spatialDelta?.added?.hasSectionedCameraGeometry == true else { return }
+    /// Places the camera-relative items of the prepared overlay and the delta layer for the
+    /// camera already applied and re-applies the section over the new containment. False when that
+    /// cannot complete now; the owed camera update then completes it and reports its failure, so
+    /// the failure is not lost but reported by the owner of camera updates.
+    private func completesSpatialPlacement(over base: RealityViewportSpatialResources) -> Bool {
+        guard spatialCameraState != nil, let content else { return false }
+        do {
+            try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
+            _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
+            try updateSectionContainment(reapplyingSection: true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Recomputes the section containment: the fixed bounds, joined by the camera-placed
+    /// sectioned items when any exist, and re-applies the requested section over it. Without
+    /// camera-placed sectioned items the containment is the fixed bounds, re-applied only when
+    /// `reapplyingSection` says it changed.
+    private func updateSectionContainment(reapplyingSection: Bool) throws {
+        let placesSectionedItems = spatialResources?.hasSectionedCameraGeometry == true
+            || spatialDelta?.added?.hasSectionedCameraGeometry == true
+        guard placesSectionedItems || reapplyingSection else { return }
         bounds = fixedBounds
-        bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
+        if placesSectionedItems, let spatialResources {
+            bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
+        }
         if let requestedSection {
             try updateSection(plane: requestedSection.plane, side: requestedSection.side, tolerance: requestedSection.tolerance)
         }
+    }
+
+    /// Whether this frame owes a delta's placement for a camera it has applied and a host it is
+    /// bound to, so that host's next engine frame should run the camera update.
+    var owesSpatialPlacementForAppliedCamera: Bool {
+        owesSpatialPlacement && content != nil && appliedLayout != nil && appliedViewportRevision != nil
     }
 
     /// The scale readout published by the current native grid frame. It is
@@ -1042,7 +1071,8 @@ final class RealityViewport {
         // A delta layer has no grid, axes or rulers, so it reports no grid failure.
         _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
         try updateCameraCalibration(content: content)
-        try updateSectionedBounds()
+        try updateSectionContainment(reapplyingSection: owesSpatialPlacement)
+        owesSpatialPlacement = false
         if gridError == nil { spatialCameraState = state }
         return gridError
     }

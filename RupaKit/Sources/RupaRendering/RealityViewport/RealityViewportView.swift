@@ -169,10 +169,18 @@ struct RealityViewportView: View {
         private var reportTask: Task<Void, Never>?
         private var frameSubscription: EventSubscription?
         private var pending: (() -> Bool)?
+        /// The camera update last scheduled for `current`, kept after it ran: a frame that later
+        /// owes a hover delta's placement runs it again on the next engine frame, since a delta
+        /// is published without a SwiftUI update of this host being guaranteed.
+        private var scheduled: (() -> Bool)?
 
         func cancelPending() { pending = nil }
 
         func updatePending() {
+            if pending == nil, let current, current.owesSpatialPlacementForAppliedCamera,
+               current.isBound(to: ObjectIdentifier(self)) {
+                pending = scheduled
+            }
             if let pending, pending() { self.pending = nil }
         }
 
@@ -185,7 +193,7 @@ struct RealityViewportView: View {
                       gridCallback: ((MeshSourcePresentationRenderError?, ViewportProjectedGrid.ScaleReadout?) -> Void)?,
                       boundsRulerCallback: ((Set<ViewportMeasurementRulerAxis>?) -> Void)?,
                       revisionCallback: ((UInt64?) -> Void)?) {
-            pending = { [weak self] in
+            let update: () -> Bool = { [weak self] in
                 guard let self, current === viewport,
                       viewport.isBound(to: ObjectIdentifier(self)) else { return true }
                 do {
@@ -224,6 +232,8 @@ struct RealityViewportView: View {
                     return true
                 }
             }
+            pending = update
+            scheduled = update
             if frameSubscription == nil {
                 // RealityView state updates are not engine frames. Native project
                 // becomes available after the scene has processed its camera.
@@ -282,6 +292,7 @@ struct RealityViewportView: View {
             frameSubscription?.cancel()
             frameSubscription = nil
             pending = nil
+            scheduled = nil
             reportTask?.cancel()
             reportTask = nil
             if !preservingReferenceAnnotations {

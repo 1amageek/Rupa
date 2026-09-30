@@ -17,6 +17,10 @@ struct RealityViewportSpatialDeltaMountTests {
     private let b = Point3D(x: 0.3, y: 0, z: 0)
     private let c = Point3D(x: 0, y: 0.3, z: 0)
 
+    private func point(_ x: Double, _ y: Double) -> Point3D {
+        Point3D(x: x, y: y, z: 0)
+    }
+
     private func record(_ u: Int) throws -> ViewportSpatialInteractionRecord {
         let reference = SelectionReference.surface(.controlPoint(.init(
             surface: .init(subshape: .init(subshapeID: .init(featureID: featureID, role: "surface", ordinal: 0),
@@ -174,5 +178,185 @@ struct RealityViewportSpatialDeltaMountTests {
         } catch let error as MeshSourcePresentationRenderError {
             #expect(error.code == .resourceExhausted)
         }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aPlacementTheDeltaCouldNotCompleteIsCompletedByTheHostsNextFrame() async throws {
+        _ = NSApplication.shared
+        let scenario = try scenario()
+        let delta = try #require(try RealityViewportSpatialDelta.make(
+            mounted: scenario.mounted, mountedRecords: scenario.mountedRecords,
+            complete: scenario.complete, completeRecords: scenario.completeRecords))
+        let frame = MountedDeltaFrame(try await RealityViewport.prepare(
+            plan: nil, spatialBatch: scenario.mounted, reusing: nil))
+        defer { frame.close() }
+        try await frame.wait("The mounted overlay never answered its handle.") { frame.answers(a, [0]) }
+        let viewport = frame.viewport
+
+        // A camera applied outside a host update leaves no camera state recorded (and no
+        // calibration for hit queries), so the delta cannot place its camera-relative items at
+        // once and owes them.
+        let layout = try #require(viewport.appliedLayout)
+        let moved = ViewportLayout(modelBounds: CGRect(x: -0.5, y: -0.5, width: 1, height: 1),
+            size: layout.viewportSize, camera: .init(zoom: 1.1, projection: .parallel), basis: .axisFront(.z),
+            verticalBounds: -0.01...0.01)
+        try viewport.applyCamera(layout: moved, displayScale: try #require(viewport.appliedDisplayScale), revision: 1)
+        try viewport.applySpatialDelta(try await viewport.prepareSpatialDelta(delta))
+        #expect(viewport.owesSpatialPlacement)
+
+        // No SwiftUI update of the host follows; its engine-frame hook completes the placement.
+        try await frame.wait("The owed placement was never completed.") {
+            !viewport.owesSpatialPlacement && frame.answers(c, [0])
+        }
+        #expect(try frame.hits(a) == [1])
+        #expect(try frame.hits(b).isEmpty)
+        #expect(frame.reports.error == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func everyCameraRelativeAndPlanarKindIsWithheldAndRestored() async throws {
+        _ = NSApplication.shared
+        let label = point(-0.3, 0.25), planar = point(0.3, 0.25), lineStart = point(-0.35, -0.25)
+        let lineEnd = point(-0.05, -0.25), cameraPath = point(0.3, -0.25), added = point(0, 0)
+        let records = try (1...5).map(record)
+        let mounted = try RealityViewportSpatialBatch(
+            paths: [.init(path: Path(CGRect(x: -0.05, y: -0.05, width: 0.1, height: 0.1)), origin: planar,
+                          xAxis: [1, 0, 0], yAxis: [0, 1, 0], color: [1, 1, 1, 1],
+                          handleIndex: 1, hitTolerancePoints: 4)],
+            labels: [.init(text: "L", anchor: label, offset: .zero, heightPoints: 12, color: [1, 1, 1, 1],
+                           handleIndex: 0, hitRectPoints: CGRect(x: -6, y: -6, width: 12, height: 12))],
+            cameraLines: [.init(points: [.init(anchor: lineStart, offset: .zero), .init(anchor: lineEnd, offset: .zero)],
+                                color: [1, 1, 1, 1], handleIndex: 2, hitTolerancePoints: 6)],
+            cameraPaths: [.init(path: Path(CGRect(x: -3, y: -3, width: 6, height: 6)), anchor: cameraPath,
+                                offset: .zero, color: [1, 1, 1, 1], handleIndex: 3, hitTolerancePoints: 8)],
+            handleCount: 4,
+            retainedSemanticByteCount: try ViewportSpatialInteractionRecord.retainedByteCount(for: Array(records[0..<4])),
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let complete = try RealityViewportSpatialBatch(
+            markers: [marker(added, handle: 0)], handleCount: 1,
+            retainedSemanticByteCount: try ViewportSpatialInteractionRecord.retainedByteCount(for: [records[4]]),
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let delta = try #require(try RealityViewportSpatialDelta.make(
+            mounted: mounted, mountedRecords: Array(records[0..<4]), complete: complete, completeRecords: [records[4]]))
+        #expect(delta.suppressed == .init(paths: [0], labels: [0], cameraLines: [0], cameraPaths: [0]))
+
+        let frame = MountedDeltaFrame(try await RealityViewport.prepare(plan: nil, spatialBatch: mounted, reusing: nil))
+        defer { frame.close() }
+        let lineMiddle = Point3D(x: (lineStart.x + lineEnd.x) / 2, y: lineStart.y, z: 0)
+        let prepared: [(Point3D, [UInt32])] = [(label, [0]), (planar, [1]), (lineMiddle, [2]), (cameraPath, [3])]
+        try await frame.wait("The prepared kinds never answered.") {
+            prepared.allSatisfy { frame.answers($0.0, $0.1) }
+        }
+        #expect(try frame.hits(added).isEmpty)
+
+        let viewport = frame.viewport
+        try viewport.applySpatialDelta(try await viewport.prepareSpatialDelta(delta))
+        #expect(!viewport.owesSpatialPlacement)
+        for (point, _) in prepared { #expect(try frame.hits(point).isEmpty) }
+        #expect(try frame.hits(added) == [0])
+
+        try viewport.applySpatialDelta(nil)
+        #expect(!viewport.owesSpatialPlacement)
+        for (point, expected) in prepared { #expect(try frame.hits(point) == expected) }
+        #expect(try frame.hits(added).isEmpty)
+        #expect(frame.reports.error == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aDeltaReappliesTheSectionOverTheContainmentItWidens() async throws {
+        _ = NSApplication.shared
+        let records = try (1...2).map(record)
+        // Everything prepared lies on the removed side of the section; the added handle does not.
+        let mounted = try RealityViewportSpatialBatch(
+            meshes: [.init(positions: [point(-0.4, 0.1), point(-0.2, 0.1)], indices: [0, 1], topology: .lines,
+                           color: [1, 1, 1, 1], attachment: .sectionedGeometry, handleIndex: 0, hitTolerancePoints: 6)],
+            handleCount: 1,
+            retainedSemanticByteCount: try ViewportSpatialInteractionRecord.retainedByteCount(for: [records[0]]),
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let retained = point(0.3, 0.1)
+        let complete = try RealityViewportSpatialBatch(
+            meshes: mounted.meshes + [.init(positions: [point(0.2, 0.1), point(0.4, 0.1)], indices: [0, 1],
+                topology: .lines, color: [1, 0, 0, 1], attachment: .sectionedGeometry,
+                handleIndex: 1, hitTolerancePoints: 6)],
+            handleCount: 2,
+            retainedSemanticByteCount: try ViewportSpatialInteractionRecord.retainedByteCount(for: records),
+            renderOrigin: .origin, retainedSurfaceByteCount: 0)
+        let delta = try #require(try RealityViewportSpatialDelta.make(
+            mounted: mounted, mountedRecords: [records[0]], complete: complete, completeRecords: records))
+
+        let frame = MountedDeltaFrame(try await RealityViewport.prepare(plan: nil, spatialBatch: mounted, reusing: nil))
+        defer { frame.close() }
+        try await frame.wait("The prepared line never answered.") { frame.answers(point(-0.3, 0.1), [0]) }
+        let viewport = frame.viewport
+        try viewport.applySection(plane: SectionAnalysisResult.Plane(sourceKind: .sketchPlane, sourceID: nil, sourceName: nil,
+            origin: .origin, normal: .init(x: 1, y: 0, z: 0), u: .init(x: 0, y: 1, z: 0), v: .init(x: 0, y: 0, z: 1)),
+            side: .front, tolerance: 0)
+        #expect(try frame.hits(point(-0.3, 0.1)).isEmpty)
+
+        try viewport.applySpatialDelta(try await viewport.prepareSpatialDelta(delta))
+        #expect(!viewport.owesSpatialPlacement)
+        #expect(try frame.hits(retained) == [1])
+        #expect(try frame.hits(point(-0.3, 0.1)).isEmpty)
+
+        try viewport.applySpatialDelta(nil)
+        #expect(try frame.hits(retained).isEmpty)
+        #expect(frame.reports.error == nil)
+    }
+}
+
+/// One frame mounted in an offscreen window through the production host.
+@MainActor
+private final class MountedDeltaFrame {
+    final class Reports { var error: MeshSourcePresentationRenderError? }
+    let viewport: RealityViewport
+    let reports = Reports()
+    private let window: NSWindow
+
+    init(_ viewport: RealityViewport) {
+        self.viewport = viewport
+        let size = CGSize(width: 512, height: 384)
+        let layout = ViewportLayout(modelBounds: CGRect(x: -0.5, y: -0.5, width: 1, height: 1),
+            size: size, camera: .init(zoom: 1, projection: .parallel), basis: .axisFront(.z),
+            verticalBounds: -0.01...0.01)
+        let reports = self.reports
+        let controller = NSHostingController(rootView: RealityViewportView(
+            viewport: viewport, viewportRevision: 1, displayMode: .solid, shading: .init(style: .flat),
+            occurrenceMaterials: [:], layout: layout,
+            interaction: .init(sceneNodeIDByOccurrenceID: [:], selectedSceneNodeIDs: [], previewSceneNodeIDs: [],
+                               hoveredSceneNodeID: nil),
+            sectionPlane: nil, retainedSide: .front, sectionTolerance: 0,
+            onUpdateResult: { reports.error = $0 }).frame(width: size.width, height: size.height))
+        window = NSWindow(contentRect: CGRect(origin: .zero, size: size), styleMask: [.titled],
+                          backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        controller.view.frame = CGRect(origin: .zero, size: window.contentLayoutRect.size)
+        window.contentViewController = controller
+        window.contentView?.layoutSubtreeIfNeeded()
+    }
+
+    func close() {
+        viewport.unbind()
+        window.contentViewController = nil
+        window.close()
+    }
+
+    func hits(_ point: Point3D) throws -> [UInt32] {
+        try viewport.spatialHandleHits(at: try #require(viewport.project(point)), revision: 1)
+    }
+
+    /// Waits, without updating the host, until `condition` holds.
+    func wait(_ message: String, until condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+        while !condition() {
+            if let error = reports.error { throw error }
+            try #require(ContinuousClock.now < deadline, "\(message)")
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    /// True once the frame applied its camera and `point` answers `expected`.
+    func answers(_ point: Point3D, _ expected: [UInt32]) -> Bool {
+        guard viewport.appliedViewportRevision == 1, let screen = viewport.project(point) else { return false }
+        do { return try viewport.spatialHandleHits(at: screen, revision: 1) == expected } catch { return false }
     }
 }
