@@ -272,6 +272,36 @@ struct ModelingOperationDraftTests {
         #expect(evaluated.brep.bodies.count == 1)
     }
 
+    @Test func aBooleanExtrusionTakesTheSectionFirstAndCombinesWithTheBodiesAfterIt() throws {
+        var document = DesignDocument.empty()
+        let cube = try document.createExtrudedRectangle(
+            name: "Cube", plane: .xy, width: .length(0.01, .meter), height: .length(0.02, .meter),
+            depth: .length(0.01, .meter), direction: .normal
+        )
+        let cubeNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == cube }).id
+        let profile = try addProfile(to: &document, z: 0)
+        var draft = makeDraft(.extrude, targets: [profile.target, SelectionTarget(sceneNodeID: cubeNode)])
+        draft.distance = "20 mm"
+        // A new body takes one section only.
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.extrusionBoolean = .difference
+        draft.keepsTools = true
+        guard case .createExtrusion(_, let source) = try draft.command(in: document) else {
+            Issue.record("A Boolean extrusion must be one authored extrusion.")
+            return
+        }
+        #expect(source.section == .profile(ProfileReference(featureID: profile.feature)))
+        #expect(source.operation == .difference && source.keepTools)
+        #expect(source.targets.map(\.featureID) == [cube])
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.document.productMetadata.sceneNodes[cubeNode] == nil)
+        _ = try CADPipeline.modelingDefault(for: store.document).evaluate(store.document.cadDocument)
+        // A Boolean makes a solid.
+        draft.sheet = true
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test(arguments: ModelingOperationDraft.ExtrusionDirectionChoice.allCases)
     func curveExtrusionDirectionEvaluates(direction: ModelingOperationDraft.ExtrusionDirectionChoice) throws {
         var document = DesignDocument.empty()

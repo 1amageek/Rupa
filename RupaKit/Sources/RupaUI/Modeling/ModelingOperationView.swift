@@ -231,7 +231,20 @@ struct ModelingOperationView: View {
             if draft.extrusionDirection == .vector {
                 vectorFields("Direction", values: $draft.axis, unit: "")
             }
-            if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }
+            if !draft.isSurfaceCreation {
+                Toggle("Sheet output", isOn: $draft.sheet)
+                Picker("Boolean", selection: $draft.extrusionBoolean) {
+                    ForEach(ModelingOperationDraft.ExtrusionBooleanChoice.allCases) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .contentShape(Rectangle())
+                if draft.extrusionBoolean != .newBody {
+                    Toggle("Keep Tools", isOn: $draft.keepsTools)
+                    Text("Select the section first, then the bodies to combine with.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         case .revolve:
             vectorFields("Axis origin", values: $draft.origin, unit: draft.unit.symbol)
             vectorFields("Axis direction", values: $draft.axis, unit: "")

@@ -87,7 +87,7 @@ import Testing
     }
 
     @MainActor
-    @Test func invalidBooleanSourcesAreRejectedAndKeepToolsRetainsTheTarget() throws {
+    @Test func invalidBooleanSourcesAreRejectedAndKeepToolsStillReplacesTheTarget() throws {
         let (session, targetID, section) = try cubeSession()
         let before = session.document
 
@@ -103,7 +103,39 @@ import Testing
         #expect(session.document.cadDocument.designGraph.order == before.cadDocument.designGraph.order)
         #expect(session.document.cadDocument.designGraph.nodes == before.cadDocument.designGraph.nodes)
 
+        // Keep Tools keeps the extruded tool, not the target the result replaces.
         let kept = FeatureOperation.extrude(tool(section: section, operation: .union, targetID: targetID, keepTools: true))
-        #expect(kept.supersededBodyFeatureIDs.isEmpty)
+        #expect(kept.supersededBodyFeatureIDs == [targetID])
+    }
+
+    @MainActor
+    @Test func aBooleanExtrusionCombinesItsTargetWhereItIsShownAndTakesItsObjectAway() throws {
+        let (session, targetID, section) = try cubeSession()
+        let targetNode = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == targetID }).id
+        // The cube is shown half a meter along X, so the 2 m tool overlaps half of it.
+        _ = try session.execute(.setSceneNodeTransform(id: targetNode, localTransform: try .translation(Vector3D(x: 0.5, y: 0, z: 0))))
+        _ = try session.execute(.createExtrusion(
+            name: "Tool", source: tool(section: section, operation: .union, targetID: targetID)
+        ))
+        let toolID = try #require(session.document.cadDocument.designGraph.order.last)
+        guard case .extrude(let placed) = session.document.cadDocument.designGraph.nodes[toolID]?.operation else {
+            Issue.record("Expected the extrusion.")
+            return
+        }
+        #expect(placed.targets.first?.placement != nil)
+        #expect(session.document.productMetadata.sceneNodes.values.contains { $0.reference?.featureID == targetID } == false)
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.featureID == toolID }.count == 1)
+        let measurement = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 2.5) < tolerance)
+
+        // An edit may change how the targets combine, not which they are.
+        _ = try session.execute(.setExtrusion(featureID: toolID, source: tool(section: section, operation: .intersect, targetID: targetID)))
+        let intersected = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
+        #expect(abs(intersected.totals.solidVolumeCubicMeters - 0.5) < tolerance)
+        var newBody = tool(section: section, operation: .newBody, targetID: targetID)
+        newBody.targets = []
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.setExtrusion(featureID: toolID, source: newBody))
+        }
     }
 }

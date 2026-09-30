@@ -1,5 +1,6 @@
 import Foundation
 import RupaCore
+import SwiftCAD
 
 /// Editable text and explicit operands, never a mutable source document.
 struct ModelingOperationDraft: Equatable {
@@ -106,6 +107,27 @@ struct ModelingOperationDraft: Equatable {
         var id: Self { self }
     }
     var extrusionDirection = ExtrusionDirectionChoice.normal
+    /// How an extrusion combines with the bodies selected after its section: a new body, or a
+    /// Boolean with them, keeping the extruded tool when `keepsTools`.
+    enum ExtrusionBooleanChoice: String, CaseIterable, Identifiable {
+        case newBody = "New Body"
+        case union = "Union"
+        case difference = "Difference"
+        case intersect = "Intersect"
+        case slice = "Slice"
+        var id: Self { self }
+        var operation: SolidOperation {
+            switch self {
+            case .newBody: .newBody
+            case .union: .union
+            case .difference: .difference
+            case .intersect: .intersect
+            case .slice: .slice
+            }
+        }
+    }
+    var extrusionBoolean = ExtrusionBooleanChoice.newBody
+    var keepsTools = false
     var sheet = false
     var isSurfaceCreation = false
     var smooth = false
@@ -239,8 +261,12 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .surfacePatch, .constrainedSurface:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
-            guard features.count == 1, let node = nodes.first else {
-                throw invalid("Select exactly one section source.")
+            // A Boolean extrusion takes the section first and the bodies it combines with after it.
+            let combines = kind == .extrude && extrusionBoolean != .newBody
+            guard let node = nodes.first, combines ? features.count >= 2 : features.count == 1 else {
+                throw invalid(combines
+                    ? "Select the section first, then the bodies to combine it with."
+                    : "Select exactly one section source.")
             }
             let section = try sectionReference(for: node.id, in: document)
             guard createsSheet || section.isProfile else {
@@ -264,8 +290,18 @@ struct ModelingOperationDraft: Equatable {
                 _ = try extrusion.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
                     try document.cadDocument.parameters.resolvedValue(for: $0)
                 }
-                return .extrudeSection(name: name, section: section, distance: extrusion.distance,
-                    startDistance: extrusion.startDistance, direction: direction, resultKind: extrusion.resultKind)
+                guard combines else {
+                    return .extrudeSection(name: name, section: section, distance: extrusion.distance,
+                        startDistance: extrusion.startDistance, direction: direction, resultKind: extrusion.resultKind)
+                }
+                guard createsSheet == false else {
+                    throw invalid("A Boolean extrusion makes a solid; turn Sheet output off.")
+                }
+                var combined = extrusion
+                combined.operation = extrusionBoolean.operation
+                combined.targets = features.dropFirst().map { BooleanTargetReference(featureID: $0) }
+                combined.keepTools = keepsTools
+                return .createExtrusion(name: name, source: combined)
             }
             let degrees = try number(angle, label: "Angle")
             guard degrees != 0, abs(degrees) <= 360 else {

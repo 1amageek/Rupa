@@ -80,9 +80,27 @@ extension DesignDocument {
         typeID: ObjectTypeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
-        let operation = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
-            direction: direction, operation: operation, targets: targets, keepTools: keepTools, resultKind: resultKind)
-        try operation.validate()
+        // A Boolean extrusion combines its targets where they are displayed, in the frame the
+        // extrusion is shown in, and replaces them; Keep Tools keeps only the extruded tool.
+        var placedTargets = targets
+        if operation != .newBody {
+            guard targets.allSatisfy({ $0.placement == nil }) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Extrusion Boolean targets are placed where they are displayed; references must not carry a placement."
+                )
+            }
+            let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+            placedTargets = try targets.map { target in
+                BooleanTargetReference(featureID: target.featureID, placement: try relativeRigidPlacement(
+                    of: hierarchy.presentingSceneNodeID(for: target.featureID), inFrameOf: nil,
+                    owner: "An extrusion's Boolean target", relation: "the extrusion"
+                ))
+            }
+        }
+        let extrusion = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
+            direction: direction, operation: operation, targets: placedTargets, keepTools: keepTools, resultKind: resultKind)
+        try extrusion.validate()
         guard let source = cadDocument.designGraph.nodes[section.featureID],
               source.outputs.contains(where: { $0.role == section.inputRole }) else {
             throw EditorError(
@@ -101,9 +119,9 @@ extension DesignDocument {
         let feature = FeatureNode(
             id: featureID,
             name: name,
-            operation: .extrude(operation),
+            operation: .extrude(extrusion),
             inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)]
-                + targets.map { FeatureInput(featureID: $0.featureID, role: .target) },
+                + placedTargets.map { FeatureInput(featureID: $0.featureID, role: .target) },
             outputs: [FeatureOutput(role: resultKind.featureOutputRole)]
         )
 
@@ -130,6 +148,11 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
+        if operation != .newBody {
+            // The extrusion's object shows the combined body; the targets' objects go, their
+            // nested sketches (the section drawn on a target's face) taking their place.
+            try removeSceneNodes(presenting: placedTargets.map(\.featureID))
+        }
         if section.isProfile {
             try synchronizeObjectPropertiesFromSource(
                 featureID: featureID,
@@ -157,6 +180,15 @@ extension DesignDocument {
             throw EditorError(code: .commandInvalid,
                 message: "Extrusion editing must retain the existing section and output kind.")
         }
+        // The targets' objects were taken away when the extrusion combined them, so an edit keeps
+        // the same targets where they were placed and may change only how they combine.
+        guard (previous.operation == .newBody) == (source.operation == .newBody),
+              previous.targets.map(\.featureID) == source.targets.map(\.featureID) else {
+            throw EditorError(code: .commandInvalid,
+                message: "Extrusion editing keeps its Boolean targets; it may change the operation and Keep Tools only.")
+        }
+        var source = source
+        source.targets = previous.targets
         try source.validate()
         feature.operation = .extrude(source)
         feature.inputs = [FeatureInput(featureID: source.section.featureID, role: source.section.inputRole)]

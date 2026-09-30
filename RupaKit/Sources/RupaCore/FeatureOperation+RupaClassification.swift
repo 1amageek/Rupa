@@ -173,8 +173,9 @@ extension FeatureOperation {
             return []
         case .sketch, .spatialPath:
             return []
+        // A Boolean extrusion replaces its targets; Keep Tools keeps only the extruded tool.
         case .extrude(let source):
-            return source.operation == .newBody || source.keepTools ? [] : Set(source.targets.map(\.featureID))
+            return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
         case .revolve:
             return []
         case .sweep(let feature):

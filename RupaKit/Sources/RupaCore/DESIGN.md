@@ -2640,12 +2640,16 @@ Verification covers source replacement, native package replay and failed commit.
 ### Authored extrusion options
 
 Full-source extrusion creation/replacement retains native section, signed extents,
-Boolean targets and Keep Tools. Replacement preserves the feature and output IDs,
-section identity and output role. The existing atomic commit admits actual
+Boolean targets and Keep Tools. A Boolean extrusion places each target where its
+object is shown (relative to the extrusion's world frame; references carrying a
+placement are refused) and takes the targets' objects away, their nested sketches
+taking their place, as a Boolean does. Replacement preserves the feature and output IDs,
+section identity and output role, and keeps the Boolean targets and their placements;
+it may change only the operation and Keep Tools. The existing atomic commit admits actual
 geometry before publication; invalid targets leave source and scene unchanged.
 Boolean extrusion measurements use evaluated body results rather than the
-uncombined profile area. Consumed targets leave the visible/measurable set;
-Keep Tools retains the native Boolean result ownership. Legacy extrusion commands
+uncombined profile area. Consumed targets leave the visible/measurable set
+whatever Keep Tools, which keeps only the extruded tool (the official page). Legacy extrusion commands
 continue to create new bodies. Pattern remapping remaps target references.
 
 ### Independent arrays of instances

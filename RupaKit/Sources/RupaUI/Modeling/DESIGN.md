@@ -183,7 +183,7 @@ native preview and cannot be applied.
 | --- | --- | --- |
 | Bridge Surface | Stable two-edge G0 ruled bridge | Separated/intersecting sheet walls, width/tension, G2/Chamfer, Both/Short/Long/None trims, Sense 1/2 and additional wall pairs |
 | Constrained Surface | Retained points, UI/API creation and replacement, bounded point interpolation and angular relaxation | Admissible height-graph projection; native admission rejects unproven geometry |
-| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves | Face/edge operands, angle/wall thickness, Direct/Individual directions, Boolean targets and Keep Tools |
+| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves; Boolean (Union/Difference/Intersect/Slice) with the bodies selected after the section, placed where they are shown, and Keep Tools | Face/edge operands, angle/wall thickness, Direct/Individual directions |
 | Loft | Ordered profile/curve sections, mixed single-loop Sheet input, exact guide connectors and discrete spatial contacts, source-sample seams, shared ruled/smooth connectors | General coincident/tangent guide contacts, whole-surface embedding admission and boundary G1/G2 controls |
 | Patch | Exact planar hole or admissible nonplanar Coons opening | General N-sided constrained fill, guides and G1/G2 |
 | Pipe | Sweep is a reusable native dependency, not a Pipe implementation | Curve/edge paths, circle/polygon/custom sections, diameter/thickness/rotation, end scale, start/end limits, Boolean targets and retained source references |
@@ -317,6 +317,11 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   curve selections retain curve intent; whole source selections resolve closed
   profiles or exact curves. Curve input requires Sheet output. Native geometric
   limitations are reported by preview and do not authorize a different shape.
+- Extrude's Boolean picker combines the extrusion with the bodies selected after
+  its section (the first operand); New Body takes the section alone. A Boolean
+  extrusion is one `createExtrusion` of solid output, Keep Tools keeping only the
+  extruded tool; Core places each target where it is shown and takes its object
+  away, as a Boolean does.
 - Extrude direction is one choice: source normal, symmetric source normal, or
   explicit vector. The form shows vector components only for the vector choice;
   it never asks a spatial curve to fabricate a plane normal. UI and semantic API
