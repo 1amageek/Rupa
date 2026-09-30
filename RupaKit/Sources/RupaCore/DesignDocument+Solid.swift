@@ -537,12 +537,22 @@ extension DesignDocument {
                 try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
             case .curve:
                 try requireSweepSourceCurveFeature(section.featureID, owner: "Loft curve")
-            case .face:
-                throw EditorError(code: .commandInvalid, message: "Loft takes profile or curve sections.")
+            case .face(let face):
+                try requireSweepTargetBodyFeature(face.featureID, owner: "Loft face section")
             }
         }
         for guide in guides {
             try requireSweepSourceCurveFeature(guide.featureID, owner: "Loft guide")
+        }
+        // A loft is built where its sources were built: a face shown elsewhere would loft from the
+        // wrong place.
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for featureID in sections.filter(\.section.isFace).map(\.featureID) {
+            guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "A loft's face sections must be shown where they were built; this one has been moved.")
+            }
         }
 
         let featureID = FeatureID()

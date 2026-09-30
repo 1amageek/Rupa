@@ -573,6 +573,9 @@ dimension/corner adapters or closed-profile display shortcuts. Sheet measurement
 come from evaluated BRep, before any sketch profile recognition. Source and
 product publication remain atomic on failure.
 
+`createLoft` takes planar faces of bodies as sections (the form reads a selected face with
+`faceSectionReference`) and refuses one shown away from where it was built.
+
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction), refuses a path or target shown away from where it was built, takes a Boolean
 pipe's targets' objects away and supersedes them; pipes are measured as their evaluated bodies.

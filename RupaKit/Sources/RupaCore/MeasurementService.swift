@@ -625,7 +625,8 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
-            for section in loft.sections {
+            // A face section has no sketch to report; the loft is measured as its evaluated body.
+            for section in loft.sections where section.section.isFace == false {
                 guard let sourceNode = document.cadDocument.designGraph.nodes[section.featureID],
                       case .sketch(let sourceSketch) = sourceNode.operation else {
                     diagnostics.append(

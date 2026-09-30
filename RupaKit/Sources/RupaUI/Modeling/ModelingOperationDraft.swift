@@ -560,11 +560,20 @@ struct ModelingOperationDraft: Equatable {
                 loftGuideNodeIDs.contains(node.id) ? LoftGuideReference(featureID: feature) : nil
             }
             let sections = try sectionNodes.map { node in
-                let reference = try sectionReference(for: node.id, in: document)
+                // A selected face of a body is a section of its own.
+                let reference: SectionReference
+                if let face = targets.first(where: { target in
+                    guard target.sceneNodeID == node.id, case .face = target.component else { return false }
+                    return true
+                }) {
+                    reference = .face(try document.faceSectionReference(for: face, operationName: "Loft", currentEvaluation: nil))
+                } else {
+                    reference = try sectionReference(for: node.id, in: document)
+                }
                 let controls = loftSectionControls[node.id] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
                 return try controls.applying(to: LoftSectionReference(section: reference))
             }
-            guard createsSheet || sections.allSatisfy({ $0.section.isProfile }) else {
+            guard createsSheet || sections.allSatisfy({ $0.section.isClosedRegion }) else {
                 throw invalid("A selected curve requires Sheet output.")
             }
             let options = LoftOptions(resultKind: createsSheet ? .sheet : .solid,

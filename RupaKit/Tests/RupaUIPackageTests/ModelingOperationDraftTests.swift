@@ -277,6 +277,37 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func facesOfTwoBodiesLoftIntoASolid() throws {
+        var document = DesignDocument.empty()
+        let boxes = try [0.0, 0.05].map { z in
+            try document.createExtrudedRectangleFromCorners(
+                name: "Box", plane: .plane(Plane3D(origin: Point3D(x: 0, y: 0, z: z), normal: .unitZ)),
+                firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+                oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+                depth: .length(0.02, .meter), direction: .normal
+            )
+        }
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // The lower box's top at z = 20 mm and the upper box's bottom at z = 50 mm.
+        let faces = try [0.02, 0.05].map { z in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .face, let normal = entry.surfaceNormal, abs(normal.z) > 0.99,
+                      let center = entry.center else { return false }
+                return abs(center.z - z) < 1e-9
+            }?.selectionTarget())
+        }
+        let draft = makeDraft(.loft, targets: faces)
+        guard case .createLoft(_, let sections, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Loft source intent.")
+            return
+        }
+        #expect(sections.map(\.featureID) == boxes && sections.allSatisfy(\.section.isFace))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (2 * 0.02 * 0.02 * 0.02 + 0.02 * 0.02 * 0.03)) < 1e-12)
+    }
+
     @Test func sheetDraftsUseNativeSourceCommands() throws {
         var patch = makeDraft(.surfacePatch)
         patch.width = "100 mm"
