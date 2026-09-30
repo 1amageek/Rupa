@@ -422,13 +422,16 @@ private struct MountedObjectHandleViewport {
         onCanvasDrag: @escaping (ViewportModelDrag) -> Void,
         onBodyPlacementCommit: @escaping ([ViewportBodyPlacementDragTarget]) -> Void,
         commitCompletion: (@MainActor () async throws -> ViewportSourceIdentity)? = nil,
-        onBodyResizeCommit: ((ViewportBodyResizeDragTarget) -> Void)? = nil
+        onBodyResizeCommit: ((ViewportBodyResizeDragTarget) -> Void)? = nil,
+        selectionOverride: SelectionModel? = nil,
+        transformGizmo: ViewportTransformGizmoConfiguration? = nil,
+        onTopologyTransformCommit: ((Transform3D) -> Void)? = nil
     ) async throws {
         _ = NSApplication.shared
         let cache = MeshSourcePresentationPlanCache()
         self.cache = cache
         func viewport(invalidation: Invalidation? = nil) -> AnyView {
-        let selection = invalidation == .selection ? SelectionModel() : fixture.selection
+        let selection = invalidation == .selection ? SelectionModel() : (selectionOverride ?? fixture.selection)
         let resizeCommit: ((ViewportBodyResizeDragTarget) async throws -> ViewportSourceIdentity)?
         if let onBodyResizeCommit, invalidation != .route {
             resizeCommit = { target in
@@ -448,6 +451,7 @@ private struct MountedObjectHandleViewport {
             canvasDragSketchPlaneOverride: ObjectHandlePressFixture.canvasSketchPlane,
             allowsSelectionRectangle: onSelectionDrag != nil,
             allowsObjectAffordances: allowsObjectAffordances && invalidation != .route,
+            transformGizmo: transformGizmo,
             selectedPresentationHasExactCADContext: true,
             onPick: onPick,
             onCanvasDrag: onCanvasDrag,
@@ -457,7 +461,8 @@ private struct MountedObjectHandleViewport {
                 if let commitCompletion { return try await commitCompletion() }
                 return .document(id: fixture.document.id, generation: DocumentGeneration(1))
             },
-            onBodyResizeCommit: resizeCommit
+            onBodyResizeCommit: resizeCommit,
+            onTopologyTransformCommit: onTopologyTransformCommit
         )
         return AnyView(Viewport(view, presentationPlanCache: cache).frame(width: fixture.size.width, height: fixture.size.height))
         }
@@ -848,6 +853,55 @@ func cadPresentationPlacementUsesNativeInputAndRejectsIncompleteSelections() asy
     #expect(abs(delta[.x] ?? 0) < 1e-9)
     #expect(abs(delta[.z] ?? 0) < 1e-9)
     try committed.validate(in: fixture.document)
+}
+
+/// Move on a box's vertical edge: the gizmo stands on the edge, not on the body, and a drag
+/// on its X arrow reaches the edge's direct edit as a world motion along X, never as a placement.
+@MainActor
+@Test(.timeLimit(.minutes(1)))
+func aGizmoOnAnEdgeCommitsItsDragToTheEdgeMove() async throws {
+    let fixture = try ObjectHandlePressFixture(pressCase: .translateX)
+    let edges = try TopologySnapshotService().snapshot(document: fixture.document).entries.filter { $0.kind == .edge }
+    let maxX = edges.compactMap { $0.midpoint?.x }.max() ?? 0
+    let maxY = edges.compactMap { $0.midpoint?.y }.max() ?? 0
+    let edge = try #require(edges.first { entry in
+        guard let mid = entry.midpoint else { return false }
+        return abs(mid.x - maxX) < 1e-9 && abs(mid.y - maxY) < 1e-9
+    })
+    let target = try #require(edge.selectionTarget())
+    let (start, end) = (try #require(edge.start), try #require(edge.end))
+    let middle = Point3D(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2, z: (start.z + end.z) / 2)
+    let gizmo = ViewportTransformGizmoConfiguration(
+        mode: .move, frame: .world(at: middle), constraint: .axis(.x),
+        topology: .init(
+            motion: BodyTopologyWorldMotion(kind: .edges, targets: [target], bodyWorldTransform: .identity, pivot: middle, form: .translation),
+            lower: Point3D(x: min(start.x, end.x), y: min(start.y, end.y), z: min(start.z, end.z)),
+            upper: Point3D(x: max(start.x, end.x), y: max(start.y, end.y), z: max(start.z, end.z))
+        )
+    )
+    var placements: [ViewportBodyPlacementDragTarget] = []
+    var motions: [Transform3D] = []
+    let mounted = try await MountedObjectHandleViewport(fixture: fixture, allowsObjectAffordances: false,
+        onPick: { _ in }, onCanvasDrag: { _ in }, onBodyPlacementCommit: { placements.append(contentsOf: $0) },
+        selectionOverride: SelectionModel(selectedTargets: [target]), transformGizmo: gizmo,
+        onTopologyTransformCommit: { motions.append($0) })
+    defer { mounted.close() }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+    while motions.isEmpty, ContinuousClock.now < deadline {
+        let (press, release) = try mounted.stations(for: .translateX)
+        try await mounted.gesture(from: press, to: release, size: fixture.size)
+    }
+    let motion = try #require(motions.last, "A drag on the edge's X arrow must reach the edge move.")
+    let moved = try motion.applied(to: middle) - middle
+    #expect(moved.x > 1e-9)
+    #expect(abs(moved.y) < 1e-12 && abs(moved.z) < 1e-12)
+    #expect(placements.isEmpty)
+    // The motion is the edge move the session commits.
+    guard case .moveBodyEdges([target], let direction, _) = try gizmo.topology!.motion.command(worldDelta: motion) else {
+        Issue.record("The drag must commit an edge move.")
+        return
+    }
+    #expect((direction - .unitX).length < 1e-12)
 }
 
 /// The world translation a committed placement adds, read out of the two
