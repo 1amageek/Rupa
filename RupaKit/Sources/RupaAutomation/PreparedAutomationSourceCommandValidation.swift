@@ -174,6 +174,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createRevolve,
              .revolveSection,
              .createSweep,
+             .createPipes,
              .createLoft,
              .setLoft,
              .createBoolean,

@@ -247,6 +247,36 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.02 * 0.02 * 0.05) < 1e-12)
     }
 
+    @Test func aPipeFollowsEachCurveAndCombinesWithBodies() throws {
+        var document = DesignDocument.empty()
+        // Two 50 mm lines up the Z axis (sketch x is world z on the ZX plane).
+        let paths = try [0.0, 0.03].map { x in
+            try document.createLineSketch(name: "Path", plane: .zx,
+                start: SketchPoint(x: .length(0, .meter), y: .length(x, .meter)),
+                end: SketchPoint(x: .length(0.05, .meter), y: .length(x, .meter)))
+        }
+        let nodes = try paths.map { path in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) }) }
+        var draft = makeDraft(.pipe, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.pipeDiameter = "10 mm"
+        draft.wallThickness = "1 mm"
+        guard case .createPipes(_, let sources) = try draft.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(sources.map(\.path.featureID) == paths && sources.allSatisfy { $0.thickness == .length(0.001, .meter) })
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.solids == 2)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 2 * Double.pi * (0.005 * 0.005 - 0.004 * 0.004) * 0.05) < 1e-12)
+
+        draft.pipeVertices = "2"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.pipeVertices = "0"
+        draft.solidBoolean = .union
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test func sheetDraftsUseNativeSourceCommands() throws {
         var patch = makeDraft(.surfacePatch)
         patch.width = "100 mm"

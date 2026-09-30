@@ -22,6 +22,7 @@ extension FeatureOperation {
              .extrude,
              .revolve,
              .sweep,
+             .pipe,
              .loft,
              .boolean,
              .chamfer,
@@ -89,6 +90,8 @@ extension FeatureOperation {
         case .revolve:
             return true
         case .sweep:
+            return true
+        case .pipe:
             return true
         case .loft:
             return true
@@ -181,6 +184,10 @@ extension FeatureOperation {
             return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
         // A Boolean sweep replaces its targets, as a Boolean extrusion does; Keep Tools keeps only
         // the swept tool.
+        // A Boolean pipe replaces its targets, as a Boolean sweep does.
+        case .pipe(let feature):
+            guard feature.booleanOperation != .newBody else { return [] }
+            return Set(feature.targets.map(\.featureID))
         case .sweep(let feature):
             guard feature.options.booleanOperation != .newBody else { return [] }
             return Set(feature.targets.map(\.featureID))

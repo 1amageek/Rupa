@@ -222,6 +222,13 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Axis Origin", value: pointSummary(revolve.axis.origin)),
                 WorkspaceInspectorTextRow(title: "Axis Direction", value: vectorSummary(revolve.axis.direction)),
             ]
+        case .pipe(let pipe):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Pipe"),
+                WorkspaceInspectorTextRow(title: "Path Source", value: WorkspaceInspectorNumberText.shortID(pipe.path.featureID)),
+                WorkspaceInspectorTextRow(title: "Section", value: pipe.vertexCount == 0 ? "Circle" : "\(pipe.vertexCount)-gon"),
+                WorkspaceInspectorTextRow(title: "Wall", value: pipe.thickness == nil ? "Solid" : "Hollow"),
+            ]
         case .sweep(let sweep):
             var rows = [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Sweep"),

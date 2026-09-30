@@ -287,6 +287,26 @@ struct ModelingOperationView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+        case .pipe:
+            lengthField("Diameter", text: $draft.pipeDiameter)
+            lengthField("Thickness", text: $draft.wallThickness)
+            TextField("Vertices (0 for a circle)", text: $draft.pipeVertices)
+            TextField("Angle (degrees)", text: $draft.pipeAngle)
+            TextField("Scale at the end", text: $draft.pipeEndScale)
+            TextField("Start (0–1)", text: $draft.pipeStart)
+            TextField("End (0–1)", text: $draft.pipeEnd)
+            lengthField("Positional approximation allowance", text: $draft.pipeAllowance)
+            Picker("Boolean", selection: $draft.solidBoolean) {
+                ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .contentShape(Rectangle())
+            if draft.solidBoolean != .newBody {
+                Toggle("Keep Tools", isOn: $draft.keepsTools)
+            }
+            Text("Select one or more curves, then any bodies to combine with. A pipe follows each curve; along a curved path it is built within the allowance.")
+                .font(.caption).foregroundStyle(.secondary)
         case .sweep:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }
             Text("Select the section first, optional guides next, and the path last.").font(.caption).foregroundStyle(.secondary)

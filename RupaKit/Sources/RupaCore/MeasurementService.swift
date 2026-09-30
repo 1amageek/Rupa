@@ -1047,6 +1047,19 @@ public struct MeasurementService {
                 try measureRevolveCase(revolve, node: node, featureID: featureID)
             case .sweep(let sweep):
                 try measureSweepCase(sweep, node: node, featureID: featureID)
+            case .pipe(let pipe):
+                // A pipe is measured as the body it evaluates to.
+                guard !isSupersededInDocumentScope(featureID), shouldMeasure(featureID) else { continue }
+                includedSourceFeatureIDs.insert(featureID)
+                var reason: String?
+                guard let values = try measureEvaluatedBodySolids(featureID: featureID,
+                    featureName: node.name, sourceFeatureID: pipe.path.featureID,
+                    sourceFeatureName: document.cadDocument.designGraph.nodes[pipe.path.featureID]?.name,
+                    evaluatedDocument: evaluatedDocument(), unsupportedReason: &reason) else {
+                    throw EditorError(code: .commandInvalid,
+                        message: "Pipe measurement failed: \(reason ?? "Missing evaluated geometry").")
+                }
+                for solid in values { solids.append(solid); bounds.include(solid.bounds) }
             case .loft(let loft):
                 try measureLoftCase(loft, node: node, featureID: featureID)
             case .boolean(let boolean):

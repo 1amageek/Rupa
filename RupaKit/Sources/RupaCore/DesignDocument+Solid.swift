@@ -447,6 +447,72 @@ extension DesignDocument {
         return featureID
     }
 
+    /// Adds a pipe along a curve: a body of its own, or combined with its targets, whose objects
+    /// go. Its path and targets must be shown where they were built, as a sweep's.
+    @discardableResult
+    public mutating func createPipe(
+        name: String,
+        source: PipeFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Pipe")
+        do {
+            try source.validate()
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "Pipe command is invalid: \(error).")
+        }
+        try requireSweepSourceCurveFeature(source.path.featureID, owner: "Pipe path")
+        for target in source.targets {
+            try requireSweepTargetBodyFeature(target.featureID, owner: "Pipe target")
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for featureID in [source.path.featureID] + source.targets.map(\.featureID) {
+            guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "A pipe's path and target bodies must be shown where they were built; this one has been moved.")
+            }
+        }
+        let featureID = FeatureID()
+        let feature = FeatureNode(
+            id: featureID,
+            name: trimmedName,
+            operation: .pipe(source),
+            inputs: [FeatureInput(featureID: source.path.featureID, role: .path)]
+                + source.targets.map { FeatureInput(featureID: $0.featureID, role: .target) },
+            outputs: [FeatureOutput(role: .body)]
+        )
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(
+                featureID: featureID,
+                documentID: cadDocument.id,
+                sourceSection: nil,
+                typeID: nil,
+                geometryRole: .solid,
+                objectRegistry: objectRegistry
+            )
+        )
+        if source.booleanOperation != .newBody {
+            try removeSceneNodes(presenting: source.targets.map(\.featureID))
+        }
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+
     @discardableResult
     public mutating func createLoft(
         name: String,

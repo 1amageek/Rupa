@@ -106,6 +106,15 @@ public struct ParameterSourceUsageService: Sendable {
             if let start = feature.startDistance { record(start, path: "extrude.startDistance") }
         case .revolve(let feature):
             record(feature.angle, path: "revolve.angle")
+            if let thickness = feature.thickness { record(thickness, path: "revolve.thickness") }
+        case .pipe(let feature):
+            record(feature.diameter, path: "pipe.diameter")
+            if let thickness = feature.thickness { record(thickness, path: "pipe.thickness") }
+            record(feature.angle, path: "pipe.angle")
+            record(feature.endScale, path: "pipe.endScale")
+            record(feature.start, path: "pipe.start")
+            record(feature.end, path: "pipe.end")
+            record(feature.approximationTolerance, path: "pipe.approximationTolerance")
         case .sweep(let feature):
             record(feature.options.twistAngle, path: "sweep.options.twistAngle")
             if let allowance = feature.options.approximationTolerance {
@@ -305,6 +314,8 @@ public struct ParameterSourceUsageService: Sendable {
             "revolve"
         case .sweep:
             "sweep"
+        case .pipe:
+            "pipe"
         case .loft:
             "loft"
         case .boolean:

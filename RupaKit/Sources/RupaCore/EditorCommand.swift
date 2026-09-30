@@ -430,6 +430,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    /// A pipe along each curve, each persisted as a feature of its own, all in one transaction.
+    case createPipes(name: String, sources: [PipeFeature])
     case createLoft(
         name: String,
         sections: [LoftSectionReference],
@@ -960,6 +962,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "revolveSection"
         case .createSweep:
             "createSweep"
+        case .createPipes:
+            "createPipes"
         case .createLoft:
             "createLoft"
         case .setLoft:
@@ -1228,6 +1232,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createRevolve,
              .revolveSection,
              .createSweep,
+             .createPipes,
              .createLoft,
              .setLoft,
              .createBoolean,

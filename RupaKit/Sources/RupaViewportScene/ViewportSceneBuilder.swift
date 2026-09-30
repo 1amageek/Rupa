@@ -196,6 +196,19 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .pipe(let pipe):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: pipe.path.featureID,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
+                    surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .loft(let loft):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,

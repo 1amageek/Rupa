@@ -11,6 +11,7 @@ struct ModelingOperationDraft: Equatable {
         case extrude = "Extrude"
         case revolve = "Revolve"
         case sweep = "Sweep"
+        case pipe = "Pipe"
         case loft = "Loft"
         case fillet = "Fillet"
         case chamfer = "Chamfer"
@@ -42,6 +43,7 @@ struct ModelingOperationDraft: Equatable {
             case .extrude: "arrow.up.to.line"
             case .revolve: "arrow.trianglehead.2.clockwise.rotate.90"
             case .sweep: "arrow.triangle.2.circlepath"
+            case .pipe: "circle.circle"
             case .loft: "square.stack.3d.up"
             case .fillet: "square.on.circle"
             case .chamfer: "cube.transparent"
@@ -175,6 +177,16 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var sweepAlignment = SweepAlignmentChoice.normal
+    /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
+    var pipeDiameter = "10 mm"
+    var pipeVertices = "0"
+    var pipeAngle = "0"
+    var pipeEndScale = "1"
+    /// The fractions of each path's length a pipe runs between.
+    var pipeStart = "0"
+    var pipeEnd = "1"
+    /// The positional allowance a pipe along a curved path is built within.
+    var pipeAllowance = "0.001 mm"
     var approximationTolerance = ""
     /// Thicken's back thickness; the distance field is its front.
     var thickenBack = "0"
@@ -226,7 +238,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -435,6 +447,61 @@ struct ModelingOperationDraft: Equatable {
                 operation: solidBoolean.operation, targets: Array(features.dropFirst()), keepTools: combines && keepsTools,
                 thickness: thickness.map { .length($0, .meter) }
             )
+        case .pipe:
+            // FIXME(INCOMPLETE_IMPLEMENTATION): a pipe follows curve sources only; edges of bodies
+            // are refused until an edge can stand for a path curve. Production path:
+            // ModelingOperationDraft.command(in:) for Pipe. Complete only when a selected edge makes
+            // a pipe along it, verified by a pipe around a box's edge.
+            guard targets.allSatisfy({ $0.component == .object }) else {
+                throw invalid("Pipe follows curves; select whole curve sources, not edges or faces.")
+            }
+            var paths = features
+            var bodies: [SweepTargetReference] = []
+            if solidBoolean != .newBody {
+                // The bodies to combine with come after the curves.
+                while paths.count > 1, let node = nodes.last(where: { $0.object?.sourceFeatureID == paths.last }),
+                      node.object?.geometryRole == .solid, let featureID = paths.last {
+                    bodies.insert(SweepTargetReference(featureID: featureID), at: 0)
+                    paths.removeLast()
+                }
+                guard !bodies.isEmpty else { throw invalid("Select the curves first, then the bodies to combine with.") }
+            }
+            guard !paths.isEmpty else { throw invalid("Select at least one curve for the pipe to follow.") }
+            let vertices = try number(pipeVertices, label: "Vertices")
+            guard vertices == vertices.rounded(), vertices == 0 || (3...256).contains(vertices) else {
+                throw invalid("Vertices is 0 for a circle or 3 to 256 for a polygon.")
+            }
+            let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
+                ? nil : CADExpression.length(try length(wallThickness, label: "Thickness"), .meter)
+            guard let operation = SweepBooleanOperation(rawValue: solidBoolean.operation.rawValue) else {
+                throw invalid("The pipe's Boolean is not a sweep Boolean.")
+            }
+            let sources = paths.map { path in
+                PipeFeature(
+                    path: SweepPathReference(featureID: path),
+                    diameter: .length(0, .meter), thickness: thickness, vertexCount: Int(vertices),
+                    booleanOperation: operation, targets: bodies, keepTools: solidBoolean != .newBody && keepsTools,
+                    approximationTolerance: .length(0, .meter)
+                )
+            }
+            let diameter = CADExpression.length(try length(pipeDiameter, label: "Diameter"), .meter)
+            let angle = CADExpression.angle(try number(pipeAngle, label: "Angle"), .degree)
+            let endScale = CADExpression.scalar(try number(pipeEndScale, label: "Scale"))
+            let start = CADExpression.scalar(try number(pipeStart, label: "Start"))
+            let end = CADExpression.scalar(try number(pipeEnd, label: "End"))
+            let allowance = CADExpression.length(try length(pipeAllowance, label: "Positional approximation allowance"), .meter)
+            let pipes = try sources.map { source -> PipeFeature in
+                var pipe = source
+                pipe.diameter = diameter
+                pipe.angle = angle
+                pipe.endScale = endScale
+                pipe.start = start
+                pipe.end = end
+                pipe.approximationTolerance = allowance
+                do { try pipe.validate() } catch { throw invalid("The pipe is invalid: \(error).") }
+                return pipe
+            }
+            return .createPipes(name: name, sources: pipes)
         case .sweep:
             let degrees = try number(twistAngle, label: "Twist angle")
             var options = SweepOptions()
@@ -590,6 +657,9 @@ struct ModelingOperationDraft: Equatable {
             let ordinal = targets.prefix(index + 1).filter { loftGuideNodeIDs.contains($0.sceneNodeID) == isGuide }.count
             role = "\(isGuide ? "Guide" : "Section") \(ordinal)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
+        case .pipe:
+            let isBody = document.productMetadata.sceneNodes[targets[index].sceneNodeID]?.object?.geometryRole == .solid
+            role = isBody ? "Body" : "Path"
         case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
         case .surfaceOffset, .surfaceExtend, .thicken: role = "Sheet face"
         case .shell: role = "Opening face"
