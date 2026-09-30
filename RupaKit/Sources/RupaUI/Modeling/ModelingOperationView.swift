@@ -231,6 +231,8 @@ struct ModelingOperationView: View {
             if draft.extrusionDirection == .vector {
                 vectorFields("Direction", values: $draft.axis, unit: "")
             }
+            TextField("Degrees", text: $draft.draftDegrees)
+                .accessibilityIdentifier("Modeling.extrusionDraftDegrees")
             if !draft.isSurfaceCreation {
                 Toggle("Sheet output", isOn: $draft.sheet)
                 Picker("Boolean", selection: $draft.extrusionBoolean) {

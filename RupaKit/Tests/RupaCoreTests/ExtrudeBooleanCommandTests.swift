@@ -1,3 +1,4 @@
+import Foundation
 import SwiftCAD
 import Testing
 @testable import RupaCore
@@ -137,5 +138,21 @@ import Testing
         #expect(throws: (any Error).self) {
             _ = try session.execute(.setExtrusion(featureID: toolID, source: newBody))
         }
+    }
+
+    @MainActor
+    @Test func aDraftedExtrusionIsMeasuredAsTheBodyItEvaluatesTo() throws {
+        let (session, _, section) = try cubeSession()
+        let drafted = ExtrudeFeature(
+            section: section, distance: .length(1, .meter), direction: .normal, resultKind: .solid,
+            draftAngle: .angle(10, .degree)
+        )
+        _ = try session.execute(.createExtrusion(name: "Drafted", source: drafted))
+        #expect(session.evaluationStatus == .valid)
+        let measurement = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
+        // The 1 m square narrows by 2·tan 10° per meter: ∫₀¹ (1 − 2ht)² dh beside the 1 m cube.
+        let t = tan(10 * Double.pi / 180)
+        let frustum = 1 - 2 * t + 4.0 / 3.0 * t * t
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (1 + frustum)) < tolerance)
     }
 }

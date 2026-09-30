@@ -127,6 +127,8 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var extrusionBoolean = ExtrusionBooleanChoice.newBody
+    /// The extrusion's draft in degrees: positive narrows the section along the extrusion.
+    var draftDegrees = "0"
     var keepsTools = false
     var sheet = false
     var isSurfaceCreation = false
@@ -290,14 +292,21 @@ struct ModelingOperationDraft: Equatable {
                 _ = try extrusion.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
                     try document.cadDocument.parameters.resolvedValue(for: $0)
                 }
-                guard combines else {
+                let draft = try number(draftDegrees, label: "Degrees")
+                guard draft.isFinite, abs(draft) < 90 else {
+                    throw invalid("Degrees must be under 90.")
+                }
+                guard combines || draft != 0 else {
                     return .extrudeSection(name: name, section: section, distance: extrusion.distance,
                         startDistance: extrusion.startDistance, direction: direction, resultKind: extrusion.resultKind)
                 }
+                var drafted = extrusion
+                drafted.draftAngle = draft == 0 ? nil : .angle(draft, .degree)
+                guard combines else { return .createExtrusion(name: name, source: drafted) }
                 guard createsSheet == false else {
                     throw invalid("A Boolean extrusion makes a solid; turn Sheet output off.")
                 }
-                var combined = extrusion
+                var combined = drafted
                 combined.operation = extrusionBoolean.operation
                 combined.targets = features.dropFirst().map { BooleanTargetReference(featureID: $0) }
                 combined.keepTools = keepsTools

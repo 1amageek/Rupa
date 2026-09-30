@@ -77,6 +77,7 @@ extension DesignDocument {
         operation: SolidOperation = .newBody,
         targets: [BooleanTargetReference] = [],
         keepTools: Bool = false,
+        draftAngle: CADExpression? = nil,
         typeID: ObjectTypeID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
@@ -99,7 +100,8 @@ extension DesignDocument {
             }
         }
         let extrusion = ExtrudeFeature(section: section, distance: distance, startDistance: startDistance,
-            direction: direction, operation: operation, targets: placedTargets, keepTools: keepTools, resultKind: resultKind)
+            direction: direction, operation: operation, targets: placedTargets, keepTools: keepTools, resultKind: resultKind,
+            draftAngle: draftAngle)
         try extrusion.validate()
         guard let source = cadDocument.designGraph.nodes[section.featureID],
               source.outputs.contains(where: { $0.role == section.inputRole }) else {

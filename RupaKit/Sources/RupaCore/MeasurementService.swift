@@ -275,14 +275,16 @@ public struct MeasurementService {
                 try appendEvaluatedSheet(sourceFeatureID: extrude.section.featureID, node: node, featureID: featureID)
                 return
             }
-            if extrude.operation != .newBody {
+            // A Boolean or drafted extrusion is measured as the body it evaluates to, not as its
+            // profile's area times its depth.
+            if extrude.operation != .newBody || extrude.draftAngle != nil {
                 var reason: String?
                 guard let values = try measureEvaluatedBodySolids(featureID: featureID,
                     featureName: node.name, sourceFeatureID: extrude.section.featureID,
                     sourceFeatureName: document.cadDocument.designGraph.nodes[extrude.section.featureID]?.name,
                     evaluatedDocument: evaluatedDocument(), unsupportedReason: &reason) else {
                     throw EditorError(code: .commandInvalid,
-                        message: "Extrusion Boolean measurement failed: \(reason ?? "Missing evaluated geometry").")
+                        message: "Extrusion measurement failed: \(reason ?? "Missing evaluated geometry").")
                 }
                 for solid in values { solids.append(solid); bounds.include(solid.bounds) }
                 return

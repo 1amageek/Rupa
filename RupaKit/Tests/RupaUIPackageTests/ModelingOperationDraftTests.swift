@@ -302,6 +302,26 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func aDraftedExtrusionCarriesItsDegrees() throws {
+        var document = DesignDocument.empty()
+        let profile = try addProfile(to: &document, z: 0)
+        var draft = makeDraft(.extrude, targets: [profile.target])
+        draft.distance = "5 mm"
+        draft.draftDegrees = "3"
+        guard case .createExtrusion(_, let source) = try draft.command(in: document) else {
+            Issue.record("A drafted extrusion is one authored extrusion.")
+            return
+        }
+        #expect(source.draftAngle == .angle(3, .degree))
+        #expect(source.operation == .newBody)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let evaluated = try CADPipeline.modelingDefault(for: store.document).evaluate(store.document.cadDocument)
+        #expect(evaluated.brep.bodies.count == 1)
+        draft.draftDegrees = "90"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test(arguments: ModelingOperationDraft.ExtrusionDirectionChoice.allCases)
     func curveExtrusionDirectionEvaluates(direction: ModelingOperationDraft.ExtrusionDirectionChoice) throws {
         var document = DesignDocument.empty()
