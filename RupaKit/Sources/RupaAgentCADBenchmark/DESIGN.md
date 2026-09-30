@@ -2292,10 +2292,14 @@ transform-seed boundaries were deleted; see the planner contract above). One
 semantic program creates the typed source in its first node and places that
 local scene output in its second, so a realized transform case runs two
 commands in one transaction: document generation +2, transaction revision +1,
-one publication, workspace unchanged. The transform oracle compares the
-immutable initial and final snapshots to prove the source's identity and
-geometry and that only the requested local/world placement differs from the
-created source.
+one publication, workspace unchanged. The transform oracle
+(`CADTransformOracle.evaluateSelfContained`) reads the final snapshot alone,
+since no earlier snapshot holds the source: it proves the program authored
+exactly the typed source requested (its geometry through
+`CADTransformInitialSourceOracle`; one sketch node, plus one body node for a
+solid), that the source node's local transform is the requested one and every
+other authored node is unplaced, and that the source's evaluated world
+occurrence, which a solid must have, sits at parent times local.
 
 The kernel's analytic sphere constructor is a separate lower-level capability;
 the production Agent route currently exposes no sphere action or capability
@@ -2678,8 +2682,9 @@ The transform action is a single bounded value containing translation, the
 explicit source-world axis point, a finite non-zero rotation axis, and the
 rotation angle. The runner sends the planned two-node program (source, then
 placement of its local scene output) through the registered
-`ProjectAgentCommandController`. The transform oracle compares exact
-initial/final source identity and placement; TRN-001's wrong translation and
+`ProjectAgentCommandController`. The self-contained transform oracle checks
+the authored source and its exact placement in the final snapshot; TRN-001's
+wrong translation and
 TRN-002's wrong-order translation `(-17.67766952966369, 17.67766952966369, 0)`
 mm, TRN-003's wrong-order translation `(0, -50, 0)` mm, and TRN-004's
 wrong-order translation `(109.53353488403286, -22.41438680420134, 25)` mm

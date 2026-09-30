@@ -426,3 +426,8 @@
   - [x] DF9 The two failures that predate DF1 follow their current contracts (23a8663b). `depends:none` `parallel:none`
   - [x] DF10 Parent frames and poly-spline patches are derived once per document identity instead of in every overlay build; a hover's overlay computation fell from 1.6 ms to 0.56 ms (cef75117). `depends:DF7` `parallel:none`
   - [x] DF11 Integration: every RupaKit suite passes, app rebuilt and restarted, pushed. `depends:DF9,DF10` `parallel:none`
+  - [ ] RV1 An unpublished candidate's evaluation snapshot has an identity of its own: every preview of a source transaction carries a candidate token in its EvaluationSnapshotID, so a snapshot ID names one evaluated content and the scene, plan, press and document-overlay caches keyed by it cannot serve another draft. `depends:none` `parallel:none`
+  - [x] RV2 The transform oracle has one route: the dead seeded initial/final oracle is removed and the benchmark design describes the self-contained oracle the runner uses. `depends:none` `parallel:none`
+  - [ ] RV3 A hover delta's placement is never dropped: a placement the delta could not complete stays owed by the frame, and the mounted host places and reports it on its next engine frame. `depends:none` `parallel:none`
+  - [ ] RV4 Coverage: native suppression and restoration of labels, planar paths, camera lines and camera paths and the sectioned attachment's section bounds; the cache basing a delta on an unpublished hover frame and falling back to a complete frame when the added items do not fit. `depends:RV3` `parallel:none`
+  - [ ] RV5 Integration: RupaKit suites, app rebuild and restart, push. `depends:RV1,RV2,RV3,RV4` `parallel:none`
