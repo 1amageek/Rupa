@@ -629,6 +629,22 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(extend.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Shape", value: extend.shape.rawValue.capitalized),
             ]
+        case .faceRebuild(let rebuild):
+            let method: String = switch rebuild.method {
+            case let .explicit(layout): "Degree \(layout.uDegree)×\(layout.vDegree), Spans \(layout.uSpans)×\(layout.vSpans)"
+            case .tolerance: "Tolerance"
+            }
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Rebuild Face"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(rebuild.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Faces", value: "\(rebuild.faces.count)"),
+                WorkspaceInspectorTextRow(title: "Method", value: method),
+            ]
+        case .faceUnwrap(let unwrap):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Unwrap Face"),
+                WorkspaceInspectorTextRow(title: "Source", value: WorkspaceInspectorNumberText.shortID(unwrap.target.featureID)),
+            ]
         case .surfaceAlign(let align):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Align Surface"),

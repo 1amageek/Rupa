@@ -1099,6 +1099,14 @@ public struct MeasurementService {
                 try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: extend.target.featureID, operationName: "Extend Sheet")
             case .surfaceAlign(let align):
                 try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: align.target.featureID, operationName: "Align Surface")
+            case .faceUnwrap(let unwrap):
+                try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: unwrap.target.featureID, operationName: "Unwrap Face")
+            case .faceRebuild(let rebuild):
+                if node.outputs.contains(where: { $0.role == .sheet }) {
+                    try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: rebuild.target.featureID, operationName: "Rebuild Face")
+                } else {
+                    try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: rebuild.target.featureID, operationName: "Rebuild Face")
+                }
             case .removeRedundantTopology(let removal):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Delete Redundant Topology")
             case .removeFillets(let removal):

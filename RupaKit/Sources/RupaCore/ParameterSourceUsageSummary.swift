@@ -159,8 +159,10 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.distance, path: "edgeOffset.distance")
         case .sheetExtend(let feature):
             record(feature.distance, path: "sheetExtend.distance")
-        case .surfaceAlign:
+        case .surfaceAlign, .faceUnwrap:
             break
+        case .faceRebuild(let feature):
+            if case let .tolerance(distance) = feature.method { record(distance, path: "faceRebuild.tolerance") }
         case .removeFillets(let feature):
             if let maximumRadius = feature.maximumRadius { record(maximumRadius, path: "removeFillets.maximumRadius") }
         case .faceDraft(let feature):
@@ -405,6 +407,10 @@ public struct ParameterSourceUsageService: Sendable {
             "sheetExtend"
         case .surfaceAlign:
             "surfaceAlign"
+        case .faceRebuild:
+            "faceRebuild"
+        case .faceUnwrap:
+            "faceUnwrap"
         case .imprintCurves:
             "imprintCurves"
         case .untrimFace:

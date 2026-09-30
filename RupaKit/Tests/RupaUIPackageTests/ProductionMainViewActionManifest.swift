@@ -148,6 +148,8 @@ enum ProductionMainViewActionManifest {
         "thicken",
         "extendSheet",
         "alignSurface",
+        "rebuildFaces",
+        "unwrapFace",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

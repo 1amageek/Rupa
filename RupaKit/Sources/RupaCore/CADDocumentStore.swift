@@ -2086,7 +2086,7 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .hollow, .thicken, .extendSheet, .alignSurface:
+        case .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFaces, .unwrapFace:
             func run() throws {
                 var updatedDocument = document
                 switch command {
@@ -2105,6 +2105,15 @@ public final class CADDocumentStore {
                         targets: targets, distance: distance, shape: shape, modifies: modifies, objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
+                case .rebuildFaces(let targets, let method, let extendU, let extendV, let shrinks):
+                    try updatedDocument.rebuildFaces(
+                        targets: targets, method: method, extendU: extendU, extendV: extendV, shrinks: shrinks,
+                        objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                case .unwrapFace(let target):
+                    try updatedDocument.unwrapFace(
+                        target: target, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
                 case .alignSurface(let targets, let continuity, let tension, let blendRows, let influence, let partialStart, let partialEnd, let layout):
                     try updatedDocument.alignSurface(
                         targets: targets, continuity: continuity, tension: tension, blendRows: blendRows,
@@ -2113,7 +2122,7 @@ public final class CADDocumentStore {
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
                 default:
-                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken, extendSheet or alignSurface.")
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken, extendSheet, alignSurface, rebuildFaces or unwrapFace.")
                 }
                 document = updatedDocument
                 try commitMutation()

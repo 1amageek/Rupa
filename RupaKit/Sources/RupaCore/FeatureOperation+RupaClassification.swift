@@ -60,6 +60,8 @@ extension FeatureOperation {
              .removeRedundantTopology,
              .sheetExtend,
              .surfaceAlign,
+             .faceRebuild,
+             .faceUnwrap,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -149,6 +151,8 @@ extension FeatureOperation {
              .removeRedundantTopology,
              .sheetExtend,
              .surfaceAlign,
+             .faceRebuild,
+             .faceUnwrap,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -271,6 +275,11 @@ extension FeatureOperation {
             return feature.modifies ? [feature.target.featureID] : []
         case .surfaceAlign(let feature):
             return [feature.target.featureID]
+        case .faceRebuild(let feature):
+            return [feature.target.featureID]
+        // Unwrap Face lays a face flat beside its body, which it leaves as it is.
+        case .faceUnwrap:
+            return []
         case .imprintCurves(let feature):
             return [feature.target.featureID]
         // Untrim makes a sheet beside its body.

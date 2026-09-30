@@ -8,7 +8,9 @@ import SwiftCAD
 /// last-selected face's surface, facing its Front when chosen), and Remove Fillets From Shell (the
 /// selected solid's fillets within a Max Radius and a Convexity), and Align Surface (the first
 /// edge, of a sheet, following the last with a Continuity, a Tension and Blend rows). Tab steps
-/// the Grow mode, Remove Fillets' Convexity, Extend Sheet's Shape or Align Surface's Continuity; OK, Return or right-click applies; Escape ends it without a change.
+/// the Grow mode, Remove Fillets' Convexity, Extend Sheet's Shape, Align Surface's Continuity or
+/// Rebuild Face's method (the faces refitted to a Degree and Spans layout or within a Tolerance,
+/// extended past them and shrunk to them); OK, Return or right-click applies; Escape ends it without a change.
 struct WorkspaceFaceEditSession: Equatable {
     /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
     let instance = WorkspaceDialogInstance()
@@ -22,6 +24,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case thicken(targets: [SelectionTarget])
         case extendSheet(edges: [SelectionTarget])
         case alignSurface(edge: SelectionTarget, reference: SelectionTarget)
+        case rebuildFace(faces: [SelectionTarget])
     }
 
     let kind: Kind
@@ -59,6 +62,13 @@ struct WorkspaceFaceEditSession: Equatable {
     var partialEnd = 0.0
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
+    /// Rebuild Face's method, which Tab steps (the explicit `layout`, or a tolerance in meters),
+    /// its extensions past the face each way as fractions of its extent, and Shrink.
+    var rebuildsWithinTolerance = false
+    var rebuildToleranceMeters = 0.00001
+    var extendU = 0.0
+    var extendV = 0.0
+    var shrinks = false
 
     init(kind: Kind) {
         self.kind = kind
@@ -74,6 +84,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case .thicken: "Thicken"
         case .extendSheet: "Extend Sheet"
         case .alignSurface: "Align Surface"
+        case .rebuildFace: "Rebuild Face"
         }
     }
 
@@ -81,13 +92,17 @@ struct WorkspaceFaceEditSession: Equatable {
     var hasGrow: Bool {
         switch kind {
         case .push, .draft, .match: true
-        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface: false
+        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace: false
         }
     }
 
     /// Tab's step through the Grow modes, Remove Fillets' convexities, Extend Sheet's shapes or
     /// Align Surface's continuities.
     mutating func stepGrow() {
+        if case .rebuildFace = kind {
+            rebuildsWithinTolerance.toggle()
+            return
+        }
         if case .alignSurface = kind {
             let all = SurfaceContinuityLevel.allCases
             continuity = all[((all.firstIndex(of: continuity) ?? 0) + 1) % all.count]
@@ -125,6 +140,12 @@ struct WorkspaceFaceEditSession: Equatable {
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
         case let .extendSheet(edges):
             return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies)
+        case let .rebuildFace(faces):
+            return .rebuildFaces(
+                targets: faces,
+                method: rebuildsWithinTolerance ? .tolerance(.length(rebuildToleranceMeters, .meter)) : .explicit(layout),
+                extendU: extendU, extendV: extendV, shrinks: shrinks
+            )
         case let .alignSurface(edge, reference):
             return .alignSurface(
                 targets: [edge, reference], continuity: continuity, tension: tension, blendRows: blendRows,

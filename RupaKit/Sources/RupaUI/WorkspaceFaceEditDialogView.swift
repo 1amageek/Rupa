@@ -5,7 +5,8 @@ import SwiftCAD
 /// The options of the running local face operation (`WorkspaceFaceEditSession`), laid out in the
 /// context panel: Push Face's Distance and Angle Adjacent, Draft Face's Degrees and Offset, Match
 /// Face's Front, and the Grow mode they share; Remove Fillets' Max Radius and Convexity; Align
-/// Surface's Continuity, Tension, Blend rows, Influence, Partial Start and End, and Degree/Spans.
+/// Surface's Continuity, Tension, Blend rows, Influence, Partial Start and End, and Degree/Spans;
+/// Rebuild Face's Method with its Degree and Spans or Tolerance, Extend U and V, and Shrink.
 struct WorkspaceFaceEditDialogView: View {
     @Binding var dialog: WorkspaceFaceEditSession
     var displayUnit: LengthDisplayUnit
@@ -62,6 +63,26 @@ struct WorkspaceFaceEditDialogView: View {
             if dialog.refitsLayout {
                 layoutFields($dialog.layout)
             }
+        case .rebuildFace:
+            Picker("Method", selection: $dialog.rebuildsWithinTolerance) {
+                Text("Explicit").tag(false)
+                Text("Tolerance").tag(true)
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.rebuildMethod")
+            if dialog.rebuildsWithinTolerance {
+                lengthField("Tolerance", meters: $dialog.rebuildToleranceMeters, identifier: "WorkspaceFaceEdit.rebuildTolerance")
+            } else {
+                layoutFields($dialog.layout)
+            }
+            TextField("Extend U", value: $dialog.extendU, format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceFaceEdit.extendU")
+            TextField("Extend V", value: $dialog.extendV, format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceFaceEdit.extendV")
+            Toggle("Shrink", isOn: $dialog.shrinks)
+                .accessibilityIdentifier("WorkspaceFaceEdit.shrinks")
         case .hollow:
             lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
         case .thicken:
@@ -124,6 +145,7 @@ struct WorkspaceFaceEditDialogView: View {
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .match(faces: [face], reference: face))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .removeFillets(object: SceneNodeID()))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .alignSurface(edge: face, reference: face))), displayUnit: .millimeter)
+        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .rebuildFace(faces: [face]))), displayUnit: .millimeter)
     }
     .padding()
 }

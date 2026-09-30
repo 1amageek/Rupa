@@ -907,7 +907,10 @@ open edges of a sheet open Extend Sheet's dialog (Distance, the Shape Tab steps,
 sketch curve extends through Extend Curve's natural shape. The palette's Align dispatches by
 selection too: an edge of a sheet and then a reference edge open Align Surface's dialog
 (Continuity, which Tab steps, Tension, Blend rows with their Influence, Partial Start and End,
-and Degree/Spans refitting the sheet first); curve ends align through Align Vertex.
+and Degree/Spans refitting the sheet first); curve ends align through Align Vertex. Rebuild
+dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
+Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays
+the one selected face flat as a new sheet object.
 Delete or Backspace on faces of solids, and the inspector's Delete Face, delete them healing
 (`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before. Delete Redundant
 Topology dispatches by selection: selected solids and sheets merge their redundant faces and

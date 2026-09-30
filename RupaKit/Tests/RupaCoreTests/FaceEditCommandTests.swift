@@ -239,4 +239,43 @@ import Testing
             _ = try session.execute(.alignSurface(targets: [edge, reference], partialStart: 0.6, partialEnd: 0.6))
         }
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func rebuildFaceRefitsASheetAndABoxsTopInPlace() throws {
+        let session = EditorSession()
+        _ = try session.execute(.createBSplineSurface(name: "Sheet", surface: .bilinearPatch(
+            bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+            topRight: Point3D(x: 0.1, y: 0.1, z: 0.02), topLeft: Point3D(x: 0, y: 0.1, z: 0))))
+        let sheet = try #require(session.document.productMetadata.sceneNodes.values.first { $0.name.hasPrefix("Sheet") && $0.reference?.kind == .body }).id
+        let sheetFace = try #require(try faces(of: sheet, in: session).first?.selectionTarget())
+        _ = try session.execute(.rebuildFaces(
+            targets: [sheetFace], method: .explicit(SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 2, vSpans: 2)), extendU: 0.2
+        ))
+        #expect(session.evaluationStatus == .valid)
+        let object = try box(session, "Box")
+        let top = try face(of: object, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try session.execute(.rebuildFaces(targets: [top], method: .tolerance(.length(0.00001, .meter))))
+        #expect(session.evaluationStatus == .valid)
+        #expect(try faces(of: object, in: session).count == 6)
+        #expect(abs(try volume(session) - 0.1 * 0.1 * 0.1) < 1e-12)
+        #expect(session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 2)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func unwrapFaceLaysAMovedBoxsTopFlatAboutTheOrigin() throws {
+        let session = EditorSession()
+        let object = try box(session, "Box")
+        _ = try session.execute(.setSceneNodeTransform(id: object, localTransform: try .translation(Vector3D(x: 1, y: 2, z: 3))))
+        let top = try face(of: object, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try session.execute(.unwrapFace(target: top))
+        #expect(session.evaluationStatus == .valid)
+        let flat = try #require(session.document.productMetadata.sceneNodes.values.first { $0.name.hasSuffix("Unwrap Face") }).id
+        let points = try TopologySnapshotService().snapshot(document: session.document).entries
+            .filter { $0.kind == .edge && $0.sceneNodeID == flat.description }.flatMap { [$0.start, $0.end] }.compactMap { $0 }
+        #expect(points.isEmpty == false)
+        #expect(points.allSatisfy { abs($0.z) < 1e-9 && abs($0.x) <= 0.05 + 1e-9 && abs($0.y) <= 0.05 + 1e-9 })
+        #expect(abs((points.map(\.x).max() ?? 0) - (points.map(\.x).min() ?? 0) - 0.1) < 1e-9)
+        // The box stays as it was, where it was.
+        #expect(try faces(of: object, in: session).count == 6)
+    }
 }

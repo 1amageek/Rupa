@@ -335,3 +335,94 @@ extension DesignDocument {
         )
     }
 }
+
+extension DesignDocument {
+    /// Rebuild Face: faces of one object refitted as B-splines on their own parameters by
+    /// `method`, widened by `extendU` and `extendV` of their extent, over the face's extent when
+    /// `shrinks` (Swift-CAD `faceRebuild`). The object shows the result in its place.
+    @discardableResult
+    public mutating func rebuildFaces(
+        name: String = "Rebuild Face",
+        targets: [SelectionTarget],
+        method: FaceRebuildMethod,
+        extendU: Double,
+        extendV: Double,
+        shrinks: Bool,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Rebuild Face"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        switch method {
+        case let .explicit(layout):
+            do {
+                try layout.validate()
+            } catch {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) layout: \(error)")
+            }
+        case let .tolerance(distance):
+            guard try resolvedLengthValue(distance, owner: "\(operationName) tolerance") > 0 else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) tolerance must be positive.")
+            }
+        }
+        guard FaceRebuildFeature.extensions.contains(extendU), FaceRebuildFeature.extensions.contains(extendV) else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) extends each way by 0 to 1 of the face's extent.")
+        }
+        let object = try offsetObject(for: targets, operationName: operationName)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let faces = try targets.map { try stableReference(of: $0, kind: .face, in: topology, operationName: operationName) }
+        return try appendFeatureShownByObject(
+            .faceRebuild(FaceRebuildFeature(
+                target: PatternTargetReference(featureID: object.featureID), faces: faces, method: method,
+                extendU: extendU, extendV: extendV, shrinks: shrinks
+            )),
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
+        )
+    }
+
+    /// Unwrap Face: one face of an object laid flat as a sheet object of its own in the world's XY
+    /// plane about the origin (Swift-CAD `faceUnwrap`); the object stays as it is.
+    @discardableResult
+    public mutating func unwrapFace(
+        name: String = "Unwrap Face",
+        target: SelectionTarget,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Unwrap Face"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        let object = try offsetObject(for: [target], operationName: operationName)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let face = try stableReference(of: target, kind: .face, in: topology, operationName: operationName)
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        let featureID = FeatureID()
+        try appendFeature(try FeatureNodeFactory.make(
+            operation: .faceUnwrap(FaceUnwrapFeature(target: PatternTargetReference(featureID: object.featureID), face: face)),
+            id: featureID, name: trimmedName, in: cadDocument, tolerance: modelingSettings.tolerance
+        ))
+        // The flat sheet lies about the world's origin, not where its source is shown.
+        let sourceName = productMetadata.sceneNodes[object.nodeID]?.name ?? trimmedName
+        try insertBooleanResultNode(
+            name: "\(sourceName) \(trimmedName)", featureID: featureID, geometryRole: .surface,
+            besideTargetNode: nil, hierarchy: try SceneNodeHierarchy(metadata: productMetadata), objectRegistry: objectRegistry
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+}

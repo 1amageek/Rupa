@@ -274,6 +274,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     /// Align by selection: an edge of a sheet and a reference edge to Align Surface, curve ends to
     /// Align Vertex (palette).
     case beginAlign
+    /// Unwrap Face on the one selected face (palette).
+    case unwrapFace
     /// S while Thicken runs: lock the back thickness to the front.
     case toggleThickenLock
     /// Applies the running face operation.

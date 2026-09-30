@@ -6727,6 +6727,14 @@ private struct ProjectMainViewContent: View {
             }
             reportToolStatus("Align: select an edge of a sheet, then the reference edge; or curve ends.", severity: .warning)
             return .handled
+        case .unwrapFace:
+            let faces = selectedBodyFaceTargets
+            guard faces.count == 1, snapshot.selection.selectedTargets.count == 1, let face = faces.first else {
+                reportToolStatus("Unwrap: select one face.", severity: .warning)
+                return .handled
+            }
+            submitSource(.unwrapFace(target: face))
+            return .handled
         case .toggleThickenLock:
             guard case .thicken = faceEditSession?.kind else { return .ignored }
             faceEditSession?.locksThicknesses.toggle()
@@ -9850,8 +9858,16 @@ private struct ProjectMainViewContent: View {
         return others.isEmpty && extendLimitBodies.count == 1 ? extendLimitBodies.first : nil
     }
 
-    /// Rebuild Curve's dialog on the selected splines (Edit menu, palette).
+    /// Rebuild by selection (Edit menu, palette): Rebuild Face's dialog on the selected faces of
+    /// bodies, Rebuild Curve's on the selected splines.
     private var rebuildAction: (@MainActor () -> Void)? {
+        let faces = selectedBodyFaceTargets
+        if faces.isEmpty == false, faces.count == snapshot.selection.selectedTargets.count {
+            return {
+                faceEditSession = WorkspaceFaceEditSession(kind: .rebuildFace(faces: faces))
+                reportToolStatus("Rebuild Face: set the degree and spans, or Tab to a tolerance; OK, Return or right-click rebuilds the faces.")
+            }
+        }
         let splines = selectedSketchCurveTargets.filter { target in
             guard case .sketchEntity(let componentID) = target.component,
                   let reference = componentID.sketchEntityReference,
