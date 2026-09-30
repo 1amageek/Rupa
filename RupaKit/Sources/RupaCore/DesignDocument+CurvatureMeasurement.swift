@@ -46,7 +46,10 @@ extension DesignDocument {
             combScale: Self.defaultCurvatureCombScale
         )
         // A measurement that cannot comb its curves is refused rather than saved unresolved.
-        _ = try CurvatureCombService().combs(for: annotation, in: self, topology: topology)
+        _ = try CurvatureCombService().combs(
+            for: annotation, in: self, topology: topology,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         return try addMeasurementAnnotation(annotation, objectRegistry: objectRegistry)
     }
 

@@ -54,7 +54,8 @@ import Testing
         #expect(copied.anchors[1].worldPoint == Point3D(x: 3, y: 0, z: 0), "A world anchor moves with the copy.")
 
         let resolution = MeasurementAnnotationResolver().resolve(
-            copied, in: document, topology: try TopologySnapshotService().snapshot(document: document)
+            copied, in: document, topology: try TopologySnapshotService().snapshot(document: document),
+            currentEvaluation: nil, currentGeneration: nil
         )
         guard case .resolved = resolution.outcome else {
             Issue.record("The copied measurement resolves on the copied geometry: \(resolution.outcome)")

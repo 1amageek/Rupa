@@ -39,14 +39,18 @@ public struct CurvatureCombService: Sendable {
     public func combs(
         for annotation: MeasurementAnnotation,
         in document: DesignDocument,
-        topology: TopologySnapshot
+        topology: TopologySnapshot,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> [CurvatureComb] {
         guard annotation.kind == .curvature else {
             throw EditorError(code: .commandInvalid, message: "Only a curvature measurement has combs.")
         }
-        // A document of sketches alone has no topology snapshot to carry its evaluated curves.
+        // A document of sketches alone has no topology snapshot to carry its evaluated curves; the
+        // caller's evaluation carries them then.
         let evaluated = try topology.evaluatedDocument ?? DocumentEvaluationContextResolver().evaluatedDocument(
-            document: document, failurePrefix: "Curvature combs require the evaluated curves"
+            document: document, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Curvature combs require the evaluated curves"
         )
         let tolerance = document.modelingSettings.tolerance
         return try annotation.anchors.compactMap { anchor in

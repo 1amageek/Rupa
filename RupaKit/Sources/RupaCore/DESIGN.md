@@ -189,7 +189,10 @@ measurement already naming exactly those curves; a measurement whose curves cann
 be combed is refused. `CurvatureCombService` evaluates each anchored curve exactly
 through Swift-CAD under its object's placement, sampling several points per knot
 span, and `MeasurementAnnotationResolver` resolves a curvature measurement to
-`.combed` combs instead of anchor points; drawings do not project them.
+`.combed` combs instead of anchor points; drawings do not project them. The
+curves come from the topology snapshot's evaluation or, for a document of sketches
+alone, from the caller's current evaluation, which every `resolveAll` caller states
+(nil when it has none) so the document is not evaluated again.
 `OrientationDegreeAnalysisCommandTests` own these contracts.
 
 Offset Edge (`offsetEdges(name:targets:supportFace:distance:isSymmetric:gapFill:)`)

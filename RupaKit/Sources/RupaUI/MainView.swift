@@ -4671,7 +4671,9 @@ private struct ProjectMainViewContent: View {
     /// The same Core resolution the viewport draws saved measurements from.
     private var savedMeasurementResolutions: [MeasurementAnnotationResolver.Resolution] {
         let document = snapshot.document.document
-        return MeasurementAnnotationResolver().resolveAll(in: document) {
+        return MeasurementAnnotationResolver().resolveAll(
+            in: document, currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+        ) {
             try TopologySnapshotService().snapshot(
                 document: document,
                 objectRegistry: objectRegistry,

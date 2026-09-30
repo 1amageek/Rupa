@@ -79,7 +79,7 @@ import Testing
     }
 
     private func resolutions(_ session: EditorSession) -> [MeasurementAnnotationResolver.Resolution] {
-        MeasurementAnnotationResolver().resolveAll(in: session.document) {
+        MeasurementAnnotationResolver().resolveAll(in: session.document, currentEvaluation: nil, currentGeneration: nil) {
             try TopologySnapshotService().snapshot(document: session.document)
         }
     }

@@ -215,7 +215,9 @@ public struct DrawingProjectionService: Sendable {
             savedView: savedView,
             basis: basis,
             topology: topologySummary,
-            displayUnit: displayUnit
+            displayUnit: displayUnit,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let annotations = DrawingAnnotationLayoutService().layout(
             annotations: projectedAnnotations.annotations,
@@ -426,9 +428,13 @@ public struct DrawingProjectionService: Sendable {
         savedView: SavedView,
         basis: ProjectionBasis,
         topology: TopologySnapshot?,
-        displayUnit: LengthDisplayUnit
+        displayUnit: LengthDisplayUnit,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> (annotations: [DrawingProjectionResult.Annotation], unresolved: [EditorDiagnostic]) {
-        let resolutions = MeasurementAnnotationResolver().resolveAll(in: document, topology: { topology })
+        let resolutions = MeasurementAnnotationResolver().resolveAll(
+            in: document, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, topology: { topology }
+        )
         var annotations: [DrawingProjectionResult.Annotation] = []
         var unresolved: [EditorDiagnostic] = []
         annotations.reserveCapacity(resolutions.count)

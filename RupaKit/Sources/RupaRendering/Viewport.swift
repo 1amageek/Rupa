@@ -2903,7 +2903,9 @@ public struct Viewport: View {
 
     private func resolvedSavedMeasurementOverlays() throws -> [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] {
         let occurrences = try SceneNodeHierarchy(metadata: document.productMetadata).resolvedOccurrences()
-        let resolutions = MeasurementAnnotationResolver().resolveAll(in: document) {
+        let resolutions = MeasurementAnnotationResolver().resolveAll(
+            in: document, currentEvaluation: currentEvaluation, currentGeneration: sceneDocumentGeneration
+        ) {
             try TopologySnapshotService().snapshot(
                 document: document,
                 objectRegistry: objectRegistry,

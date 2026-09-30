@@ -806,7 +806,9 @@ public struct SnapResolver: Sendable {
         candidates += measurementCandidates(
             in: document,
             topology: topology,
-            constructionPlane: constructionPlane
+            constructionPlane: constructionPlane,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         candidates += try surfaceFrameCandidates(
             in: document,
@@ -1041,11 +1043,13 @@ public struct SnapResolver: Sendable {
     private func measurementCandidates(
         in document: DesignDocument,
         topology: TopologySnapshot?,
-        constructionPlane: SketchPlaneCoordinateSystem?
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> [PrioritizedSnapCandidate] {
         let resolutions = MeasurementAnnotationResolver(
             anchorResolver: MeasurementAnchorWorldPointResolver(curveSampler: curveSampler)
-        ).resolveAll(in: document) { topology }
+        ).resolveAll(in: document, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration) { topology }
         var candidates: [PrioritizedSnapCandidate] = []
         for resolution in resolutions {
             guard case .resolved(let resolvedAnchors) = resolution.outcome,

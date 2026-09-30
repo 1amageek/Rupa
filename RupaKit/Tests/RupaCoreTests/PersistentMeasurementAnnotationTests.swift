@@ -133,7 +133,7 @@ import Testing
         let topology = try TopologySnapshotService().snapshot(document: document)
         let resolver = MeasurementAnnotationResolver()
 
-        let withTopology = resolver.resolveAll(in: document) { topology }
+        let withTopology = resolver.resolveAll(in: document, currentEvaluation: nil, currentGeneration: nil) { topology }
         #expect(withTopology.map(\.name) == ["A Resolved", "B Stale"])
         guard case .resolved(let anchors) = withTopology[0].outcome else {
             Issue.record("The fully placed annotation must resolve.")
@@ -148,7 +148,7 @@ import Testing
         #expect(error.message.contains("anchor 2"))
 
         // A topology failure is reported only for the annotations that need topology.
-        let failingTopology = resolver.resolveAll(in: document) {
+        let failingTopology = resolver.resolveAll(in: document, currentEvaluation: nil, currentGeneration: nil) {
             throw EditorError(code: .evaluationFailed, message: "evaluation unavailable")
         }
         #expect({ if case .resolved = failingTopology[0].outcome { true } else { false } }())

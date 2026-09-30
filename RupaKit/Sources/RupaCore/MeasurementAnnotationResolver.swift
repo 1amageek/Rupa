@@ -55,9 +55,12 @@ public struct MeasurementAnnotationResolver: Sendable {
     ///
     /// `topology` is requested only when some annotation anchors to generated topology. If it
     /// cannot be produced, each annotation that needs it is reported with that failure; the
-    /// others still resolve.
+    /// others still resolve. `currentEvaluation` is the caller's evaluation of the document (nil
+    /// when it has none), reused for curves the snapshot does not carry.
     public func resolveAll(
         in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: () throws -> TopologySnapshot?
     ) -> [Resolution] {
         let annotations = document.productMetadata.measurements.values.sorted {
@@ -89,7 +92,10 @@ public struct MeasurementAnnotationResolver: Sendable {
                     ))
                 )
             }
-            return resolve(annotation, in: document, topology: snapshot)
+            return resolve(
+                annotation, in: document, topology: snapshot,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         }
     }
 
@@ -100,20 +106,27 @@ public struct MeasurementAnnotationResolver: Sendable {
     public func resolve(
         _ annotation: MeasurementAnnotation,
         in document: DesignDocument,
-        topology: TopologySnapshot?
+        topology: TopologySnapshot?,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> Resolution {
         Resolution(
             measurementID: annotation.id,
             name: annotation.name,
             kind: annotation.kind,
-            outcome: outcome(for: annotation, in: document, topology: topology)
+            outcome: outcome(
+                for: annotation, in: document, topology: topology,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         )
     }
 
     private func outcome(
         for annotation: MeasurementAnnotation,
         in document: DesignDocument,
-        topology: TopologySnapshot?
+        topology: TopologySnapshot?,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) -> Outcome {
         if annotation.kind == .curvature {
             guard let topology else {
@@ -124,7 +137,8 @@ public struct MeasurementAnnotationResolver: Sendable {
             }
             do {
                 return .combed(try CurvatureCombService(anchorResolver: anchorResolver).combs(
-                    for: annotation, in: document, topology: topology
+                    for: annotation, in: document, topology: topology,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
                 ))
             } catch let error as EditorError {
                 return .unresolved(EditorError(code: error.code, message: "Measurement \"\(annotation.name)\": \(error.message)"))
