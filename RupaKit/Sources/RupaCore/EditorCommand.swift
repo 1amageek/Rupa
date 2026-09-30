@@ -416,7 +416,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection, resultKind: ExtrudeResultKind = .solid)
     case extrudeSection(name: String, section: SectionReference, distance: CADExpression, startDistance: CADExpression? = nil, direction: ExtrudeDirection, resultKind: ExtrudeResultKind)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
-    case revolveSection(name: String, section: SectionReference, axis: RevolveAxis, angle: CADExpression, resultKind: BodyKind)
+    /// A revolve of a section about a world axis, as a new body or combined with the bodies of
+    /// `targets` where they are shown, optionally thin.
+    case revolveSection(
+        name: String, section: SectionReference, axis: RevolveAxis, angle: CADExpression, resultKind: BodyKind,
+        operation: SolidOperation = .newBody, targets: [FeatureID] = [], keepTools: Bool = false, thickness: CADExpression? = nil
+    )
     case createSweep(
         name: String,
         sections: [SectionReference],

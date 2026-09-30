@@ -188,7 +188,7 @@ native preview and cannot be applied.
 | Patch | Exact planar hole or admissible nonplanar Coons opening | General N-sided constrained fill, guides and G1/G2 |
 | Pipe | Sweep is a reusable native dependency, not a Pipe implementation | Curve/edge paths, circle/polygon/custom sections, diameter/thickness/rotation, end scale, start/end limits, Boolean targets and retained source references |
 | PolySplines | Native inline-mesh reconstruction exists | Authored-Mesh conversion/provenance UI; arbitrary mesh and global G2 claims are unsupported |
-| Revolve | Profile and certified spatial-curve revolution, explicit Sheet/Solid output | Thickness, curve-to-solid admission, two-point and Normal/Binormal/Tangent axis controls, Boolean targets and Keep Tools |
+| Revolve | Profile and certified spatial-curve revolution, explicit Sheet/Solid output; a curve closed on itself or along the axis as a solid; axis by origin and direction or by two points; Thickness walling a one-loop line and tangent-arc section; Boolean (Union/Difference/Intersect/Slice) with the bodies selected after the section, and Keep Tools | Normal/Binormal/Tangent axis controls (their meaning is undecided); thin sections with holes |
 | Square | Native inline four-boundary Coons builder exists | Referenced boundary authoring, UV degree/span and derivative constraints |
 | Sweep | Curve/profile section and independent path, explicit sheet result | Face operands, remaining path-normal/twist/scale combinations, ordered multiple guides with Point/Chord/Curve behavior, Round corners and Simplify; retained options require actual geometry |
 | XNURBS | No authoring entry or substitute Fill/Bridge dispatch | General constrained N-sided solver, G1/G2, guides, UV flow and quality guarantees |
@@ -326,6 +326,10 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   extrusion is one `createExtrusion` of solid output, Keep Tools keeping only the
   extruded tool; Core places each target where it is shown and takes its object
   away, as a Boolean does.
+- Revolve's axis runs through its origin along a direction, or from its start to its end
+  point; its Thickness, Boolean picker and Keep Tools behave as Extrude's, in one
+  `revolveSection`. A revolved curve may ask for a solid: the kernel closes it along the
+  axis when both its ends lie on it and reports the evaluation invalid otherwise.
 - Extrude takes faces of one body alone as operands (`extrudeFaces`): Individual
   extrudes each along its own normal, Direct all along the first's; the Boolean
   picker combines them with that body. An edge, a vertex, or a face beside whole

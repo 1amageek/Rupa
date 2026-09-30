@@ -238,8 +238,8 @@ struct ModelingOperationView: View {
             }
             if !draft.isSurfaceCreation {
                 Toggle("Sheet output", isOn: $draft.sheet)
-                Picker("Boolean", selection: $draft.extrusionBoolean) {
-                    ForEach(ModelingOperationDraft.ExtrusionBooleanChoice.allCases) { choice in
+                Picker("Boolean", selection: $draft.solidBoolean) {
+                    ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
                         Text(choice.rawValue).tag(choice)
                     }
                 }
@@ -248,7 +248,7 @@ struct ModelingOperationView: View {
                     Toggle("Individual", isOn: $draft.extrudesIndividually)
                         .accessibilityIdentifier("Modeling.extrudeFacesIndividually")
                 }
-                if draft.extrusionBoolean != .newBody {
+                if draft.solidBoolean != .newBody {
                     Toggle("Keep Tools", isOn: $draft.keepsTools)
                     Text(draft.extrudesFaces
                         ? "Faces combine with the body they lie on."
@@ -257,9 +257,36 @@ struct ModelingOperationView: View {
                 }
             }
         case .revolve:
-            vectorFields("Axis origin", values: $draft.origin, unit: draft.unit.symbol)
-            vectorFields("Axis direction", values: $draft.axis, unit: "")
+            Picker("Axis", selection: $draft.revolveAxisChoice) {
+                ForEach(ModelingOperationDraft.RevolveAxisChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .contentShape(Rectangle())
+            vectorFields(draft.revolveAxisChoice == .twoPoints ? "Axis start" : "Axis origin", values: $draft.origin, unit: draft.unit.symbol)
+            if draft.revolveAxisChoice == .twoPoints {
+                vectorFields("Axis end", values: $draft.axisEnd, unit: draft.unit.symbol)
+            } else {
+                vectorFields("Axis direction", values: $draft.axis, unit: "")
+            }
             TextField("Angle (degrees)", text: $draft.angle)
+            if !draft.createsSheet {
+                lengthField("Thickness", text: $draft.wallThickness)
+            }
+            if !draft.isSurfaceCreation {
+                Toggle("Sheet output", isOn: $draft.sheet)
+                Picker("Boolean", selection: $draft.solidBoolean) {
+                    ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .contentShape(Rectangle())
+                if draft.solidBoolean != .newBody {
+                    Toggle("Keep Tools", isOn: $draft.keepsTools)
+                    Text("Select the section first, then the bodies to combine with.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
         case .sweep:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }
             Text("Select the section first, optional guides next, and the path last.").font(.caption).foregroundStyle(.secondary)

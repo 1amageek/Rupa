@@ -31,7 +31,16 @@ struct ModelingOperationDraftTests {
         #expect(result.brep.faces.count == (kind == .revolve ? 2 : 1))
         #expect(result.brep.bodies.values.allSatisfy { $0.kind == .sheet })
         draft.isSurfaceCreation = false
-        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        if kind == .revolve {
+            // A revolved curve may ask for a solid; the kernel closes it along the axis or reports
+            // the evaluation invalid.
+            guard case .revolveSection(_, _, _, _, .solid, _, _, _, _) = try draft.command(in: document) else {
+                Issue.record("A solid revolve of a curve is one revolve.")
+                return
+            }
+        } else {
+            #expect(throws: EditorError.self) { try draft.command(in: document) }
+        }
     }
 
     @Test(arguments: [ModelingOperationDraft.Kind.extrude, .sweep, .loft])
@@ -258,7 +267,7 @@ struct ModelingOperationDraftTests {
         ))
         draft.kind = .revolve
         draft.angle = "180"
-        guard case .revolveSection(_, let reference, let axis, let angle, let resultKind) = try draft.command(in: document) else {
+        guard case .revolveSection(_, let reference, let axis, let angle, let resultKind, _, _, _, _) = try draft.command(in: document) else {
             Issue.record("Expected revolve source command.")
             return
         }
@@ -284,7 +293,7 @@ struct ModelingOperationDraftTests {
         draft.distance = "20 mm"
         // A new body takes one section only.
         #expect(throws: EditorError.self) { try draft.command(in: document) }
-        draft.extrusionBoolean = .difference
+        draft.solidBoolean = .difference
         draft.keepsTools = true
         guard case .createExtrusion(_, let source) = try draft.command(in: document) else {
             Issue.record("A Boolean extrusion must be one authored extrusion.")
@@ -329,7 +338,7 @@ struct ModelingOperationDraftTests {
         draft.distance = "5 mm"
         draft.startDistance = "0"
         draft.extrudesIndividually = true
-        draft.extrusionBoolean = .union
+        draft.solidBoolean = .union
         #expect(draft.extrudesFaces)
         guard case .extrudeFaces(let targets, let distance, _, let individual, let operation, _, _, _) = try draft.command(in: .empty()) else {
             Issue.record("Faces extrude through extrudeFaces.")
@@ -348,6 +357,78 @@ struct ModelingOperationDraftTests {
             #expect(mixed.extrudesFaces == false)
             #expect(throws: EditorError.self) { try mixed.command(in: .empty()) }
         }
+    }
+
+    /// A 10 × 300 mm strip 20–30 mm from a Y axis at x = 50 mm, and a 100 mm cube it bores
+    /// through.
+    private func stripAndCube(in document: inout DesignDocument) throws -> (strip: FeatureID, stripTarget: SelectionTarget, cube: FeatureID, cubeNode: SceneNodeID) {
+        let strip = try document.createRectangleSketchFromCorners(
+            name: "Strip", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0.02, .meter), y: .length(-0.1, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.03, .meter), y: .length(0.2, .meter))
+        )
+        let cube = try document.createExtrudedRectangleFromCorners(
+            name: "Cube", plane: .plane(Plane3D(origin: Point3D(x: 0, y: 0, z: -0.05), normal: .unitZ)),
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.1, .meter), y: .length(0.1, .meter)),
+            depth: .length(0.1, .meter), direction: .normal
+        )
+        let stripNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(strip) })
+        let cubeNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == cube }).id
+        return (strip, SelectionTarget(sceneNodeID: stripNode.id), cube, cubeNode)
+    }
+
+    @Test func aRevolveCombinesWithTheBodiesAfterItsSection() throws {
+        var document = DesignDocument.empty()
+        let fixture = try stripAndCube(in: &document)
+        var draft = makeDraft(.revolve, targets: [fixture.stripTarget, SelectionTarget(sceneNodeID: fixture.cubeNode)])
+        draft.origin = ["50 mm", "0", "0"]
+        // A new body takes one section only.
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.solidBoolean = .difference
+        draft.keepsTools = true
+        guard case .revolveSection(_, let section, _, _, let resultKind, let operation, let targets, let keepTools, _) = try draft.command(in: document) else {
+            Issue.record("A Boolean revolve is one revolve.")
+            return
+        }
+        #expect(section == .profile(ProfileReference(featureID: fixture.strip)) && resultKind == .solid)
+        #expect(operation == .difference && keepTools && targets == [fixture.cube])
+        draft.keepsTools = false
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.document.productMetadata.sceneNodes[fixture.cubeNode] == nil)
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The tube's 20–30 mm annulus bores 100 mm through the cube.
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.001 - Double.pi * (0.03 * 0.03 - 0.02 * 0.02) * 0.1)) < 1e-12)
+        draft.sheet = true
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
+    @Test func aThinRevolveTakesItsAxisFromTwoPoints() throws {
+        var document = DesignDocument.empty()
+        let fixture = try stripAndCube(in: &document)
+        var draft = makeDraft(.revolve, targets: [fixture.stripTarget])
+        draft.revolveAxisChoice = .twoPoints
+        draft.origin = ["50 mm", "0", "0"]
+        draft.axisEnd = ["50 mm", "0", "0"]
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.axisEnd = ["50 mm", "10 mm", "0"]
+        draft.angle = "90"
+        draft.wallThickness = "2 mm"
+        guard case .revolveSection(_, _, let axis, _, _, _, _, _, let thickness) = try draft.command(in: document) else {
+            Issue.record("A thin revolve is one revolve.")
+            return
+        }
+        let direction = try axis.direction.normalized(tolerance: 1e-12)
+        #expect(axis.origin == Point3D(x: 0.05, y: 0, z: 0) && direction == .unitY)
+        #expect(thickness == .length(0.002, .meter))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // Pappus: the strip's 2 mm ring (6 × 296 mm hollow), 25 mm from the axis, a quarter turn,
+        // beside the 100 mm cube.
+        let ring = 0.01 * 0.3 - 0.006 * 0.296
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.001 + 0.25 * 2 * Double.pi * 0.025 * ring)) < 1e-12)
     }
 
     @Test func aThinExtrusionCarriesItsWallThickness() throws {
@@ -468,7 +549,7 @@ struct ModelingOperationDraftTests {
             let sibling = makeDraft(kind, targets: [targets[0]])
             let reference: SectionReference
             switch try sibling.command(in: document) {
-            case .extrudeSection(_, let section, _, _, _, _), .revolveSection(_, let section, _, _, _): reference = section
+            case .extrudeSection(_, let section, _, _, _, _), .revolveSection(_, let section, _, _, _, _, _, _, _): reference = section
             default: Issue.record("Expected a section operation."); return
             }
             #expect(reference == sections[0].section)

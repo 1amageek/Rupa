@@ -40,9 +40,12 @@ struct CurveExtrudeCommandTests {
         #expect(try session.document.cadDocument.sourceFingerprint(tolerance: .standard)
             == created.cadDocument.sourceFingerprint(tolerance: .standard))
         #expect(throws: (any Error).self) {
+            // A revolved curve may close into a solid along the axis, so the invalid revolve is a
+            // Boolean without targets.
             try session.execute(revolve
                 ? .revolveSection(name: "Invalid solid", section: section,
-                    axis: RevolveAxis(origin: .origin, direction: .unitY), angle: .angle(180, .degree), resultKind: .solid)
+                    axis: RevolveAxis(origin: .origin, direction: .unitY), angle: .angle(180, .degree), resultKind: .solid,
+                    operation: .union)
                 : .extrudeSection(name: "Invalid solid", section: section,
                     distance: .length(10, .millimeter), direction: .normal, resultKind: .solid))
         }

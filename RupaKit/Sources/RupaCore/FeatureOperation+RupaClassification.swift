@@ -176,8 +176,9 @@ extension FeatureOperation {
         // A Boolean extrusion replaces its targets; Keep Tools keeps only the extruded tool.
         case .extrude(let source):
             return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
-        case .revolve:
-            return []
+        // A Boolean revolve replaces its targets, as a Boolean extrusion does.
+        case .revolve(let source):
+            return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
         case .sweep(let feature):
             // A boolean sweep replaces its target bodies (the kernel removes the
             // target topology unless keep-tools retains both operands), so the

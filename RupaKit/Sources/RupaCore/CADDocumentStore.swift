@@ -2900,13 +2900,17 @@ public final class CADDocumentStore {
             func run() throws {
                 let name: String
                 let revolution: RevolveFeature
+                var targets: [FeatureID] = []
                 switch command {
                 case .createRevolve(let value, let profile, let axis, let angle):
                     name = value
                     revolution = RevolveFeature(profile: profile, axis: axis, angle: angle)
-                case .revolveSection(let value, let section, let axis, let angle, let resultKind):
+                case .revolveSection(let value, let section, let axis, let angle, let resultKind,
+                                     let operation, let targetIDs, let keepTools, let thickness):
                     name = value
-                    revolution = RevolveFeature(section: section, axis: axis, angle: angle, resultKind: resultKind)
+                    targets = targetIDs
+                    revolution = RevolveFeature(section: section, axis: axis, angle: angle, operation: operation,
+                                                keepTools: keepTools, resultKind: resultKind, thickness: thickness)
                 default:
                     throw EditorError(
                         code: .commandInvalid,
@@ -2920,6 +2924,10 @@ public final class CADDocumentStore {
                     axis: revolution.axis,
                     angle: revolution.angle,
                     resultKind: revolution.resultKind,
+                    operation: revolution.operation,
+                    targets: targets.map { BooleanTargetReference(featureID: $0) },
+                    keepTools: revolution.keepTools,
+                    thickness: revolution.thickness,
                     objectRegistry: objectRegistry
                 )
                 document = updatedDocument

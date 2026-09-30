@@ -99,6 +99,15 @@ struct ModelingOperationDraft: Equatable {
     var height: String
     var origin = ["0", "0", "0"]
     var axis = ["0", "1", "0"]
+    /// A revolve's axis: through its origin along a direction, or from its origin to an end point.
+    enum RevolveAxisChoice: String, CaseIterable, Identifiable {
+        case direction = "Direction"
+        case twoPoints = "Two Points"
+        var id: Self { self }
+    }
+    var revolveAxisChoice = RevolveAxisChoice.direction
+    /// The second point of a two-point revolve axis.
+    var axisEnd = ["0", "0.01", "0"]
     var angle = "360"
     enum ExtrusionDirectionChoice: String, CaseIterable, Identifiable {
         case normal = "Source normal"
@@ -109,7 +118,7 @@ struct ModelingOperationDraft: Equatable {
     var extrusionDirection = ExtrusionDirectionChoice.normal
     /// How an extrusion combines with the bodies selected after its section: a new body, or a
     /// Boolean with them, keeping the extruded tool when `keepsTools`.
-    enum ExtrusionBooleanChoice: String, CaseIterable, Identifiable {
+    enum SolidBooleanChoice: String, CaseIterable, Identifiable {
         case newBody = "New Body"
         case union = "Union"
         case difference = "Difference"
@@ -126,7 +135,8 @@ struct ModelingOperationDraft: Equatable {
             }
         }
     }
-    var extrusionBoolean = ExtrusionBooleanChoice.newBody
+    /// How an extrusion or a revolve combines with the bodies selected after its section.
+    var solidBoolean = SolidBooleanChoice.newBody
     /// The extrusion's draft in degrees: positive narrows the section along the extrusion.
     var draftDegrees = "0"
     /// A thin extrusion's wall thickness, empty for a whole section.
@@ -277,7 +287,7 @@ struct ModelingOperationDraft: Equatable {
                 distance: .length(try length(distance, label: "End position"), .meter),
                 startDistance: .length(try length(startDistance, label: "Start position"), .meter),
                 individual: extrudesIndividually,
-                operation: extrusionBoolean.operation,
+                operation: solidBoolean.operation,
                 keepTools: keepsTools,
                 draftAngle: draft == 0 ? nil : .angle(draft, .degree),
                 thickness: thickness.map { .length($0, .meter) }
@@ -296,11 +306,11 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .surfacePatch, .constrainedSurface:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
-            // FIXME(INCOMPLETE_IMPLEMENTATION): edges of a sheet, a face beside whole objects, and
-            // any face, edge or vertex for Revolve are refused rather than read as their whole
-            // object. Production path: ModelingOperationDraft.command(in:) for Extrude and Revolve.
-            // Complete only when surface edges extrude and faces revolve as their own sections,
-            // verified by the generated sheets' and bodies' measurements.
+            // FIXME(INCOMPLETE_IMPLEMENTATION): the edges of a sheet and a face beside whole objects
+            // are refused rather than read as their whole object (Revolve takes regions and curves
+            // only, as Plasticity's does). Production path: ModelingOperationDraft.command(in:) for
+            // Extrude. Complete only when a sheet's edges extrude into a sheet, verified by the
+            // generated sheet's area.
             guard targets.allSatisfy({ target in
                 switch target.component {
                 case .face, .edge, .vertex: false
@@ -311,15 +321,17 @@ struct ModelingOperationDraft: Equatable {
                     ? "Extrude takes faces alone, or whole sections; edges and vertices are not sections."
                     : "Revolve takes whole sections, not faces, edges or vertices.")
             }
-            // A Boolean extrusion takes the section first and the bodies it combines with after it.
-            let combines = kind == .extrude && extrusionBoolean != .newBody
+            // A Boolean extrusion or revolve takes the section first and the bodies it combines
+            // with after it.
+            let combines = solidBoolean != .newBody
             guard let node = nodes.first, combines ? features.count >= 2 : features.count == 1 else {
                 throw invalid(combines
                     ? "Select the section first, then the bodies to combine it with."
                     : "Select exactly one section source.")
             }
             let section = try sectionReference(for: node.id, in: document)
-            guard createsSheet || section.isProfile else {
+            // A revolved curve may close into a solid along its axis; the kernel checks its ends.
+            guard createsSheet || section.isProfile || kind == .revolve else {
                 throw invalid("A selected curve requires Sheet output.")
             }
             if kind == .extrude {
@@ -361,7 +373,7 @@ struct ModelingOperationDraft: Equatable {
                     throw invalid("A Boolean extrusion makes a solid; turn Sheet output off.")
                 }
                 var combined = drafted
-                combined.operation = extrusionBoolean.operation
+                combined.operation = solidBoolean.operation
                 combined.targets = features.dropFirst().map { BooleanTargetReference(featureID: $0) }
                 combined.keepTools = keepsTools
                 return .createExtrusion(name: name, source: combined)
@@ -370,21 +382,45 @@ struct ModelingOperationDraft: Equatable {
             guard degrees != 0, abs(degrees) <= 360 else {
                 throw invalid("Revolve angle must be non-zero and within -360…360 degrees.")
             }
-            let direction = Vector3D(
-                x: try number(axis[0], label: "Axis X"),
-                y: try number(axis[1], label: "Axis Y"),
-                z: try number(axis[2], label: "Axis Z")
+            let axisOrigin = Point3D(
+                x: try length(origin[0], label: "Axis origin X"),
+                y: try length(origin[1], label: "Axis origin Y"),
+                z: try length(origin[2], label: "Axis origin Z")
             )
-            let revolveAxis = RevolveAxis(
-                origin: Point3D(
-                    x: try length(origin[0], label: "Axis origin X"),
-                    y: try length(origin[1], label: "Axis origin Y"),
-                    z: try length(origin[2], label: "Axis origin Z")
-                ), direction: direction
+            let direction: Vector3D
+            switch revolveAxisChoice {
+            case .direction:
+                direction = Vector3D(
+                    x: try number(axis[0], label: "Axis X"),
+                    y: try number(axis[1], label: "Axis Y"),
+                    z: try number(axis[2], label: "Axis Z")
+                )
+            case .twoPoints:
+                let end = Point3D(
+                    x: try length(axisEnd[0], label: "Axis end X"),
+                    y: try length(axisEnd[1], label: "Axis end Y"),
+                    z: try length(axisEnd[2], label: "Axis end Z")
+                )
+                direction = end - axisOrigin
+            }
+            let revolveAxis = RevolveAxis(origin: axisOrigin, direction: direction)
+            do {
+                try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
+            } catch {
+                throw invalid(revolveAxisChoice == .twoPoints
+                    ? "The axis's two points must be apart." : "The axis direction must not be zero.")
+            }
+            let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
+                ? nil : try length(wallThickness, label: "Thickness")
+            guard !createsSheet || (thickness == nil && !combines) else {
+                throw invalid("A thin or Boolean revolve makes a solid; turn Sheet output off.")
+            }
+            return .revolveSection(
+                name: name, section: section, axis: revolveAxis,
+                angle: .angle(degrees, .degree), resultKind: createsSheet ? .sheet : .solid,
+                operation: solidBoolean.operation, targets: Array(features.dropFirst()), keepTools: combines && keepsTools,
+                thickness: thickness.map { .length($0, .meter) }
             )
-            try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
-            return .revolveSection(name: name, section: section, axis: revolveAxis,
-                angle: .angle(degrees, .degree), resultKind: createsSheet ? .sheet : .solid)
         case .sweep:
             let degrees = try number(twistAngle, label: "Twist angle")
             var options = SweepOptions()

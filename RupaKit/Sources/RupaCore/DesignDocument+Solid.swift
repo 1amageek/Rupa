@@ -234,15 +234,50 @@ extension DesignDocument {
     public mutating func revolveSection(
         name: String, section: SectionReference, axis: RevolveAxis,
         angle: CADExpression, resultKind: BodyKind,
+        operation: SolidOperation = .newBody,
+        targets: [BooleanTargetReference] = [],
+        keepTools: Bool = false,
+        thickness: CADExpression? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Revolve")
+        // A face section revolves in its body's frame, where the face's object shows it, about the
+        // world axis read in that frame; a profile or a curve in the world's.
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let frameNode = section.isFace ? hierarchy.presentingSceneNodeID(for: section.featureID) : nil
+        let frameWorld = try frameNode.map { try hierarchy.worldTransform(of: $0) }
+        var frameAxis = axis
+        if let frameWorld {
+            let toFrame = try frameWorld.inverse()
+            frameAxis = RevolveAxis(origin: try toFrame.applied(to: axis.origin),
+                                    direction: try frameWorld.inverseApplyingLinearPart(to: axis.direction))
+        }
+        // A Boolean revolve combines its targets where they are displayed and replaces them, as a
+        // Boolean extrusion does.
+        var placedTargets = targets
+        if operation != .newBody {
+            guard targets.allSatisfy({ $0.placement == nil }) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Revolve Boolean targets are placed where they are displayed; references must not carry a placement."
+                )
+            }
+            placedTargets = try targets.map { target in
+                BooleanTargetReference(featureID: target.featureID, placement: try relativeRigidPlacement(
+                    of: hierarchy.presentingSceneNodeID(for: target.featureID), inFrameOf: frameNode,
+                    owner: "A revolve's Boolean target", relation: "the revolve"
+                ))
+            }
+        }
         let revolve = RevolveFeature(
             section: section,
-            axis: axis,
+            axis: frameAxis,
             angle: angle,
-            operation: .newBody,
-            resultKind: resultKind
+            operation: operation,
+            targets: placedTargets,
+            keepTools: keepTools,
+            resultKind: resultKind,
+            thickness: thickness
         )
         try revolve.validate(tolerance: modelingSettings.tolerance)
         guard let source = cadDocument.designGraph.nodes[section.featureID],
@@ -264,7 +299,8 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .revolve(revolve),
-            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)],
+            inputs: [FeatureInput(featureID: section.featureID, role: section.inputRole)]
+                + placedTargets.map { FeatureInput(featureID: $0.featureID, role: .target) },
             outputs: [FeatureOutput(role: resultKind == .solid ? .body : .sheet)]
         )
 
@@ -279,7 +315,7 @@ extension DesignDocument {
         }
 
         try appendFeature(feature)
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
+        let nodeID = try productMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .body(featureID),
             object: .body(
@@ -291,6 +327,14 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
+        if let frameWorld {
+            // Shown where the face's object is, at the root.
+            productMetadata.sceneNodes[nodeID]?.localTransform = frameWorld
+        }
+        if operation != .newBody {
+            // The revolve's object shows the combined body; the targets' objects go.
+            try removeSceneNodes(presenting: placedTargets.map(\.featureID))
+        }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitRevolve = true

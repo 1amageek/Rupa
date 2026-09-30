@@ -573,6 +573,11 @@ dimension/corner adapters or closed-profile display shortcuts. Sheet measurement
 come from evaluated BRep, before any sketch profile recognition. Source and
 product publication remain atomic on failure.
 
+`revolveSection` places Boolean targets where they are shown and takes their objects away,
+as `extrudeSection` does, and reads its world axis in the face's object frame for a face
+section; supersession and measurement treat a Boolean, thin, curve or face revolve as the
+body it evaluates to.
+
 `extrudeFaces` extrudes planar faces of one body as their own sections
 (`SectionReference.face`), each a New Body extrusion placed in its object's frame:
 Individual along each face's outward normal, Direct all along the first face's.

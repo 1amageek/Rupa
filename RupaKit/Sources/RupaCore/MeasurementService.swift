@@ -372,6 +372,20 @@ public struct MeasurementService {
                 try appendEvaluatedSheet(sourceFeatureID: revolve.section.featureID, node: node, featureID: featureID)
                 return
             }
+            // A Boolean or thin revolve, or one of a curve or a face, is measured as the body it
+            // evaluates to, not from its profile.
+            if revolve.operation != .newBody || revolve.thickness != nil || !revolve.section.isProfile {
+                var reason: String?
+                guard let values = try measureEvaluatedBodySolids(featureID: featureID,
+                    featureName: node.name, sourceFeatureID: revolve.section.featureID,
+                    sourceFeatureName: document.cadDocument.designGraph.nodes[revolve.section.featureID]?.name,
+                    evaluatedDocument: evaluatedDocument(), unsupportedReason: &reason) else {
+                    throw EditorError(code: .commandInvalid,
+                        message: "Revolve measurement failed: \(reason ?? "Missing evaluated geometry").")
+                }
+                for solid in values { solids.append(solid); bounds.include(solid.bounds) }
+                return
+            }
             guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.section.featureID],
                   case .sketch(let sourceSketch) = sourceNode.operation else {
                 diagnostics.append(
