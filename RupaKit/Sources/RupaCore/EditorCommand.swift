@@ -432,6 +432,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case unjoinFaces(name: String, targets: [SelectionTarget])
     /// Unjoin on solids or sheets: every face becomes a sheet of its own.
     case unjoinShells(name: String, targets: [SelectionTarget])
+    /// Reverse on sheets: each sheet turned over, every face facing the other way.
+    case reverseSheets(name: String, targets: [SelectionTarget])
+    /// Raise Surface Degree on the B-spline surfaces behind faces or objects.
+    case raiseSurfaceDegree(targets: [SelectionTarget])
+    /// Toggle Curvature: a curvature measurement on these edges and curves, or none where one was.
+    case toggleCurvatureMeasurement(targets: [SelectionTarget])
+    /// A curvature measurement's comb length.
+    case setMeasurementCombScale(id: MeasurementAnnotationID, combScale: Double)
     case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
     case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)
     case createBSplineSurface(
@@ -913,6 +921,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "unjoinFaces"
         case .unjoinShells:
             "unjoinShells"
+        case .reverseSheets:
+            "reverseSheets"
+        case .raiseSurfaceDegree:
+            "raiseSurfaceDegree"
+        case .toggleCurvatureMeasurement:
+            "toggleCurvatureMeasurement"
+        case .setMeasurementCombScale:
+            "setMeasurementCombScale"
         case .createConstrainedSurface:
             "createConstrainedSurface"
         case .setConstrainedSurface:
@@ -1143,6 +1159,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .joinSheets,
              .unjoinFaces,
              .unjoinShells,
+             .reverseSheets,
+             .raiseSurfaceDegree,
+             .toggleCurvatureMeasurement,
+             .setMeasurementCombScale,
              .createConstrainedSurface,
              .setConstrainedSurface,
              .createBSplineSurface,

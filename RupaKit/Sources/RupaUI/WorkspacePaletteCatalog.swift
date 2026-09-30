@@ -66,8 +66,10 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Text", invocation: .edit(.text)),
         Command(title: "Delete Redundant Topology", invocation: .edit(.deleteRedundantTopology)),
         Command(title: "Align Vertex", aliases: ["Align"], invocation: .edit(.alignVertex)),
-        Command(title: "Reverse Curve", aliases: ["Reverse"], invocation: .edit(.reverseCurves)),
-        Command(title: "Raise Curve Degree", aliases: ["Raise Degree"], shortcut: "⇧S", invocation: .edit(.raiseCurveDegree)),
+        Command(title: "Reverse", aliases: ["Reverse Curve", "Reverse Sheet"], invocation: .edit(.reverse)),
+        Command(title: "Raise Degree", aliases: ["Raise Curve Degree", "Raise Surface Degree"], shortcut: "⇧S", invocation: .edit(.raiseDegree)),
+        Command(title: "Find Boundary Edges", invocation: .edit(.findBoundaryEdges)),
+        Command(title: "Toggle Curvature", aliases: ["Toggle Surface Curvature", "Curvature Comb"], invocation: .edit(.toggleCurvature)),
         Command(title: "Convert Vertex", invocation: .edit(.convertVertex)),
         Command(title: "Rebuild", aliases: ["Rebuild Curve"], invocation: .edit(.rebuild)),
         Command(title: "Deform", aliases: ["Deform Curve", "Deform Solid and Sheet"], invocation: .edit(.deform)),
@@ -96,8 +98,8 @@ enum WorkspacePaletteEditCommand: Equatable {
     case duplicate, mirror, place, copyWithPlacement, pasteWithPlacement
     case rectangularArray, radialArray, curveArray
     case completeEdge, subdivide, splitSegment, insertKnot
-    case createInstance, realizeInstances, reverseCurves, alignVertex, deleteRedundantTopology, text
-    case raiseCurveDegree, convertVertex, rebuild, deform, createOutline
+    case createInstance, realizeInstances, reverse, alignVertex, deleteRedundantTopology, text
+    case raiseDegree, findBoundaryEdges, toggleCurvature, convertVertex, rebuild, deform, createOutline
 
     /// The closure the Edit menu runs for this item, nil while the selection leaves it unavailable.
     func action(in commands: WorkspaceEditCommands) -> (@MainActor () -> Void)? {
@@ -116,11 +118,13 @@ enum WorkspacePaletteEditCommand: Equatable {
         case .insertKnot: commands.insertKnot
         case .createInstance: commands.createInstance
         case .realizeInstances: commands.realizeInstances
-        case .reverseCurves: commands.reverseCurves
+        case .reverse: commands.reverse
         case .alignVertex: commands.alignVertex
         case .deleteRedundantTopology: commands.deleteRedundantTopology
         case .text: commands.text
-        case .raiseCurveDegree: commands.raiseCurveDegree
+        case .raiseDegree: commands.raiseDegree
+        case .findBoundaryEdges: commands.findBoundaryEdges
+        case .toggleCurvature: commands.toggleCurvature
         case .convertVertex: commands.convertVertex
         case .rebuild: commands.rebuild
         case .deform: commands.deform

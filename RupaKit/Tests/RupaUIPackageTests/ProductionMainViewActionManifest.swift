@@ -257,6 +257,10 @@ enum ProductionMainViewActionManifest {
         "joinSheets",
         "unjoinFaces",
         "unjoinShells",
+        "reverseSheets",
+        "raiseSurfaceDegree",
+        "toggleCurvatureMeasurement",
+        "setMeasurementCombScale",
     ]
 
     static let canvasEditorCommandNames = [

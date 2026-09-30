@@ -15,7 +15,7 @@ struct WorkspaceCommandPaletteTests {
         #expect(catalog.matches("offset vertex").map(\.title) == ["Offset Curve"])
         #expect(catalog.matches("PROJECT outline").map(\.title) == ["Alternative Duplicate"])
         #expect(catalog.matches("no such command").isEmpty)
-        #expect(catalog.matches("reverse").map(\.title) == ["Reverse Curve"])
+        #expect(catalog.matches("reverse").map(\.title) == ["Reverse"])
         #expect(Set(catalog.commands.map(\.title)).count == catalog.commands.count)
     }
 

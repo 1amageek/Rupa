@@ -222,8 +222,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case applyBridgeTension
     /// Escape while the Bridge Curve's G1 tension is typed: leave it unchanged.
     case cancelBridgeTension
-    /// Shift-S: Raise Curve Degree on the selected sketch curves.
-    case raiseCurveDegree
+    /// Shift-S: Raise Degree by selection — sketch curves to Raise Curve Degree, faces or sheets to
+    /// Raise Surface Degree.
+    case raiseDegree
     /// Return while Rebuild Curve's dialog runs: rebuild.
     case confirmRebuild
     /// Escape while Rebuild Curve's dialog runs: end it without a change.
@@ -913,7 +914,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             return context.hasProjectableSelection ? .projectToConstructionPlane : nil
         }
         if input.modifiers == [.shift], key == "s" {
-            return context.selectedSketchTargetCount > 0 ? .raiseCurveDegree : nil
+            let raises = context.selectedSketchTargetCount > 0
+                || context.hasBodyFaceSelection || context.hasBodyObjectSelection
+            return raises ? .raiseDegree : nil
         }
         guard input.modifiers.isEmpty else { return nil }
         if input.isTab, context.hasAlignableVertexPair, !context.hasSelectedBridgeCurve {

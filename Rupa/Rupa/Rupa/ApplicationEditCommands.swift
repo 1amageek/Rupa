@@ -69,14 +69,22 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.alignVertex?()
             }
             .disabled(editCommands?.alignVertex == nil)
-            Button("Reverse Curve") {
-                editCommands?.reverseCurves?()
+            Button("Reverse") {
+                editCommands?.reverse?()
             }
-            .disabled(editCommands?.reverseCurves == nil)
-            Button("Raise Curve Degree") {
-                editCommands?.raiseCurveDegree?()
+            .disabled(editCommands?.reverse == nil)
+            Button("Raise Degree") {
+                editCommands?.raiseDegree?()
             }
-            .disabled(editCommands?.raiseCurveDegree == nil)
+            .disabled(editCommands?.raiseDegree == nil)
+            Button("Find Boundary Edges") {
+                editCommands?.findBoundaryEdges?()
+            }
+            .disabled(editCommands?.findBoundaryEdges == nil)
+            Button("Toggle Curvature") {
+                editCommands?.toggleCurvature?()
+            }
+            .disabled(editCommands?.toggleCurvature == nil)
             Button("Convert Vertex") {
                 editCommands?.convertVertex?()
             }

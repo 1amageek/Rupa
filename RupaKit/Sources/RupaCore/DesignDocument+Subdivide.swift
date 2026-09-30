@@ -121,12 +121,7 @@ extension DesignDocument {
         var didCommit = false
         defer { if !didCommit { self = previous } }
         try cadDocument.replaceFeature(feature, tolerance: tolerance)
-        for (id, node) in productMetadata.sceneNodes where node.reference?.featureID == featureID && node.object != nil {
-            productMetadata.sceneNodes[id]?.object?.properties["surface.degree.u"] = .integer(surface.uDegree)
-            productMetadata.sceneNodes[id]?.object?.properties["surface.degree.v"] = .integer(surface.vDegree)
-            productMetadata.sceneNodes[id]?.object?.properties["control.point.u"] = .integer(surface.uControlPointCount)
-            productMetadata.sceneNodes[id]?.object?.properties["control.point.v"] = .integer(surface.vControlPointCount)
-        }
+        recordSurfaceShape(of: featureID, surface)
         try validate(objectRegistry: objectRegistry)
         didCommit = true
     }

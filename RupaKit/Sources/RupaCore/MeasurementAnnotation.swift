@@ -11,6 +11,8 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
         case perimeter
         case area
         case edgeLength
+        /// Curvature combs along edges and sketch curves (Toggle Curvature).
+        case curvature
     }
 
     public var id: MeasurementAnnotationID
@@ -20,6 +22,9 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
     public var anchors: [MeasurementAnchor]
     public var labelPosition: Point3D?
     public var placementAxis: Vector3D?
+    /// A curvature measurement's comb length, as a fraction of each curve's size at its tightest
+    /// bend; nil for every other kind.
+    public var combScale: Double?
 
     public init(
         id: MeasurementAnnotationID = MeasurementAnnotationID(),
@@ -28,7 +33,8 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
         kind: Kind,
         anchors: [MeasurementAnchor],
         labelPosition: Point3D? = nil,
-        placementAxis: Vector3D? = nil
+        placementAxis: Vector3D? = nil,
+        combScale: Double? = nil
     ) {
         self.id = id
         self.sceneNodeID = sceneNodeID
@@ -37,6 +43,7 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
         self.anchors = anchors
         self.labelPosition = labelPosition
         self.placementAxis = placementAxis
+        self.combScale = combScale
     }
 
     public func validate() throws {
@@ -80,6 +87,23 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
                     "Radius and diameter measurement annotations require at least one anchor."
                 )
             }
+        case .curvature:
+            guard anchors.isEmpty == false, anchors.allSatisfy(\.namesACurve) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Curvature measurement annotations require generated edges or sketch curves."
+                )
+            }
+        }
+        if kind == .curvature {
+            guard let combScale, combScale.isFinite, combScale > 0 else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Curvature measurement annotations require a positive, finite comb scale."
+                )
+            }
+        } else if combScale != nil {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Only curvature measurement annotations carry a comb scale."
+            )
         }
         for anchor in anchors {
             try anchor.validate()
@@ -251,6 +275,14 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
                 parameter: parameter
             )
         )
+    }
+
+    /// Whether the anchor names a whole curve a curvature comb can follow: a generated edge, or a
+    /// sketch curve entity.
+    public var namesACurve: Bool {
+        if referencesTopology(kind: .edge) { return true }
+        guard kind == .sketchReference, case .entity = sketchReference?.reference else { return false }
+        return true
     }
 
     public func validate() throws {

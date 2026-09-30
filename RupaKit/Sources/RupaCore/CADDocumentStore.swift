@@ -2958,6 +2958,35 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .reverseSheets(name, targets):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.reverseSheets(
+                name: name, targets: targets, objectRegistry: objectRegistry
+            ).last
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .raiseSurfaceDegree(targets):
+            var updatedDocument = document
+            try updatedDocument.raiseSurfaceDegree(targets: targets, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .toggleCurvatureMeasurement(targets):
+            var updatedDocument = document
+            try updatedDocument.toggleCurvatureMeasurement(
+                targets: targets, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .setMeasurementCombScale(id, combScale):
+            var updatedDocument = document
+            try updatedDocument.setMeasurementCombScale(id: id, combScale: combScale, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createConstrainedSurface(name, source):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createConstrainedSurface(

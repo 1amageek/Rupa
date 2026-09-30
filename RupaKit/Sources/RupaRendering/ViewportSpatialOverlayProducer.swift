@@ -313,6 +313,14 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let label: String
         /// A distance dimension's lines, when the annotation is a two-point distance.
         var dimension: MeasurementDimensionGeometry? = nil
+        /// A curvature measurement's combs, each with the tooth length per unit curvature.
+        var curvatureCombs: [SavedCurvatureComb] = []
+    }
+
+    /// One curve's comb of a saved curvature measurement, in the world.
+    struct SavedCurvatureComb: Sendable {
+        let samples: [ViewportSpatialOverlayProducer.SketchCurveCurvatureSample]
+        let displayScale: Double
     }
 
     /// Raw pattern inputs captured at the MainActor boundary.  Preview
@@ -1654,6 +1662,16 @@ enum ViewportSpatialOverlayProducer {
             activeFamilies.insert(.measurement)
         }
         for saved in measurement.saved {
+            if saved.curvatureCombs.isEmpty == false {
+                for comb in saved.curvatureCombs {
+                    meshes += try curvatureMeshes(
+                        samples: comb.samples, scaleFactor: comb.displayScale,
+                        color: savedCurvatureColor, handleIndex: nil, family: .measurement
+                    )
+                }
+                activeFamilies.insert(.measurement)
+                continue
+            }
             if let dimension = saved.dimension {
                 try appendDimension(
                     dimension, label: saved.label, color: savedMeasurementColor, markerDiameter: 6,
@@ -2605,6 +2623,8 @@ extension ViewportSpatialOverlayProducer {
     static let referenceColor = SIMD4<Float>(0.25, 0.92, 1.0, 0.70)
     static let measurementColor = SIMD4<Float>(0.25, 0.92, 1.0, 1.0)
     static let savedMeasurementColor = SIMD4<Float>(0.62, 0.86, 1.0, 0.92)
+    /// Curvature combs are drawn in white, as Plasticity draws them.
+    static let savedCurvatureColor = SIMD4<Float>(1.0, 1.0, 1.0, 0.9)
     static let editColor = SIMD4<Float>(1.0, 0.78, 0.28, 1.0)
     static let boundarySurfaceColor = SIMD4<Float>(0.26, 0.82, 0.94, 1.0)
 

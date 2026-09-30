@@ -3558,7 +3558,7 @@ extension ViewportSpatialOverlayProducer {
         )
     }
 
-    private static func curvatureMeshes(
+    static func curvatureMeshes(
         samples: [SketchCurveCurvatureSample],
         scaleFactor: Double,
         color: SIMD4<Float>,

@@ -166,6 +166,32 @@ keeps its object, retargeted to the feature. Because the body is consumed in the
 graph, measurement no longer counts it. Instances are refused (realize them
 first). `JoinUnjoinCommandTests` own these contracts.
 
+Reverse on sheets (`reverseSheets(name:targets:)`) appends one Swift-CAD
+`reverseSheet` feature per sheet object, which consumes the sheet and turns every
+face over with its surface and trim unchanged; the object keeps its name and
+placement and presents the reversed sheet. Solids are refused. A reversed sheet
+whose source is a B-spline surface keeps that surface as its control source
+(`surfaceControlSourceFeatureID`), so its control points stay editable. Raise
+Surface Degree (`raiseSurfaceDegree(targets:)`) raises the B-spline surface
+behind each selected face or object by one degree in U and V through Swift-CAD's
+exact degree elevation, once per surface, keeping its shape, parameterization and
+trims; `recordSurfaceShape(of:_:)` keeps the objects' degree and control-point
+counts in step, as Subdivide does. A face of any other body has no control points
+to raise and is refused (a `FIXME(INCOMPLETE_IMPLEMENTATION)` records that
+Plasticity raises any face). `BoundaryEdgeSelectionService` answers Find Boundary
+Edges without changing the document: the open edges of the selected objects,
+every edge one face of the body uses (`OpenBoundaryLoopResolver.boundaryEdgeIDs`),
+as edge selections. Toggle Curvature (`toggleCurvatureMeasurement(targets:)`)
+saves a `.curvature` measurement annotation under Measurements whose anchors name
+whole generated edges or sketch curves and whose `combScale` sets the comb length
+(`setMeasurementCombScale(id:combScale:)`), or takes away the curvature
+measurement already naming exactly those curves; a measurement whose curves cannot
+be combed is refused. `CurvatureCombService` evaluates each anchored curve exactly
+through Swift-CAD under its object's placement, sampling several points per knot
+span, and `MeasurementAnnotationResolver` resolves a curvature measurement to
+`.combed` combs instead of anchor points; drawings do not project them.
+`OrientationDegreeAnalysisCommandTests` own these contracts.
+
 Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
 face and curve cutters and shows every piece as an object of its own. Each
 cutter becomes a sheet kept by a hidden object placed where the cutter is: a face

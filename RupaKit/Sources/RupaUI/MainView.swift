@@ -6555,8 +6555,8 @@ private struct ProjectMainViewContent: View {
             guard bodies.isEmpty == false else { return .ignored }
             submitSource(.unjoinShells(name: "Unjoin", targets: bodies.map { SelectionTarget(sceneNodeID: $0) }))
             return .handled
-        case .raiseCurveDegree:
-            guard let action = raiseCurveDegreeAction else { return .ignored }
+        case .raiseDegree:
+            guard let action = raiseDegreeAction else { return .ignored }
             action()
             return .handled
         case .confirmRebuild:
@@ -9413,11 +9413,13 @@ private struct ProjectMainViewContent: View {
             deleteRedundantTopology: deleteRedundantTopologyAction,
             text: { isTextDialogPresented = true },
             alignVertex: alignVertexAction,
-            reverseCurves: reverseCurvesAction,
+            reverse: reverseAction,
             createInstance: createInstanceAction,
             realizeInstances: realizeInstancesAction,
             insertKnot: selectedTool == .select ? insertKnotAction : nil,
-            raiseCurveDegree: raiseCurveDegreeAction,
+            raiseDegree: raiseDegreeAction,
+            findBoundaryEdges: findBoundaryEdgesAction,
+            toggleCurvature: toggleCurvatureAction,
             convertVertex: convertVertexAction,
             rebuild: rebuildAction,
             deform: deformAction,
@@ -9595,11 +9597,22 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Raise Curve Degree on every selected sketch curve (Shift-S, Edit menu, palette), as one step;
-    /// the raised curves' control points are selected, as Plasticity selects the new CVs.
-    private var raiseCurveDegreeAction: (@MainActor () -> Void)? {
+    /// Raise Degree by selection (Shift-S, Edit menu, palette): selected sketch curves take Raise
+    /// Curve Degree, whose raised control points are then selected as Plasticity selects the new
+    /// CVs; otherwise selected faces and objects take Raise Surface Degree on the surfaces behind
+    /// them.
+    private var raiseDegreeAction: (@MainActor () -> Void)? {
         let curves = selectedSketchCurveTargets
-        guard !curves.isEmpty else { return nil }
+        guard !curves.isEmpty else {
+            let surfaces = selectedBodyFaceTargets + selectedBodyObjectIDs.map { SelectionTarget(sceneNodeID: $0) }
+            guard surfaces.isEmpty == false else { return nil }
+            return {
+                submitSource(.raiseSurfaceDegree(targets: surfaces)) { result in
+                    guard result?.didMutate == true else { return }
+                    reportToolStatus("Raise Surface Degree: one degree up in U and V.")
+                }
+            }
+        }
         return {
             submitSource(.raiseSketchCurveDegree(targets: curves)) { result in
                 guard result?.didMutate == true, let document = workspace.view?.document.document else { return }
@@ -9993,19 +10006,79 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Reverse Curve on every selected sketch curve (Edit menu, palette), as one step; Core refuses
-    /// the whole step when one of them has no direction to reverse (a circle, or an arc until its
-    /// direction is represented).
-    private var reverseCurvesAction: (@MainActor () -> Void)? {
+    /// Reverse by selection (Edit menu, palette), as one step: selected sketch curves take Reverse
+    /// Curve, which Core refuses whole when one of them has no direction to reverse (a circle, or an
+    /// arc until its direction is represented); otherwise selected sheet objects take Reverse Sheet.
+    private var reverseAction: (@MainActor () -> Void)? {
         let curves = snapshot.selection.selectedTargets.filter { target in
             guard case .sketchEntity(let componentID) = target.component else { return false }
             return componentID.sketchEntityReference != nil
                 && componentID.sketchPointHandleReference == nil
                 && componentID.sketchControlPointReference == nil
         }
-        guard !curves.isEmpty else { return nil }
+        guard !curves.isEmpty else {
+            let sheets = selectedSheetObjectTargets
+            guard sheets.isEmpty == false else { return nil }
+            return {
+                submitSource(.reverseSheets(name: "Reverse", targets: sheets))
+            }
+        }
         return {
             submitSource(curves.map { .reverseSketchCurve(target: $0) }, name: "Reverse Curve")
+        }
+    }
+
+    /// Toggle Curvature (Edit menu, palette): the selected edges and sketch curves get a curvature
+    /// measurement under Measurements, or lose the one already combing exactly them.
+    private var toggleCurvatureAction: (@MainActor () -> Void)? {
+        let curves = snapshot.selection.selectedTargets.filter { target in
+            switch target.component {
+            case .edge: return true
+            case .sketchEntity(let componentID):
+                return componentID.sketchEntityReference != nil
+                    && componentID.sketchPointHandleReference == nil
+                    && componentID.sketchControlPointReference == nil
+            default: return false
+            }
+        }
+        guard curves.isEmpty == false else { return nil }
+        return {
+            let before = snapshot.document.document.productMetadata.measurements.count
+            submitSource(.toggleCurvatureMeasurement(targets: curves)) { result in
+                guard result?.didMutate == true, let document = workspace.view?.document.document else { return }
+                reportToolStatus(document.productMetadata.measurements.count > before
+                    ? "Curvature measurement added under Measurements."
+                    : "Curvature measurement removed.")
+            }
+        }
+    }
+
+    /// Find Boundary Edges (Edit menu, palette): the open edges of the selected sheets become the
+    /// selection; the document is not changed.
+    private var findBoundaryEdgesAction: (@MainActor () -> Void)? {
+        let objects = selectedBodyObjectIDs.map { SelectionTarget(sceneNodeID: $0) }
+        guard objects.isEmpty == false else { return nil }
+        return {
+            let edges: [SelectionTarget]
+            do {
+                edges = try BoundaryEdgeSelectionService().boundaryEdges(
+                    of: objects,
+                    in: snapshot.document.document,
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: snapshot.cadInteraction,
+                    currentGeneration: snapshot.documentGeneration
+                )
+            } catch {
+                reportToolStatus("Find Boundary Edges: \(error.localizedDescription)", severity: .warning)
+                return
+            }
+            guard edges.isEmpty == false else {
+                reportToolStatus("Find Boundary Edges: the selection has no open edges.")
+                return
+            }
+            if selectTargets(edges) {
+                reportToolStatus("Find Boundary Edges: \(edges.count) open edge\(edges.count == 1 ? "" : "s") selected.")
+            }
         }
     }
 
@@ -11391,6 +11464,7 @@ private struct ProjectMainViewContent: View {
         }
 
         sectionAnalysisInspectorSection(nodes)
+        curvatureMeasurementInspectorSection(nodes)
 
         WorkspaceSurfaceInspectorView(
             basisStateResult: selectedSurfaceBasisStateResult(for: nodes),
@@ -11472,6 +11546,26 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// A selected curvature measurement's comb length.
+    @ViewBuilder
+    private func curvatureMeasurementInspectorSection(_ nodes: [SceneNode]) -> some View {
+        if nodes.count == 1, let node = nodes.first,
+           let measurement = snapshot.document.document.productMetadata.measurements.values.first(where: {
+               $0.sceneNodeID == node.id && $0.kind == .curvature
+           }) {
+            inspectorSection("Curvature") {
+                inspectorRow("Curves", "\(measurement.anchors.count)")
+                workspaceScaleFactorControl(
+                    "Comb Scale",
+                    values: [measurement.combScale ?? DesignDocument.defaultCurvatureCombScale]
+                ) { value in
+                    submitSource(.setMeasurementCombScale(id: measurement.id, combScale: max(value, 1.0e-6)))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func objectTransformInspectorSection(_ nodes: [SceneNode]) -> some View {
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,

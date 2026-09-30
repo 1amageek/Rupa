@@ -37,16 +37,23 @@ public struct WorkspaceEditCommands {
     public var deleteRedundantTopology: (@MainActor () -> Void)?
     /// Aligns the selected curve end with the other selected end at the chosen continuity.
     public var alignVertex: (@MainActor () -> Void)?
-    /// Reverses the direction of every selected sketch line and spline, as one step.
-    public var reverseCurves: (@MainActor () -> Void)?
+    /// Reverse by selection: the direction of every selected sketch line and spline, or the side
+    /// every selected sheet faces, as one step.
+    public var reverse: (@MainActor () -> Void)?
     /// Makes an instance of the selection where it is and starts moving it into place.
     public var createInstance: (@MainActor () -> Void)?
     /// Turns the selected component instances into independent, editable copies.
     public var realizeInstances: (@MainActor () -> Void)?
     /// Starts Insert Knot: each clicked spline gains a control point where it is clicked.
     public var insertKnot: (@MainActor () -> Void)?
-    /// Raises the degree of every selected sketch line and spline, the same curves.
-    public var raiseCurveDegree: (@MainActor () -> Void)?
+    /// Raise Degree by selection: every selected sketch line and spline, or the B-spline surface
+    /// behind every selected face or sheet, one degree up with the same shape.
+    public var raiseDegree: (@MainActor () -> Void)?
+    /// Selects the open boundary edges of the selected sheets.
+    public var findBoundaryEdges: (@MainActor () -> Void)?
+    /// Saves a curvature measurement combing the selected edges and curves, or takes away the one
+    /// already combing them.
+    public var toggleCurvature: (@MainActor () -> Void)?
     /// Turns the selected spline vertex into an ordinary control point.
     public var convertVertex: (@MainActor () -> Void)?
     /// Opens Rebuild Curve's dialog on the selected splines.
@@ -72,11 +79,13 @@ public struct WorkspaceEditCommands {
         deleteRedundantTopology: (@MainActor () -> Void)? = nil,
         text: (@MainActor () -> Void)? = nil,
         alignVertex: (@MainActor () -> Void)? = nil,
-        reverseCurves: (@MainActor () -> Void)? = nil,
+        reverse: (@MainActor () -> Void)? = nil,
         createInstance: (@MainActor () -> Void)? = nil,
         realizeInstances: (@MainActor () -> Void)? = nil,
         insertKnot: (@MainActor () -> Void)? = nil,
-        raiseCurveDegree: (@MainActor () -> Void)? = nil,
+        raiseDegree: (@MainActor () -> Void)? = nil,
+        findBoundaryEdges: (@MainActor () -> Void)? = nil,
+        toggleCurvature: (@MainActor () -> Void)? = nil,
         convertVertex: (@MainActor () -> Void)? = nil,
         rebuild: (@MainActor () -> Void)? = nil,
         deform: (@MainActor () -> Void)? = nil,
@@ -97,11 +106,13 @@ public struct WorkspaceEditCommands {
         self.deleteRedundantTopology = deleteRedundantTopology
         self.text = text
         self.alignVertex = alignVertex
-        self.reverseCurves = reverseCurves
+        self.reverse = reverse
         self.createInstance = createInstance
         self.realizeInstances = realizeInstances
         self.insertKnot = insertKnot
-        self.raiseCurveDegree = raiseCurveDegree
+        self.raiseDegree = raiseDegree
+        self.findBoundaryEdges = findBoundaryEdges
+        self.toggleCurvature = toggleCurvature
         self.convertVertex = convertVertex
         self.rebuild = rebuild
         self.deform = deform

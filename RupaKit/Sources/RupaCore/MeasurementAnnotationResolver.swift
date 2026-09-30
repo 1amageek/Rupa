@@ -29,6 +29,8 @@ public struct MeasurementAnnotationResolver: Sendable {
 
     public enum Outcome: Equatable, Sendable {
         case resolved([MeasurementAnchorWorldPointResolver.ResolvedAnchor])
+        /// A curvature measurement's combs, one per anchored curve that bends.
+        case combed([CurvatureComb])
         case unresolved(EditorError)
     }
 
@@ -40,9 +42,13 @@ public struct MeasurementAnnotationResolver: Sendable {
 
     /// Whether resolving the document's annotations needs a topology snapshot.
     public static func requiresTopology(_ document: DesignDocument) -> Bool {
-        document.productMetadata.measurements.values.contains { measurement in
-            measurement.anchors.contains(where: anchorsToTopology)
-        }
+        document.productMetadata.measurements.values.contains(where: requiresTopology)
+    }
+
+    /// A curvature measurement reads its curves from the evaluated document the topology snapshot
+    /// carries, sketch curves included.
+    private static func requiresTopology(_ measurement: MeasurementAnnotation) -> Bool {
+        measurement.kind == .curvature || measurement.anchors.contains(where: anchorsToTopology)
     }
 
     /// Resolves every annotation in the document, ordered by name and then ID.
@@ -72,7 +78,7 @@ public struct MeasurementAnnotationResolver: Sendable {
             }
         }
         return annotations.map { annotation in
-            if let topologyFailure, annotation.anchors.contains(where: Self.anchorsToTopology) {
+            if let topologyFailure, Self.requiresTopology(annotation) {
                 return Resolution(
                     measurementID: annotation.id,
                     name: annotation.name,
@@ -109,6 +115,23 @@ public struct MeasurementAnnotationResolver: Sendable {
         in document: DesignDocument,
         topology: TopologySnapshot?
     ) -> Outcome {
+        if annotation.kind == .curvature {
+            guard let topology else {
+                return .unresolved(EditorError(
+                    code: .referenceUnresolved,
+                    message: "Measurement \"\(annotation.name)\" cannot be combed: its topology snapshot is unavailable."
+                ))
+            }
+            do {
+                return .combed(try CurvatureCombService(anchorResolver: anchorResolver).combs(
+                    for: annotation, in: document, topology: topology
+                ))
+            } catch let error as EditorError {
+                return .unresolved(EditorError(code: error.code, message: "Measurement \"\(annotation.name)\": \(error.message)"))
+            } catch {
+                return .unresolved(EditorError(code: .referenceUnresolved, message: "Measurement \"\(annotation.name)\": \(error)"))
+            }
+        }
         var anchors: [MeasurementAnchorWorldPointResolver.ResolvedAnchor] = []
         anchors.reserveCapacity(annotation.anchors.count)
         for (index, anchor) in annotation.anchors.enumerated() {

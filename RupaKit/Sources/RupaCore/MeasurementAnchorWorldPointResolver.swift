@@ -142,6 +142,12 @@ public struct MeasurementAnchorWorldPointResolver: Sendable {
         return (sourceSceneNodeID, transform)
     }
 
+    /// The world transform placing the geometry the anchor names: its node's, or its occurrence's.
+    public func placementTransform(for anchor: MeasurementAnchor, in document: DesignDocument) throws -> Transform3D {
+        try anchor.validate()
+        return try placement(for: anchor, in: document).transform
+    }
+
     /// The topology entry a topology anchor names together with the world transform placing it.
     public func placedTopologyEntry(
         for anchor: MeasurementAnchor,

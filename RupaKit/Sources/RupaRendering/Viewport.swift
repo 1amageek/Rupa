@@ -2913,9 +2913,20 @@ public struct Viewport: View {
         }
         var result: [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] = []
         for resolution in resolutions {
-            guard case .resolved(let anchors) = resolution.outcome,
-                  let annotation = document.productMetadata.measurements[resolution.measurementID],
+            guard let annotation = document.productMetadata.measurements[resolution.measurementID],
                   isEffectivelyVisible(annotation.sceneNodeID, in: occurrences) else {
+                continue
+            }
+            if case .combed(let combs) = resolution.outcome {
+                let drawn = try combs.compactMap { comb in
+                    try savedCurvatureComb(comb, combScale: annotation.combScale ?? DesignDocument.defaultCurvatureCombScale)
+                }
+                if drawn.isEmpty == false {
+                    result.append(.init(points: [], label: annotation.name, curvatureCombs: drawn))
+                }
+                continue
+            }
+            guard case .resolved(let anchors) = resolution.outcome else {
                 continue
             }
             result.append(.init(
@@ -2925,6 +2936,32 @@ public struct Viewport: View {
             ))
         }
         return result
+    }
+
+    /// A curve's comb as drawn: its bent samples, with teeth `combScale` of the curve's size long
+    /// at its tightest bend, but never past a centre of curvature (the rule sketch combs follow,
+    /// `ViewportCurveCurvatureComb.displayScale`). A comb with fewer than two bent samples is not
+    /// drawn.
+    private func savedCurvatureComb(
+        _ comb: CurvatureComb, combScale: Double
+    ) throws -> ViewportSpatialOverlaySemanticSnapshot.SavedCurvatureComb? {
+        let bent = comb.samples.filter { abs($0.curvature) > 1.0e-12 }
+        guard bent.count >= 2, let maximum = bent.map({ abs($0.curvature) }).max() else { return nil }
+        var lower = bent[0].point
+        var upper = bent[0].point
+        for sample in comb.samples {
+            lower = Point3D(x: min(lower.x, sample.point.x), y: min(lower.y, sample.point.y), z: min(lower.z, sample.point.z))
+            upper = Point3D(x: max(upper.x, sample.point.x), y: max(upper.y, sample.point.y), z: max(upper.z, sample.point.z))
+        }
+        let diagonal = max((upper - lower).length, 1.0e-6)
+        let scale = min(diagonal * combScale / maximum, 1.0 / (maximum * maximum))
+        guard scale.isFinite, scale > 0 else {
+            throw RealityViewportSpatialBatch.invalid("A curvature measurement's comb has no drawable length.")
+        }
+        return .init(
+            samples: bent.map { .init(point: $0.point, normal: $0.normal, curvature: $0.curvature) },
+            displayScale: scale
+        )
     }
 
     /// An annotation node's resolved visibility, from the same occurrence

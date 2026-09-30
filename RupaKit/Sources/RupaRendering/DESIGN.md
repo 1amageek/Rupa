@@ -947,6 +947,11 @@ as spheres elsewhere.
    on every hover, so saved measurements, which depend only on the
    published document state and the ruler, are resolved once per
    generation and ruler for a document its current evaluation describes.
+   A curvature measurement resolves to combs rather than anchor points; the
+   viewport draws each comb's bent samples as white teeth and their envelope
+   (`curvatureMeshes`), each tooth `combScale` of its curve's size long at the
+   tightest bend and never past a centre of curvature, the rule sketch combs
+   follow.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

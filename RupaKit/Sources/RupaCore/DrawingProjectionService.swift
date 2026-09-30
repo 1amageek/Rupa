@@ -440,6 +440,10 @@ public struct DrawingProjectionService: Sendable {
             switch resolution.outcome {
             case .resolved(let value):
                 resolvedAnchors = value
+            case .combed:
+                // Curvature combs analyse a curve's shape in the viewport; a drawing shows
+                // dimensions, so a curvature measurement is not projected onto it.
+                continue
             case .unresolved(let error):
                 unresolved.append(EditorDiagnostic(severity: .warning, message: error.message))
                 continue
@@ -575,6 +579,9 @@ public struct DrawingProjectionService: Sendable {
                 nil,
                 "Edge \(LengthDisplayText.readableLengthString(fromMeters: length, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
+        case .curvature:
+            // A curvature measurement resolves to combs, which a drawing does not project.
+            throw EditorError(code: .commandInvalid, message: "A curvature measurement has no drawing dimension.")
         case .radius:
             guard let radius = radiusMeters(from: anchors) else {
                 return (nil, nil, nil, fallbackName)

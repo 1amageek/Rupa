@@ -1016,6 +1016,13 @@ extension DesignDocument {
                 return nil
             }
             return trim.target.featureID
+        case .reverseSheet(let reverse):
+            // A reversed B-spline sheet keeps the control net it was turned over from.
+            guard let source = surfaceControlSourceFeatureID(for: reverse.target.featureID),
+                  case .bSplineSurface = cadDocument.designGraph.nodes[source]?.operation else {
+                return nil
+            }
+            return source
         default:
             return nil
         }

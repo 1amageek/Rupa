@@ -522,7 +522,7 @@ private func keyboardContext(
     #expect(action("∆", [.option]) == .unjoin)
 }
 
-@Test func workspaceKeyboardRouterRaisesTheSelectedCurvesDegreeOnShiftS() {
+@Test func workspaceKeyboardRouterRaisesTheSelectedDegreeOnShiftS() {
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()
     func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
@@ -530,8 +530,15 @@ private func keyboardContext(
     }
     #expect(action("S", [.shift]) == nil)
     context.selectedSketchTargetCount = 1
-    #expect(action("S", [.shift]) == .raiseCurveDegree)
-    #expect(action("s") != .raiseCurveDegree)
+    #expect(action("S", [.shift]) == .raiseDegree)
+    #expect(action("s") != .raiseDegree)
+    // Faces and sheets raise the surface behind them.
+    context.selectedSketchTargetCount = 0
+    context.hasBodyFaceSelection = true
+    #expect(action("S", [.shift]) == .raiseDegree)
+    context.hasBodyFaceSelection = false
+    context.hasBodyObjectSelection = true
+    #expect(action("S", [.shift]) == .raiseDegree)
     context.isSelectToolActive = false
     #expect(action("S", [.shift]) == nil)
 }
