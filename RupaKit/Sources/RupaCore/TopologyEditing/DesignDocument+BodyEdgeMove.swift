@@ -262,14 +262,19 @@ extension DesignDocument {
 extension DesignDocument {
     /// The edges, faces or vertices `targets` became after the features up to `featureID` changed
     /// their body, followed through the kernel's lineage, so a selection survives a move. A target
-    /// with no single descendant is left out.
+    /// with no single descendant is left out. The document's current evaluation at `currentGeneration`,
+    /// when handed, is read instead of evaluating the whole document again.
     public func topologyTargets(
         following targets: [SelectionTarget],
         to featureID: FeatureID,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SelectionTarget] {
         let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
-            document: self, objectRegistry: objectRegistry, failurePrefix: "Move selection"
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Move selection"
         )
         var children: [SubshapeID: [SubshapeID]] = [:]
         for lineage in evaluated.lineage.values {

@@ -198,7 +198,11 @@ public final class EditorSession {
         var restoredSelection = snapshot.selection
         restoredSelection.pruneMissingReferences(in: restoredStore.document)
         var restoredWorkspaceState = snapshot.workspaceState
-        restoredWorkspaceState.pruneMissingReferences(in: restoredStore.document)
+        restoredWorkspaceState.pruneMissingReferences(
+            in: restoredStore.document,
+            evaluation: restoredStore.currentEvaluation,
+            generation: restoredStore.generation
+        )
         documentState = DocumentState(
             store: restoredStore,
             commandStack: restoredCommandStack,
@@ -258,7 +262,11 @@ public final class EditorSession {
         var restoredSelection = prepared.after.selection
         restoredSelection.pruneMissingReferences(in: restoredStore.document)
         var restoredWorkspaceState = prepared.after.workspaceState
-        restoredWorkspaceState.pruneMissingReferences(in: restoredStore.document)
+        restoredWorkspaceState.pruneMissingReferences(
+            in: restoredStore.document,
+            evaluation: restoredStore.currentEvaluation,
+            generation: restoredStore.generation
+        )
         documentState = DocumentState(
             store: restoredStore,
             commandStack: replacementCommandStack,

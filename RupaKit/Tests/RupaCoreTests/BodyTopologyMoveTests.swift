@@ -44,6 +44,27 @@ import Testing
         #expect(abs((movedEntry.center?.z ?? 0) - (maxZ + 0.02)) < 1e-9)
     }
 
+    /// Following the moved targets through the session's current evaluation answers what a fresh
+    /// evaluation answers, without evaluating the document again.
+    @MainActor
+    @Test func followingAMoveThroughTheCurrentEvaluationMatchesAFreshOne() throws {
+        var moved = try box()
+        let faces = try entries(.face, of: moved)
+        let maxZ = faces.compactMap { $0.center?.z }.max() ?? 0
+        let top = try #require(faces.first { abs(($0.center?.z ?? -1) - maxZ) < 1e-9 })
+        let target = try #require(top.selectionTarget())
+        try moved.moveBodyFaces(targets: [target], direction: .unitZ, distance: .length(0.02, .meter))
+        let session = EditorSession(document: moved)
+        session.store.evaluateCurrentDocument()
+        #expect(session.currentEvaluation != nil)
+        let moveID = try #require(session.document.cadDocument.designGraph.order.last)
+        let reused = try session.document.topologyTargets(following: [target], to: moveID,
+            currentEvaluation: session.currentEvaluation, currentGeneration: session.generation)
+        let fresh = try session.document.topologyTargets(following: [target], to: moveID)
+        #expect(!reused.isEmpty)
+        #expect(reused == fresh)
+    }
+
     @Test func aCornerVertexMovesAndAWarpingMoveIsKept() throws {
         var document = try box()
         let vertices = try entries(.vertex, of: document)

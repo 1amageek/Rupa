@@ -10435,10 +10435,14 @@ private struct ProjectMainViewContent: View {
         }
         submitSource(command) { result in
             guard result != nil, let nodeID = targets.first?.sceneNodeID,
-                  let document = workspace.view?.document.document,
-                  let featureID = document.productMetadata.sceneNodes[nodeID]?.reference?.featureID else { return }
+                  let published = workspace.view,
+                  let featureID = published.document.document.productMetadata.sceneNodes[nodeID]?.reference?.featureID else { return }
             do {
-                let moved = try document.topologyTargets(following: targets, to: featureID, objectRegistry: objectRegistry)
+                // The published view carries the evaluation the commit produced.
+                let moved = try published.document.document.topologyTargets(
+                    following: targets, to: featureID, objectRegistry: objectRegistry,
+                    currentEvaluation: published.cadInteraction, currentGeneration: published.documentGeneration
+                )
                 transformSession?.topologyTargets = moved
                 selectTargets(moved)
                 refreshTransformFrame()

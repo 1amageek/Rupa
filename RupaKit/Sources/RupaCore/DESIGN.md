@@ -972,7 +972,13 @@ evaluated the document once per selected target. The resolver still checks a
 target and its body before any snapshot is built, so a target no corner can
 name costs no evaluation (`TopologySnapshotReuseTests`). `EditorSession` hands
 its current evaluation to `WorkspaceState.pruneMissingReferences`, so surface
-frame displays are checked without evaluating the document per display.
+frame displays are checked without evaluating the document per display; a
+session rebuilt from a transaction snapshot or a prepared transaction hands the
+rebuilt store's evaluation the same way. `topologyTargets(following:to:)` reads
+the published evaluation a commit produced instead of evaluating again.
+`BodyDisplaySnapshotService` sorts the subshape table once and splits it by
+feature, where each body had sorted the whole table twice (once for its own
+entries and once for its first body).
 
 ### Snap placement contract
 

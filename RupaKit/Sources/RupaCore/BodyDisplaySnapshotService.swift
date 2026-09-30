@@ -32,12 +32,30 @@ public struct BodyDisplaySnapshotService: Sendable {
     public func snapshots(
         evaluatedDocument: EvaluatedDocument
     ) -> [FeatureID: BodyDisplaySnapshot] {
+        // The subshape table is sorted once and split by feature, keeping that order: every body
+        // had sorted the whole table again, twice, to find its own entries and its first body.
+        var entriesByFeatureID: [FeatureID: [SubshapeEntry]] = [:]
+        var firstBodyByFeatureID: [FeatureID: GeneratedBodyIdentityResolver.Identity] = [:]
+        var bodyFeatureIDs: [FeatureID] = []
+        for entry in evaluatedDocument.subshapes.entries.sorted(by: {
+            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
+        }) {
+            let featureID = entry.key.featureID
+            entriesByFeatureID[featureID, default: []].append(entry)
+            if case .body(let bodyID) = entry.value, firstBodyByFeatureID[featureID] == nil {
+                firstBodyByFeatureID[featureID] = .init(bodyID: bodyID, sourceFeatureID: featureID, subshapeID: entry.key)
+                bodyFeatureIDs.append(featureID)
+            }
+        }
         var snapshots: [FeatureID: BodyDisplaySnapshot] = [:]
-        for featureID in identityResolver.bodyFeatureIDs(in: evaluatedDocument.subshapes) {
-            guard let snapshot = snapshot(
-                for: featureID,
-                in: evaluatedDocument
-            ) else {
+        for featureID in bodyFeatureIDs {
+            guard let identity = firstBodyByFeatureID[featureID],
+                  let snapshot = snapshot(
+                    for: featureID,
+                    identity: identity,
+                    entries: entriesByFeatureID[featureID] ?? [],
+                    in: evaluatedDocument
+                  ) else {
                 continue
             }
             snapshots[featureID] = snapshot
@@ -45,15 +63,16 @@ public struct BodyDisplaySnapshotService: Sendable {
         return snapshots
     }
 
+    /// One subshape table entry.
+    private typealias SubshapeEntry = (key: SubshapeID, value: TopologyReference)
+
     private func snapshot(
         for featureID: FeatureID,
+        identity: GeneratedBodyIdentityResolver.Identity,
+        entries: [SubshapeEntry],
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyDisplaySnapshot? {
-        guard let identity = identityResolver.firstBodyIdentity(
-            for: featureID,
-            in: evaluatedDocument.subshapes
-        ),
-              let mesh = evaluatedDocument.meshes[identity.bodyID],
+        guard let mesh = evaluatedDocument.meshes[identity.bodyID],
               let bounds = bodyBounds(mesh.positions) else {
             return nil
         }
@@ -71,6 +90,7 @@ public struct BodyDisplaySnapshotService: Sendable {
                 for: featureID,
                 bodyID: identity.bodyID,
                 mesh: mesh,
+                entries: entries,
                 in: evaluatedDocument
             )
         )
@@ -80,15 +100,13 @@ public struct BodyDisplaySnapshotService: Sendable {
         for featureID: FeatureID,
         bodyID: BodyID,
         mesh: SwiftCAD.Mesh,
+        entries generatedEntries: [SubshapeEntry],
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyDisplaySnapshot.Topology {
         let model = evaluatedDocument.brep
         var faces: [BodyDisplaySnapshot.Topology.Face] = []
         var edges: [BodyDisplaySnapshot.Topology.Edge] = []
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []
-        let generatedEntries = evaluatedDocument.subshapes.entries.sorted(by: {
-            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
-        })
         var edgeSubshapeIDs: [EdgeID: SubshapeID] = [:]
         var edgeDisplayPointsByID: [EdgeID: [Point3D]] = [:]
         var adjacentFacesByEdgeID: [EdgeID: [SubshapeID]] = [:]
