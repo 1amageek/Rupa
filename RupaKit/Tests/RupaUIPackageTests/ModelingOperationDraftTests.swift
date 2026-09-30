@@ -202,6 +202,51 @@ struct ModelingOperationDraftTests {
         #expect(parallel.alignment == .parallel && parallel.approximationTolerance == nil)
     }
 
+    @Test func aFaceSweepsIntoABlockOrGrowsItsBody() throws {
+        var document = DesignDocument.empty()
+        let box = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let top = try #require(topology.entries.first { entry in
+            entry.kind == .face && (entry.surfaceNormal.map { $0.z > 0.99 } ?? false)
+        }?.selectionTarget())
+        // A straight path up from the top face's middle (sketch x is world z, sketch y world x).
+        let path = try document.createLineSketch(name: "Path", plane: .zx,
+            start: SketchPoint(x: .length(0.02, .meter), y: .length(0.01, .meter)),
+            end: SketchPoint(x: .length(0.05, .meter), y: .length(0.01, .meter)))
+        let pathNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
+        var draft = makeDraft(.sweep, targets: [top, .init(sceneNodeID: pathNode.id)])
+        guard case .createSweep(_, let sections, _, _, let targets, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        guard case .face(let face) = sections.first else {
+            Issue.record("A selected face sweeps as a face section.")
+            return
+        }
+        #expect(face.featureID == box && targets.isEmpty)
+        let apart = CADDocumentStore(document: document)
+        _ = try apart.apply(draft.command(in: document))
+        let separate = try MeasurementService().measure(document: apart.document, ruler: .standard(for: .meter))
+        #expect(abs(separate.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + 0.02 * 0.02 * 0.03)) < 1e-12)
+
+        draft.solidBoolean = .union
+        guard case .createSweep(_, _, _, _, let grownTargets, let options) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(grownTargets == [SweepTargetReference(featureID: box)] && options.booleanOperation == .union)
+        let grown = CADDocumentStore(document: document)
+        _ = try grown.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: grown.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.02 * 0.02 * 0.05) < 1e-12)
+    }
+
     @Test func sheetDraftsUseNativeSourceCommands() throws {
         var patch = makeDraft(.surfacePatch)
         patch.width = "100 mm"

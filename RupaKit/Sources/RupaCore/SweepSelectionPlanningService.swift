@@ -25,10 +25,13 @@ public struct SweepSelectionPlanningService: Sendable {
         }
     }
 
+    /// The sweep of the selection's section along its path, combined with `targets` when the
+    /// options ask for a Boolean.
     public func command(
         targetSceneNodeID: SceneNodeID? = nil,
         name: String,
-        options: SweepOptions = SweepOptions()
+        options: SweepOptions = SweepOptions(),
+        targets: [SweepTargetReference] = []
     ) throws -> EditorCommand {
         let resolution = try resolution(targetSceneNodeID: targetSceneNodeID)
         guard let section = resolution.section,
@@ -39,7 +42,7 @@ public struct SweepSelectionPlanningService: Sendable {
             )
         }
         var resolvedOptions = options
-        if section.profile == nil {
+        if section.isClosedRegion == false {
             resolvedOptions.resultKind = .sheet
         }
         return .createSweep(
@@ -47,7 +50,7 @@ public struct SweepSelectionPlanningService: Sendable {
             sections: [section],
             path: SweepPathReference(featureID: pathFeatureID),
             guides: resolution.guideFeatureIDs.map { SweepGuideReference(featureID: $0) },
-            targets: [],
+            targets: targets,
             options: resolvedOptions
         )
     }
@@ -88,6 +91,7 @@ public struct SweepSelectionPlanningService: Sendable {
         var isTarget: Bool
         var profileReference: ProfileReference?
         var curveFeatureID: FeatureID?
+        var face: FaceSectionReference?
     }
 
     private struct CandidateSceneNode {
@@ -105,16 +109,21 @@ public struct SweepSelectionPlanningService: Sendable {
             }
         }
         let profileReferences = Set(candidates.compactMap(\.profileReference))
-        guard profileReferences.count <= 1 else {
+        let faces = candidates.compactMap(\.face)
+        guard profileReferences.count + faces.count <= 1 else {
             throw EditorError(code: .commandInvalid,
-                message: "Sweep requires one section profile. Use Loft for multiple profile sections.")
+                message: "Sweep requires one section profile or face. Use Loft for multiple profile sections.")
         }
         let profileReference = profileReferences.first
         let allCurveFeatureIDs = uniqueFeatureIDs(candidates.compactMap(\.curveFeatureID))
         let targetCurveFeatureID = candidates.last { $0.isTarget }?.curveFeatureID
         let section: SectionReference?
         let pathFeatureID: FeatureID?
-        if let profileReference {
+        if let face = faces.first {
+            // A face of a body sweeps like a profile along the last selected curve.
+            section = .face(face)
+            pathFeatureID = targetCurveFeatureID ?? allCurveFeatureIDs.last
+        } else if let profileReference {
             section = .profile(profileReference)
             let curveFeatureIDs = allCurveFeatureIDs.filter { $0 != profileReference.featureID }
             pathFeatureID = targetCurveFeatureID.flatMap { target in
@@ -169,6 +178,15 @@ public struct SweepSelectionPlanningService: Sendable {
         guard let sceneNode = document.productMetadata.sceneNodes[candidateSceneNode.id] else {
             return nil
         }
+        // A selected face of a body is a closed section of its own.
+        if let faceTarget = selection.selectedTargets.first(where: { target in
+            guard target.sceneNodeID == sceneNode.id, case .face = target.component else { return false }
+            return true
+        }) {
+            // Planning runs on a document without the store's evaluation, so it reads its own.
+            let reference = try document.faceSectionReference(for: faceTarget, operationName: "Sweep", currentEvaluation: nil)
+            return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: nil, curveFeatureID: nil, face: reference)
+        }
         let referencedFeatureID = sceneNode.reference?.featureID
         if let referencedFeatureID,
            let section = try document.explicitModelingSectionReference(
@@ -181,8 +199,8 @@ public struct SweepSelectionPlanningService: Sendable {
                     throw EditorError(code: .commandInvalid, message: "Selected source does not produce a curve.")
                 }
                 return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: nil, curveFeatureID: reference.featureID)
-            case .face:
-                throw EditorError(code: .commandInvalid, message: "Sweep takes a profile or a curve section.")
+            case .face(let reference):
+                return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: nil, curveFeatureID: nil, face: reference)
             }
         }
         let sketchFeatureID = sceneNode.reference?.kind == .sketch ? referencedFeatureID : nil

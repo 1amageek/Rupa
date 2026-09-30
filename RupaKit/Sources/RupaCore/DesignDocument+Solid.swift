@@ -374,8 +374,8 @@ extension DesignDocument {
                 try requireSweepSourceProfileFeature(profile.featureID, owner: "Sweep profile")
             case .curve(let curve):
                 try requireSweepSourceCurveFeature(curve.featureID, owner: "Sweep curve section")
-            case .face:
-                throw EditorError(code: .commandInvalid, message: "Sweep takes a profile or a curve section.")
+            case .face(let face):
+                try requireSweepTargetBodyFeature(face.featureID, owner: "Sweep face section")
             }
         }
         try requireSweepSourceCurveFeature(path.featureID, owner: "Sweep path")
@@ -384,6 +384,16 @@ extension DesignDocument {
         }
         for target in targets {
             try requireSweepTargetBodyFeature(target.featureID, owner: "Sweep target")
+        }
+        // A sweep is built where its sources were built: a face or a target body shown elsewhere
+        // would be swept or combined at the wrong place.
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for featureID in sections.filter(\.isFace).map(\.featureID) + targets.map(\.featureID) {
+            guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "A sweep's face and target bodies must be shown where they were built; this one has been moved.")
+            }
         }
 
         let featureID = FeatureID()
@@ -427,6 +437,10 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
         )
+        if options.booleanOperation != .newBody {
+            // The sweep's object shows the combined body; the targets' objects go.
+            try removeSceneNodes(presenting: targets.map(\.featureID))
+        }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommitSweep = true

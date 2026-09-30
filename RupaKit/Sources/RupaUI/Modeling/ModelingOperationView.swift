@@ -296,6 +296,19 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
+            if !draft.isSurfaceCreation {
+                Picker("Boolean", selection: $draft.solidBoolean) {
+                    ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
+                        Text(choice.rawValue).tag(choice)
+                    }
+                }
+                .contentShape(Rectangle())
+                if draft.solidBoolean != .newBody {
+                    Toggle("Keep Tools", isOn: $draft.keepsTools)
+                    Text("Select the section and path first, then the bodies to combine with; a face combines with its own body.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             TextField("Twist angle (degrees)", text: $draft.twistAngle)
             Toggle("Reverse twist at midpoint (double helix)", isOn: $draft.doubleHelical)
             lengthField("Positional approximation allowance", text: $draft.approximationTolerance)

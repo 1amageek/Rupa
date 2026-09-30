@@ -179,15 +179,10 @@ extension FeatureOperation {
         // A Boolean revolve replaces its targets, as a Boolean extrusion does.
         case .revolve(let source):
             return source.operation == .newBody ? [] : Set(source.targets.map(\.featureID))
+        // A Boolean sweep replaces its targets, as a Boolean extrusion does; Keep Tools keeps only
+        // the swept tool.
         case .sweep(let feature):
-            // A boolean sweep replaces its target bodies (the kernel removes the
-            // target topology unless keep-tools retains both operands), so the
-            // targets must leave the measurable set exactly like standalone
-            // boolean operands below.
-            guard feature.options.booleanOperation != .newBody,
-                  feature.options.keepTools == false else {
-                return []
-            }
+            guard feature.options.booleanOperation != .newBody else { return [] }
             return Set(feature.targets.map(\.featureID))
         case .loft:
             return []

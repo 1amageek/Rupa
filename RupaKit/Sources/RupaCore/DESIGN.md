@@ -573,6 +573,11 @@ dimension/corner adapters or closed-profile display shortcuts. Sheet measurement
 come from evaluated BRep, before any sketch profile recognition. Source and
 product publication remain atomic on failure.
 
+`createSweep` takes a planar face of a body as its section (`faceSectionReference`),
+refuses a face or target body shown away from where it was built (a sweep has no
+placements), and takes the targets' objects away for a Boolean; a Boolean sweep
+supersedes its targets whatever Keep Tools.
+
 `revolveSection` places Boolean targets where they are shown and takes their objects away,
 as `extrudeSection` does, and reads its world axis in the face's object frame for a face
 section; supersession and measurement treat a Boolean, thin, curve or face revolve as the

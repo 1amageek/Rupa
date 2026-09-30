@@ -425,6 +425,26 @@ extension DesignDocument {
         didCommit = true
         return featureID
     }
+
+    /// The section a selected planar face of a body stands for, read from the body as it is now.
+    public func faceSectionReference(
+        for target: SelectionTarget,
+        operationName: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FaceSectionReference {
+        let object = try offsetObject(for: [target], operationName: operationName)
+        let role = productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        return FaceSectionReference(
+            featureID: object.featureID,
+            face: try stableReference(of: target, kind: .face, in: topology, operationName: operationName),
+            bodyRole: role == .surface ? .sheet : .body
+        )
+    }
 }
 
 extension DesignDocument {

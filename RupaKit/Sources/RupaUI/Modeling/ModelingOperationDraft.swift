@@ -459,9 +459,33 @@ struct ModelingOperationDraft: Equatable {
                     options.twistAngle = .angle(degrees, .degree)
                 }
             }
+            // A Boolean sweep combines with the bodies selected after its section and path, or
+            // with the body its face section lies on.
+            var sources = targets
+            var bodies: [SweepTargetReference] = []
+            if solidBoolean != .newBody {
+                guard let operation = SweepBooleanOperation(rawValue: solidBoolean.operation.rawValue), !createsSheet else {
+                    throw invalid("A Boolean sweep makes a solid; turn Sheet output off.")
+                }
+                while sources.count > 1, let last = sources.last, last.component == .object,
+                      let node = document.productMetadata.sceneNodes[last.sceneNodeID],
+                      node.object?.geometryRole == .solid, let featureID = node.object?.sourceFeatureID {
+                    bodies.insert(SweepTargetReference(featureID: featureID), at: 0)
+                    sources.removeLast()
+                }
+                if bodies.isEmpty, let face = sources.first(where: { if case .face = $0.component { return true }; return false }),
+                   let featureID = document.productMetadata.sceneNodes[face.sceneNodeID]?.object?.sourceFeatureID {
+                    bodies = [SweepTargetReference(featureID: featureID)]
+                }
+                guard !bodies.isEmpty else {
+                    throw invalid("Select the section and path first, then the bodies to combine with.")
+                }
+                options.booleanOperation = operation
+                options.keepTools = keepsTools
+            }
             return try SweepSelectionPlanningService(
-                document: document, selection: SelectionModel(selectedTargets: targets)
-            ).command(name: name, options: options)
+                document: document, selection: SelectionModel(selectedTargets: sources)
+            ).command(name: name, options: options, targets: bodies)
         case .loft:
             let sectionNodes = nodes.filter { !loftGuideNodeIDs.contains($0.id) }
             guard sectionNodes.count >= 2 else { throw invalid("Select at least two ordered sections, separate from guides.") }

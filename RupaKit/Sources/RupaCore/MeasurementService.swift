@@ -479,9 +479,8 @@ public struct MeasurementService {
             let measuredProfile: MeasuredProfile?
             switch sectionReference {
             case .face:
-                // A sweep refuses face sections before it evaluates.
-                diagnostics.append(EditorDiagnostic(severity: .warning, message: "Measurement skipped a sweep of a face section."))
-                return
+                // A face has no sketch to report; the sweep is measured as the body it evaluates to.
+                measuredProfile = nil
             case .profile(let profileReference):
                 guard case .sketch(let sourceSketch) = sourceNode.operation else {
                     diagnostics.append(
@@ -571,7 +570,7 @@ public struct MeasurementService {
                 bounds.include(sheet.bounds)
                 return
             }
-            guard let profile = measuredProfile else {
+            guard measuredProfile != nil || sectionReference.isFace else {
                 diagnostics.append(
                     EditorDiagnostic(
                         severity: .warning,
@@ -594,7 +593,7 @@ public struct MeasurementService {
             )
             // A straight sweep also reports its authored normal height and path length; its
             // volume and bounds remain the evaluated B-rep's.
-            if let dimensions = try straightSweepDimensions(
+            if let profile = measuredProfile, let dimensions = try straightSweepDimensions(
                 profile: profile,
                 sweep: sweep,
                 pathSketch: pathSketch,
