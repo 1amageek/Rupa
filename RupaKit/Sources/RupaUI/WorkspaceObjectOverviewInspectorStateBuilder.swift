@@ -621,6 +621,11 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Operation", value: "Unjoin Body"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(unjoin.target.featureID)),
             ]
+        case .reverseSheet(let reverse):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Reverse"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(reverse.target.featureID)),
+            ]
         case .unjoinFaces(let unjoin):
             let selection = switch unjoin.selection {
             case .everyFace: "Every face"

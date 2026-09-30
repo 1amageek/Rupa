@@ -52,6 +52,7 @@ extension FeatureOperation {
              .joinBodies,
              .unjoinBody,
              .unjoinFaces,
+             .reverseSheet,
              .extract,
              .wrap,
              .bridgeSurface,
@@ -131,6 +132,7 @@ extension FeatureOperation {
              .joinBodies,
              .unjoinBody,
              .unjoinFaces,
+             .reverseSheet,
              .extract,
              .wrap:
             return true
@@ -229,6 +231,9 @@ extension FeatureOperation {
             return [feature.target.featureID]
         // Unjoin faces consumes its target, holding its faces as the shells of one sheet.
         case .unjoinFaces(let feature):
+            return [feature.target.featureID]
+        // Reverse consumes the sheet it turns over.
+        case .reverseSheet(let feature):
             return [feature.target.featureID]
         // An extraction copies part of a body that stays: one extraction never replaces its
         // source. A source every component of which is extracted is replaced by its pieces, which

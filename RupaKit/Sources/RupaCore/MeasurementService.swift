@@ -1061,6 +1061,13 @@ public struct MeasurementService {
                     sourceFeatureID: unjoin.target.featureID,
                     operationName: "Unjoin Body"
                 )
+            case .reverseSheet(let reverse):
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: reverse.target.featureID,
+                    operationName: "Reverse"
+                )
             case .unjoinFaces(let unjoin):
                 try measureEvaluatedBodyOperationCase(
                     node: node,
