@@ -154,12 +154,15 @@ struct ModelingOperationDraftTests {
         _ = try store.apply(.upsertParameter(name: "sheet_thickness", expression: .length(0.002, .meter), kind: .length))
         let thickness = try ParameterExpressionParser().parse("sheet_thickness",
             parameters: store.document.cadDocument.parameters, targetKind: .length)
-        for side in [ThickenSide.positive, .negative, .symmetric] {
+        let zero = try ParameterExpressionParser().parse("0", parameters: store.document.cadDocument.parameters,
+            targetKind: .length, defaults: ParameterExpressionDefaults(lengthUnit: makeDraft(.thicken, targets: [target]).unit))
+        for (front, back) in [("sheet_thickness", "0"), ("0", "sheet_thickness"), ("sheet_thickness", "sheet_thickness")] {
             var thicken = makeDraft(.thicken, targets: [target])
-            thicken.distance = "sheet_thickness"
-            thicken.thickenSide = side
+            thicken.distance = front
+            thicken.thickenBack = back
             #expect(try thicken.command(in: store.document) == .createSheetSurfaceEdit(
-                name: "Thicken", target: target, edit: .thicken(thickness: thickness, side: side)))
+                name: "Thicken", target: target,
+                edit: .thicken(front: front == "0" ? zero : thickness, back: back == "0" ? zero : thickness)))
             thicken.distance = "-2 mm"
             #expect(throws: EditorError.self) { try thicken.command(in: store.document) }
         }

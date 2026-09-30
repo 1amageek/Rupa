@@ -256,7 +256,12 @@ stays a solid, measured as one; otherwise it opens into a sheet (Surface Fill's 
 Remove Fillets From Shell (`removeFillets(name:target:maximumRadius:convexity:)`) appends
 `removeFillets` on a solid object. Delete Redundant Topology on objects
 (`removeRedundantTopology(targets:)`) appends one `removeRedundantTopology` per solid or sheet
-object, as one step. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
+object, as one step. Hollow (`hollow(name:targets:thickness:)`) appends `shell` on a solid
+object, opening through the chosen faces or closed inside the object chosen whole. Thicken
+(`thicken(name:targets:front:back:)`) grows a sheet object into a solid in its place, or, for
+faces of a body (Thicken Face), appends an `extract` of them and a `thicken` of that sheet shown
+as a new solid object beside the body. Hollow and Thicken are measured as the solids they
+evaluate to. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
 `BodyFaceDraftCommandTests` own these contracts.
 
 Face offset operates in the source profile frame. Moving the start cap compensates

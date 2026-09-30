@@ -515,10 +515,6 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Thicken"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(thicken.target.featureID)),
-                WorkspaceInspectorTextRow(
-                    title: "Side",
-                    value: String(describing: thicken.side).capitalized
-                ),
             ]
         case .bridgeSurface(let bridgeSurface):
             return [

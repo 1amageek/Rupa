@@ -17,6 +17,8 @@ struct WorkspaceFaceEditSession: Equatable {
         case draft(faces: [SelectionTarget], neutral: SelectionTarget)
         case match(faces: [SelectionTarget], reference: SelectionTarget)
         case removeFillets(object: SceneNodeID)
+        case hollow(targets: [SelectionTarget])
+        case thicken(targets: [SelectionTarget])
     }
 
     let kind: Kind
@@ -32,6 +34,13 @@ struct WorkspaceFaceEditSession: Equatable {
     /// Remove Fillets' largest radius, in meters; zero takes fillets of any radius.
     var maximumRadiusMeters = 0.0
     var convexity: FilletConvexity = .any
+    /// Hollow's wall thickness, in meters.
+    var wallThicknessMeters = 0.001
+    /// Thicken's thicknesses along the sheet's normal and against it, in meters; locked, the back
+    /// follows the front.
+    var frontMeters = 0.001
+    var backMeters = 0.0
+    var locksThicknesses = false
 
     init(kind: Kind) {
         self.kind = kind
@@ -43,6 +52,16 @@ struct WorkspaceFaceEditSession: Equatable {
         case .draft: "Draft Face"
         case .match: "Match Face"
         case .removeFillets: "Remove Fillets"
+        case .hollow: "Hollow"
+        case .thicken: "Thicken"
+        }
+    }
+
+    /// Whether the operation has a Grow mode: Push Face, Draft Face and Match Face do.
+    var hasGrow: Bool {
+        switch kind {
+        case .push, .draft, .match: true
+        case .removeFillets, .hollow, .thicken: false
         }
     }
 
@@ -53,6 +72,7 @@ struct WorkspaceFaceEditSession: Equatable {
             convexity = all[((all.firstIndex(of: convexity) ?? 0) + 1) % all.count]
             return
         }
+        guard hasGrow else { return }
         let all = FaceEditGrow.allCases
         grow = all[((all.firstIndex(of: grow) ?? 0) + 1) % all.count]
     }
@@ -72,6 +92,13 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .match(faces, reference):
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
+        case let .hollow(targets):
+            return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))
+        case let .thicken(targets):
+            return .thicken(
+                targets: targets, front: .length(frontMeters, .meter),
+                back: .length(locksThicknesses ? frontMeters : backMeters, .meter)
+            )
         case let .removeFillets(object):
             return .removeFillets(
                 target: object, maximumRadius: maximumRadiusMeters > 0 ? .length(maximumRadiusMeters, .meter) : nil, convexity: convexity

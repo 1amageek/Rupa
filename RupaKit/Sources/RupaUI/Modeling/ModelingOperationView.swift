@@ -195,20 +195,16 @@ struct ModelingOperationView: View {
         case .surfaceOffset:
             lengthField("Signed normal offset", text: $draft.distance)
         case .thicken:
-            lengthField("Thickness", text: $draft.distance)
+            lengthField("Front", text: $draft.distance)
                 .contentShape(Rectangle())
-            Picker("Side", selection: $draft.thickenSide) {
-                Text("Positive normal").tag(ThickenSide.positive)
-                Text("Negative normal").tag(ThickenSide.negative)
-                Text("Symmetric").tag(ThickenSide.symmetric)
-            }
-            .contentShape(Rectangle())
-            Text("Thicken the entire sheet containing the selected face. Symmetric distributes the total thickness equally on both sides. Preview verifies the resulting solid.")
+            lengthField("Back", text: $draft.thickenBack)
+                .contentShape(Rectangle())
+            Text("Thicken the entire sheet containing the selected face: Front along its normal, Back against it. Preview verifies the resulting solid.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         case .shell:
             lengthField("Wall thickness", text: $draft.distance)
-            Text("Remove the selected face and hollow the body inward. The native Shell currently requires one orthogonal six-face solid; Preview verifies the wall thickness fits.")
+            Text("Remove the selected face and hollow the body inward by the wall thickness. Preview verifies the thickness fits.")
                 .font(.caption).foregroundStyle(.secondary)
         case .surfaceExtend:
             Text("Expand the trim within the underlying surface domain. U/V are surface parameters, not lengths.")

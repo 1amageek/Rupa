@@ -264,6 +264,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginMatchFace
     /// Remove Fillets From Shell on the selected solid (palette).
     case beginRemoveFillets
+    /// Hollow on the selected solid or its faces, and Thicken on the selected sheet or faces
+    /// (palette).
+    case beginHollow
+    case beginThicken
+    /// S while Thicken runs: lock the back thickness to the front.
+    case toggleThickenLock
     /// Applies the running face operation.
     case confirmFaceEdit
     case cancelFaceEdit
@@ -483,6 +489,7 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isReturn { return .confirmFaceEdit }
             if input.isEscape { return .cancelFaceEdit }
             if input.isTab { return .stepFaceEditGrow }
+            if input.characters.lowercased() == "s" { return .toggleThickenLock }
         }
         if context.isProjectSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {

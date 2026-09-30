@@ -126,4 +126,31 @@ import Testing
         #expect(abs(try volume(session) - 0.001) < 1e-12)
         #expect(session.evaluationStatus == .valid)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func hollowOpensThroughAFaceOrClosesInsideTheSolid() throws {
+        let opened = EditorSession()
+        let box = try self.box(opened, "Box")
+        let top = try face(of: box, in: opened, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try opened.execute(.hollow(targets: [top], thickness: .length(0.01, .meter)))
+        #expect(abs(try volume(opened) - (0.001 - 0.08 * 0.08 * 0.09)) < 1e-12)
+
+        let closed = EditorSession()
+        let solid = try self.box(closed, "Box")
+        _ = try closed.execute(.hollow(targets: [SelectionTarget(sceneNodeID: solid)], thickness: .length(0.01, .meter)))
+        #expect(abs(try volume(closed) - (0.001 - 0.08 * 0.08 * 0.08)) < 1e-12)
+        #expect(closed.evaluationStatus == .valid)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func thickenFaceMakesANewSolidBesideTheBody() throws {
+        let session = EditorSession()
+        let box = try self.box(session, "Box")
+        let top = try face(of: box, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try session.execute(.thicken(targets: [top], front: .length(0.01, .meter), back: .length(0, .meter)))
+        let solids = session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body && $0.object?.geometryRole == .solid }
+        #expect(solids.count == 2)
+        #expect(abs(try volume(session) - (0.001 + 0.1 * 0.1 * 0.01)) < 1e-12)
+        #expect(session.evaluationStatus == .valid)
+    }
 }

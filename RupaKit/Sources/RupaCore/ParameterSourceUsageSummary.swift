@@ -193,7 +193,8 @@ public struct ParameterSourceUsageService: Sendable {
         case .shell(let feature):
             record(feature.thickness, path: "shell.thickness")
         case .thicken(let feature):
-            record(feature.thickness, path: "thicken.thickness")
+            record(feature.front, path: "thicken.front")
+            record(feature.back, path: "thicken.back")
         case .curveOffset(let feature):
             record(feature.distance, path: "curveOffset.distance")
         case .curveExtend(let feature):

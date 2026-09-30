@@ -6666,6 +6666,36 @@ private struct ProjectMainViewContent: View {
             faceEditSession = WorkspaceFaceEditSession(kind: .removeFillets(object: object))
             reportToolStatus("Remove Fillets: set the largest radius, Tab steps Convexity; OK, Return or right-click removes them.")
             return .handled
+        case .beginHollow:
+            let faces = selectedBodyFaceTargets
+            let objects = selectedBodyObjectIDs
+            if faces.isEmpty == false {
+                faceEditSession = WorkspaceFaceEditSession(kind: .hollow(targets: faces))
+            } else if objects.count == 1, let object = objects.first {
+                faceEditSession = WorkspaceFaceEditSession(kind: .hollow(targets: [SelectionTarget(sceneNodeID: object)]))
+            } else {
+                reportToolStatus("Hollow: select the faces to open, or one solid to hollow closed.", severity: .warning)
+                return .handled
+            }
+            reportToolStatus("Hollow: set the wall thickness; OK, Return or right-click hollows the solid.")
+            return .handled
+        case .beginThicken:
+            let faces = selectedBodyFaceTargets
+            let objects = selectedBodyObjectIDs
+            if faces.isEmpty == false {
+                faceEditSession = WorkspaceFaceEditSession(kind: .thicken(targets: faces))
+            } else if objects.count == 1, let object = objects.first {
+                faceEditSession = WorkspaceFaceEditSession(kind: .thicken(targets: [SelectionTarget(sceneNodeID: object)]))
+            } else {
+                reportToolStatus("Thicken: select one sheet, or faces of a body.", severity: .warning)
+                return .handled
+            }
+            reportToolStatus("Thicken: set Front and Back, S locks them together; OK, Return or right-click thickens.")
+            return .handled
+        case .toggleThickenLock:
+            guard case .thicken = faceEditSession?.kind else { return .ignored }
+            faceEditSession?.locksThicknesses.toggle()
+            return .handled
         case .confirmFaceEdit:
             confirmFaceEdit()
             return .handled

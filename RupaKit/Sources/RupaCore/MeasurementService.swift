@@ -1131,6 +1131,10 @@ public struct MeasurementService {
                 continue
             case .curveTrim:
                 continue
+            case .shell(let shell):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: shell.target.featureID, operationName: "Hollow")
+            case .thicken(let thicken):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: thicken.target.featureID, operationName: "Thicken")
             case .faceOffset(let offset):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: offset.target.featureID, operationName: "Push Face")
             case .patchSurface,
@@ -1146,8 +1150,6 @@ public struct MeasurementService {
                  .fillet,
                  .g2Blend,
                  .setbackCorner,
-                 .shell,
-                 .thicken,
                  .bridgeSurface,
                  .curveExtend,
                  .curveMatch,

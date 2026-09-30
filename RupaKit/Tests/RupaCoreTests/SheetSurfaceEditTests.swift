@@ -6,8 +6,21 @@ import Testing
 @MainActor
 @Suite("Native sheet surface edits", .timeLimit(.minutes(1)))
 struct SheetSurfaceEditTests {
-    @Test(arguments: [SwiftCAD.ThickenSide.positive, .negative, .symmetric])
-    func thickenRetainsOccurrenceAndReevaluatesParameters(side: SwiftCAD.ThickenSide) throws {
+    /// The three ways the test grows the sheet: all along its normal, all against it, or half each way.
+    enum TestSide: CaseIterable {
+        case positive, negative, symmetric
+
+        func edit(_ thickness: CADExpression) -> SheetSurfaceEdit {
+            switch self {
+            case .positive: .thicken(front: thickness, back: .length(0, .meter))
+            case .negative: .thicken(front: .length(0, .meter), back: thickness)
+            case .symmetric: .thicken(front: .divide(thickness, .constant(.scalar(2))), back: .divide(thickness, .constant(.scalar(2))))
+            }
+        }
+    }
+
+    @Test(arguments: TestSide.allCases)
+    func thickenRetainsOccurrenceAndReevaluatesParameters(side: TestSide) throws {
         let session = EditorSession()
         _ = try session.execute(.createBSplineSurface(name: "Patch", surface: patch))
         _ = try session.execute(.upsertParameter(name: "thickness", expression: .length(0.002, .meter), kind: .length))
@@ -19,7 +32,7 @@ struct SheetSurfaceEditTests {
         for thickness in [0.0, -0.002] {
             #expect(throws: (any Error).self) {
                 try session.execute(.createSheetSurfaceEdit(name: "Invalid", target: target,
-                    edit: .thicken(thickness: .length(thickness, .meter), side: side)))
+                    edit: side.edit(.length(thickness, .meter))))
             }
             #expect(session.document.cadDocument.designGraph == original.cadDocument.designGraph)
             #expect(session.document.productMetadata == original.productMetadata)
@@ -27,7 +40,7 @@ struct SheetSurfaceEditTests {
         let expression = try ParameterExpressionParser().parse("thickness",
             parameters: original.cadDocument.parameters, targetKind: .length)
         _ = try session.execute(.createSheetSurfaceEdit(name: "Thicken", target: target,
-            edit: .thicken(thickness: expression, side: side)))
+            edit: side.edit(expression)))
         let node = try #require(session.document.productMetadata.sceneNodes[target.sceneNodeID])
         let object = try #require(node.object)
         let originalObject = try #require(original.productMetadata.sceneNodes[target.sceneNodeID]?.object)
@@ -53,7 +66,7 @@ struct SheetSurfaceEditTests {
         let solidFace = try #require(faces.first?.selectionTarget())
         #expect(throws: (any Error).self) {
             try session.execute(.createSheetSurfaceEdit(name: "Invalid solid", target: solidFace,
-                edit: .thicken(thickness: expression, side: side)))
+                edit: side.edit(expression)))
         }
         #expect(session.document.cadDocument.designGraph == current.cadDocument.designGraph)
         #expect(session.document.productMetadata == current.productMetadata)

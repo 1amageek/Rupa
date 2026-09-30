@@ -2086,6 +2086,28 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .hollow, .thicken:
+            func run() throws {
+                var updatedDocument = document
+                switch command {
+                case .hollow(let targets, let thickness):
+                    try updatedDocument.hollow(
+                        targets: targets, thickness: thickness, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                case .thicken(let targets, let front, let back):
+                    try updatedDocument.thicken(
+                        targets: targets, front: front, back: back, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
+                default:
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow or thicken.")
+                }
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .removeRedundantTopology:
             func run() throws {
                 guard case .removeRedundantTopology(let targets) = command else {

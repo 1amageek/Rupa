@@ -219,9 +219,11 @@ extension DesignDocument {
         }
     }
 
-    /// Appends `operation` as a feature the object then shows in its place, keeping its name.
+    /// Appends `operation` as a feature the object then shows in its place, keeping its name and,
+    /// unless `geometryRole` says otherwise, whether it is a solid or a sheet.
     mutating func appendFeatureShownByObject(
-        _ operation: FeatureOperation, name: String, object: SceneNodeID, objectRegistry: ObjectTypeRegistry
+        _ operation: FeatureOperation, name: String, object: SceneNodeID, geometryRole: ObjectDescriptor.GeometryRole? = nil,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> FeatureID {
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata
@@ -237,7 +239,7 @@ extension DesignDocument {
             operation: operation, id: featureID, name: name, in: cadDocument, tolerance: modelingSettings.tolerance
         ))
         let node = productMetadata.sceneNodes[object]
-        try retargetBodyNode(object, to: featureID, name: node?.name ?? name, geometryRole: node?.object?.geometryRole ?? .solid)
+        try retargetBodyNode(object, to: featureID, name: node?.name ?? name, geometryRole: geometryRole ?? node?.object?.geometryRole ?? .solid)
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true

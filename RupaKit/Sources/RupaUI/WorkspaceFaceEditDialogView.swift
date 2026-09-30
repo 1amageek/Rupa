@@ -24,6 +24,15 @@ struct WorkspaceFaceEditDialogView: View {
         case .match:
             Toggle("Front", isOn: $dialog.front)
                 .accessibilityIdentifier("WorkspaceFaceEdit.front")
+        case .hollow:
+            lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
+        case .thicken:
+            lengthField("Front", meters: $dialog.frontMeters, identifier: "WorkspaceFaceEdit.front")
+            if dialog.locksThicknesses == false {
+                lengthField("Back", meters: $dialog.backMeters, identifier: "WorkspaceFaceEdit.back")
+            }
+            Toggle("Lock", isOn: $dialog.locksThicknesses)
+                .accessibilityIdentifier("WorkspaceFaceEdit.lockThicknesses")
         case .removeFillets:
             lengthField("Max Radius", meters: $dialog.maximumRadiusMeters, identifier: "WorkspaceFaceEdit.maximumRadius")
             Picker("Convexity", selection: $dialog.convexity) {
@@ -32,7 +41,7 @@ struct WorkspaceFaceEditDialogView: View {
             .fixedSize()
             .accessibilityIdentifier("WorkspaceFaceEdit.convexity")
         }
-        if case .removeFillets = dialog.kind {} else {
+        if dialog.hasGrow {
             Picker("Grow", selection: $dialog.grow) {
                 ForEach(FaceEditGrow.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }

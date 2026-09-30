@@ -98,3 +98,109 @@ extension DesignDocument {
         didCommit = true
     }
 }
+
+extension DesignDocument {
+    /// Hollow: a solid object emptied to walls `thickness` thick inside it, opening through the
+    /// chosen faces, or closed inside it when the object itself is chosen (Swift-CAD `shell`). The
+    /// object shows the result in its place.
+    @discardableResult
+    public mutating func hollow(
+        name: String = "Hollow",
+        targets: [SelectionTarget],
+        thickness: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Hollow"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        guard try resolvedLengthValue(thickness, owner: "\(operationName) thickness") > 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) thickness must be positive.")
+        }
+        let object = try offsetObject(for: targets, operationName: operationName)
+        guard productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .solid else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) empties a solid object.")
+        }
+        let faceTargets = targets.filter { if case .face = $0.component { true } else { false } }
+        guard faceTargets.count == targets.count || targets.count == 1 && targets[0].component == .object else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) opens through faces of a solid, or closes inside the solid chosen whole.")
+        }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let faces = try faceTargets.map { try stableReference(of: $0, kind: .face, in: topology, operationName: operationName) }
+        return try appendFeatureShownByObject(
+            .shell(ShellFeature(target: ShellTargetReference(featureID: object.featureID), removedFaces: faces, thickness: thickness)),
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
+        )
+    }
+
+    /// Thicken: a sheet object grown into a solid `front` along its normal and `back` against it,
+    /// shown in its place; or, Thicken Face, faces of a body copied as a sheet and grown into a new
+    /// solid object beside it (Swift-CAD `extract` then `thicken`), the body kept.
+    @discardableResult
+    public mutating func thicken(
+        name: String = "Thicken",
+        targets: [SelectionTarget],
+        front: CADExpression,
+        back: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Thicken"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        let frontValue = try resolvedLengthValue(front, owner: "\(operationName) front")
+        let backValue = try resolvedLengthValue(back, owner: "\(operationName) back")
+        guard frontValue >= 0, backValue >= 0, frontValue + backValue > 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) takes a front and a back thickness, neither negative, not both zero.")
+        }
+        let object = try offsetObject(for: targets, operationName: operationName)
+        let faceTargets = targets.filter { if case .face = $0.component { true } else { false } }
+        if faceTargets.isEmpty {
+            guard targets.count == 1, productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .surface else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) grows a sheet object, or faces of a body.")
+            }
+            return try appendFeatureShownByObject(
+                .thicken(ThickenFeature(target: ThickenTargetReference(featureID: object.featureID), front: front, back: back)),
+                name: trimmedName, object: object.nodeID, geometryRole: .solid, objectRegistry: objectRegistry
+            )
+        }
+        guard faceTargets.count == targets.count else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) grows either a sheet object or faces, not both.")
+        }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let faces = try faceTargets.map { try stableReference(of: $0, kind: .face, in: topology, operationName: operationName) }
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        let sheetID = FeatureID()
+        try appendFeature(try FeatureNodeFactory.make(
+            operation: .extract(ExtractFeature(target: PatternTargetReference(featureID: object.featureID), selection: .faces(faces))),
+            id: sheetID, name: "\(trimmedName) Faces", in: cadDocument, tolerance: modelingSettings.tolerance
+        ))
+        let solidID = FeatureID()
+        try appendFeature(try FeatureNodeFactory.make(
+            operation: .thicken(ThickenFeature(target: ThickenTargetReference(featureID: sheetID), front: front, back: back)),
+            id: solidID, name: trimmedName, in: cadDocument, tolerance: modelingSettings.tolerance
+        ))
+        let sourceName = productMetadata.sceneNodes[object.nodeID]?.name ?? trimmedName
+        try insertBooleanResultNode(
+            name: "\(sourceName) \(trimmedName)", featureID: solidID, geometryRole: .solid,
+            besideTargetNode: object.nodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
+            objectRegistry: objectRegistry
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return solidID
+    }
+}

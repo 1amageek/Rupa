@@ -92,7 +92,7 @@ struct FeatureLengthEditingTests {
                 topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0)))
             if kind == 6 {
                 let feature = try FeatureNodeFactory.make(operation: .thicken(.init(target: .init(featureID: source),
-                    thickness: .length(0.002, .meter))), id: FeatureID(), in: document.cadDocument,
+                    front: .length(0.002, .meter), back: .length(0, .meter))), id: FeatureID(), in: document.cadDocument,
                     tolerance: document.modelingSettings.tolerance)
                 _ = try document.appendFeatureGraph(.init(features: [feature], primaryFeatureID: feature.id))
                 return EditorSession(document: document)

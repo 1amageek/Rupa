@@ -144,6 +144,8 @@ enum ProductionMainViewActionManifest {
         "matchFaces",
         "removeFillets",
         "removeRedundantTopology",
+        "hollow",
+        "thicken",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

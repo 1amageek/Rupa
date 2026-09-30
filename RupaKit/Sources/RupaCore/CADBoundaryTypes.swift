@@ -111,7 +111,6 @@ public typealias SketchTangentOrientation = SwiftCAD.SketchTangentOrientation
 public typealias SketchCurveSampler = SwiftCAD.SketchCurveSampler
 public typealias SweepFeature = SwiftCAD.SweepFeature
 public typealias InvoluteGearFeature = SwiftCAD.InvoluteGearFeature
-public typealias ThickenSide = SwiftCAD.ThickenSide
 public typealias LoftFeature = SwiftCAD.LoftFeature
 public typealias LoftGuideReference = SwiftCAD.LoftGuideReference
 public typealias LoftSectionReference = SwiftCAD.LoftSectionReference

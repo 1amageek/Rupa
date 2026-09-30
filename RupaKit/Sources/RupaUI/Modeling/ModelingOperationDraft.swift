@@ -116,7 +116,8 @@ struct ModelingOperationDraft: Equatable {
     var twistAngle = "0"
     var doubleHelical = false
     var approximationTolerance = ""
-    var thickenSide = ThickenSide.positive
+    /// Thicken's back thickness; the distance field is its front.
+    var thickenBack = "0"
     var reverseSecondBoundary = false
     var loftSectionControls: [SceneNodeID: LoftSectionDraft] = [:]
     var loftGuideNodeIDs: Set<SceneNodeID> = []
@@ -369,7 +370,10 @@ struct ModelingOperationDraft: Equatable {
             if kind == .surfaceOffset {
                 edit = .offset(distance: try topologyLength(distance, label: "Offset", signed: true, in: document))
             } else if kind == .thicken {
-                edit = .thicken(thickness: try topologyLength(distance, label: "Thickness", in: document), side: thickenSide)
+                edit = .thicken(
+                    front: try topologyLength(distance, label: "Front", allowsZero: true, in: document),
+                    back: try topologyLength(thickenBack, label: "Back", allowsZero: true, in: document)
+                )
             } else {
                 let u0 = try number(uBounds[0], label: "U minimum")
                 let u1 = try number(uBounds[1], label: "U maximum")
@@ -452,12 +456,19 @@ struct ModelingOperationDraft: Equatable {
     }
 
     private func topologyLength(
-        _ text: String, label: String, signed: Bool = false, in document: DesignDocument
+        _ text: String, label: String, signed: Bool = false, allowsZero: Bool = false, in document: DesignDocument
     ) throws -> CADExpression {
         let parameters = document.cadDocument.parameters
         let expression = try ParameterExpressionParser().parse(text, parameters: parameters,
             targetKind: .length, defaults: ParameterExpressionDefaults(lengthUnit: unit))
         let quantity = try parameters.resolvedValue(for: expression)
+        if allowsZero {
+            // One side of a thickening may be nothing; neither may be negative.
+            guard quantity.value.isFinite, quantity.value >= 0 else {
+                throw invalid("\(label) must resolve to a finite length that is not negative.")
+            }
+            return expression
+        }
         guard quantity.value.isFinite,
               (signed ? abs(quantity.value) : quantity.value) > document.modelingSettings.tolerance.distance else {
             throw invalid("\(label) must resolve to a finite \(signed ? "non-zero" : "positive") length above modeling tolerance.")

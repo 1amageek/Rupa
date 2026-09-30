@@ -11,7 +11,7 @@ public struct NativeFeatureLengthEditor: FeatureLengthEditing {
         case .chamfer(let value): .init(title: "Distance", expression: value.distance)
         case .g2Blend(let value): .init(title: "Distance", expression: value.distance)
         case .shell(let value): .init(title: "Wall thickness", expression: value.thickness)
-        case .thicken(let value): .init(title: "Thickness", expression: value.thickness)
+        case .thicken(let value): .init(title: "Front thickness", expression: value.front)
         case .surfaceOffset(let value): .init(title: "Signed normal offset", expression: value.distance)
         default: nil
         }
@@ -31,7 +31,7 @@ public struct NativeFeatureLengthEditor: FeatureLengthEditing {
         case .shell(let value):
             return .shell(.init(target: value.target, removedFaces: value.removedFaces, thickness: expression))
         case .thicken(let value):
-            return .thicken(.init(target: value.target, thickness: expression, side: value.side))
+            return .thicken(.init(target: value.target, front: expression, back: value.back))
         case .surfaceOffset(let value):
             return .surfaceOffset(.init(target: value.target, distance: expression))
         default:
