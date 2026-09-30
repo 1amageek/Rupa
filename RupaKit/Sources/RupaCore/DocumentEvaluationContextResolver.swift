@@ -1,6 +1,13 @@
 import SwiftCAD
 import RupaCoreTypes
 
+/// The evaluated form of a document for a command or query.
+///
+/// A current evaluation that describes the document (same generation and source identity) is
+/// returned as it is. One that no longer does, because the command already changed the document,
+/// seeds the kernel's incremental evaluation, so only what changed is evaluated again; this is the
+/// same materialized evaluation the store accepts as exact when it matches. Without a current
+/// evaluation, or with an injected evaluator, the document is evaluated from scratch.
 public struct DocumentEvaluationContextResolver: Sendable {
     private let pipelineOverride: CADPipeline?
     private let exactEvaluatorOverride: (any ExactDocumentEvaluating)?
@@ -29,6 +36,12 @@ public struct DocumentEvaluationContextResolver: Sendable {
         }
 
         do {
+            if pipelineOverride == nil, let base = currentEvaluation?.evaluatedDocument {
+                DocumentWorkProbe.current?.recordIncrementalEvaluation()
+                return try DocumentEvaluator.modelingDefault(for: document, objectRegistry: objectRegistry)
+                    .evaluate(document.cadDocument, reusing: base)
+            }
+            DocumentWorkProbe.current?.recordEvaluationFromScratch()
             let pipeline = try pipelineOverride ?? .modelingDefault(
                 for: document,
                 objectRegistry: objectRegistry
@@ -58,6 +71,12 @@ public struct DocumentEvaluationContextResolver: Sendable {
         }
 
         do {
+            if exactEvaluatorOverride == nil, let base = currentEvaluation?.evaluatedDocument {
+                DocumentWorkProbe.current?.recordIncrementalEvaluation()
+                return try DocumentEvaluator.modelingDefault(for: document, objectRegistry: objectRegistry)
+                    .evaluate(document.cadDocument, reusing: base)
+            }
+            DocumentWorkProbe.current?.recordEvaluationFromScratch()
             let evaluator = try exactEvaluatorOverride ?? DocumentEvaluator.modelingDefault(
                 for: document,
                 objectRegistry: objectRegistry

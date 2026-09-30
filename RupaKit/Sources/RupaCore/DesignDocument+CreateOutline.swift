@@ -11,7 +11,9 @@ extension DesignDocument {
     public mutating func createBodyOutlines(
         targets: [SelectionTarget],
         plane: SketchPlane,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let owner = "Create Outline"
         guard !targets.isEmpty else {
@@ -19,7 +21,10 @@ extension DesignDocument {
         }
         let tolerance = modelingSettings.tolerance
         let system = try SketchPlaneCoordinateSystem(plane: plane)
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }

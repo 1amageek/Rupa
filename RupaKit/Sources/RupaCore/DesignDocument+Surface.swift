@@ -272,7 +272,9 @@ extension DesignDocument {
         uDistance: CADExpression,
         vDistance: CADExpression,
         normalDistance: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         guard targets.isEmpty == false else {
             throw EditorError(
@@ -293,6 +295,8 @@ extension DesignDocument {
         let resolvedFrame = try resolvedSurfaceFrame(
             frame,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             owner: "Surface control point frame move"
         )
         let delta = try surfaceFrameDelta(
@@ -434,12 +438,16 @@ extension DesignDocument {
     private func resolvedSurfaceFrame(
         _ query: SurfaceFrameQuery,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         owner: String
     ) throws -> SurfaceFrameResult.Frame {
         let frames = try SurfaceFrameService().resolveFrames(
             document: self,
             queries: [query],
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let frame = frames.first else {
             throw EditorError(
@@ -877,7 +885,9 @@ extension DesignDocument {
     public mutating func setSurfaceTrimLoops(
         target: SelectionReference,
         trimLoops: [SurfaceTrimLoop],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let owner = "B-spline surface trim loops"
         let tolerance = modelingSettings.tolerance
@@ -937,7 +947,9 @@ extension DesignDocument {
             } else {
                 let face = try generatedPatchFaceReference(
                     for: surfaceResolution.featureID,
-                    owner: owner
+                    owner: owner,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 let trim = SurfaceTrimFeature(
                     target: SurfaceOperationTargetReference(
@@ -1011,9 +1023,14 @@ extension DesignDocument {
 
     func generatedPatchFaceReference(
         for surfaceFeatureID: FeatureID,
-        owner: String
+        owner: String,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> StableSubshapeReference {
-        let topology = try TopologySnapshotService().snapshot(document: self)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let entry = topology.entries.first(where: { entry in
             guard entry.kind == .face,
                   let subshapeID = GeneratedSubshapeIdentity.subshapeID(from: entry.subshapeID) else {

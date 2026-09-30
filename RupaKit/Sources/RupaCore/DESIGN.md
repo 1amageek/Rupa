@@ -989,6 +989,30 @@ the published evaluation a commit produced instead of evaluating again.
 feature, where each body had sorted the whole table twice (once for its own
 entries and once for its first body).
 
+Every command that reads evaluated topology receives the store's evaluation.
+The document operations, their target resolvers
+(`GeneratedTopologySelectionResolver`, `ConstructionPlaneTargetResolver`,
+`EdgeOffsetSupportFaceResolver`, the dimension resolvers, `TopologySnapshotMemo`)
+and the workspace surface frame checks take `currentEvaluation` and
+`currentGeneration`, and `CADDocumentStore` passes its current evaluation and
+generation to each; `EditorCommandPlanningContext` carries them to command
+planning. The store's evaluation is nil unless it was made for the store's
+generation, so a command in a group after an unevaluated mutation reads none.
+Before, each of these read the whole document from a fresh exact evaluation
+because the argument defaulted to nil at the call. `DocumentEvaluationContextResolver`
+returns a matching evaluation as it is; one that no longer describes the
+document, because the command already changed it (Boolean pieces, pattern
+regeneration after a parameter edit), seeds the kernel's incremental
+evaluation, so only what changed is evaluated. A direct topology edit and a
+sheet boundary edit evaluate nothing themselves: the store's evaluation boundary
+decides whether the result evaluates and restores the document when it does not
+(`TopologyEditing/DESIGN.md`). `CurrentEvaluationPlumbingAuditTests` fails when a
+RupaCore topology read omits its evaluation or the store calls an operation that
+accepts one without it; `CommandEvaluationReuseTests` counts, through
+`DocumentWorkProbe`, that a face delete through the store evaluates nothing from
+scratch, that a face move evaluates only at the store boundary, and that a
+changed document reuses every unchanged feature of the current evaluation.
+
 ### Snap placement contract
 
 Snap candidates are offered where the geometry is displayed. Each source is

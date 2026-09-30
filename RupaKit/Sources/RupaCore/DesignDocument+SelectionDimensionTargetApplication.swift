@@ -6,7 +6,9 @@ extension DesignDocument {
     mutating func applyObjectFaceDistanceDimension(
         dimension: SelectionDimension,
         context: SelectionDimensionObjectFaceDistanceContext,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         let targetDistance = try resolvedLength(
             dimension.target,
@@ -23,13 +25,17 @@ extension DesignDocument {
             target: context.target,
             kind: context.kind,
             value: dimension.target,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
     func sourceObjectFaceDistanceDimensionContextIfPresent(
         for dimension: SelectionDimension,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SelectionDimensionObjectFaceDistanceContext? {
         guard case .subshape(let firstReference) = dimension.first,
               case .subshape(let secondReference) = dimension.second else {
@@ -37,7 +43,9 @@ extension DesignDocument {
         }
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard
             let firstTarget = try generatedFaceTargetIfPresent(
@@ -58,6 +66,8 @@ extension DesignDocument {
             second: secondTarget,
             in: self,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology,
             operationName: "Selection face-distance application"
         ) else {

@@ -50,7 +50,9 @@ struct ViewportBodyResizeBaseline: Sendable {
     }
 
     static func resolve(document: DesignDocument, nodeID: SceneNodeID,
-                        worldTransform: Transform3D) throws -> Self? {
+                        worldTransform: Transform3D,
+                        currentEvaluation: DocumentEvaluationContext?,
+                        currentGeneration: DocumentGeneration?) throws -> Self? {
         guard let node = document.productMetadata.sceneNodes[nodeID],
               let featureID = node.reference?.featureID,
               let feature = document.cadDocument.designGraph.nodes[document.boxExtrusionFeatureID(featureID)],
@@ -62,7 +64,8 @@ struct ViewportBodyResizeBaseline: Sendable {
               sketch.entities.count == 4,
               sketch.entities.values.allSatisfy({ if case .line = $0 { true } else { false } }) else { return nil }
         let source = try ObjectDimensionSourceResolver().resolve(
-            target: .init(sceneNodeID: nodeID, component: .object), in: document)
+            target: .init(sceneNodeID: nodeID, component: .object), in: document,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
         let range = try extrude.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
             try document.cadDocument.parameters.resolvedValue(for: $0)
         }

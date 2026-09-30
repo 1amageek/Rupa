@@ -45,7 +45,8 @@ extension ViewportSpatialOverlayProducer {
             if input.allowsBodyResize, selected.count == 1, case .cad(_, let output) = item.reference,
                output == reference.featureID?.description {
                 resize = try ViewportBodyResizeBaseline.resolve(document: input.document, nodeID: nodeID,
-                    worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, node.localTransform))
+                    worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, node.localTransform),
+                    currentEvaluation: input.evaluation, currentGeneration: input.evaluationGeneration)
             } else { resize = nil }
             members.append(.init(occurrenceID: item.occurrenceID.rawValue, reference: reference,
                                  sceneNodeID: nodeID, baseLocalTransform: node.localTransform,

@@ -19,7 +19,9 @@ public struct DefaultEditorCommandContextResolver: EditorCommandContextResolving
                 edgeTarget: target,
                 selection: context.selection,
                 document: context.document,
-                objectRegistry: context.objectRegistry
+                objectRegistry: context.objectRegistry,
+                currentEvaluation: context.currentEvaluation,
+                currentGeneration: context.generation
             )
             guard resolution.status != .ambiguous else {
                 throw EditorError(

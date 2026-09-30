@@ -6,7 +6,9 @@ extension DesignDocument {
     public mutating func offsetBodyFace(
         target: SelectionTarget,
         distance: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let offsetMeters = try resolvedLengthValue(distance, owner: "Face offset distance")
         guard abs(offsetMeters) > 1.0e-12 else {
@@ -21,7 +23,9 @@ extension DesignDocument {
         )
         let face = try editableBodyFace(
             for: resolvedTarget.target,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let featureID = resolvedTarget.featureID
         guard var feature = cadDocument.designGraph.nodes[featureID],

@@ -403,7 +403,8 @@ struct SurfaceFillCommandTests {
                     ))
                 })
             ),
-            metadata: copied.productMetadata, cadDocument: copied.cadDocument, authoredMeshAssets: copied.authoredMeshAssets)
+            metadata: copied.productMetadata, cadDocument: copied.cadDocument, authoredMeshAssets: copied.authoredMeshAssets,
+            currentEvaluation: nil, currentGeneration: nil)
         let clone = try PatternArrayIndependentCopyBuilder().createOutputs(name: "Copied boundaries",
             fragment: fragment,
             transforms: [.translation(Vector3D(x: 1, y: 0, z: 0))],

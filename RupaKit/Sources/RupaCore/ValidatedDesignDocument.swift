@@ -9,7 +9,7 @@ public struct ValidatedDesignDocument: Sendable {
         _ document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        DocumentValidationProbe.current?.recordValidation()
+        DocumentWorkProbe.current?.recordValidation()
         try document.modelingSettings.validate()
         let validatedCADDocument = try ValidatedCADDocument(
             document.cadDocument,

@@ -5,13 +5,17 @@ import RupaCoreTypes
 extension DesignDocument {
     func sourceSelectionDimensionApplication(
         for dimension: SelectionDimension,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SelectionDimensionSourceApplication {
         switch dimension.kind {
         case .distance:
             if let objectFaceContext = try sourceObjectFaceDistanceDimensionContextIfPresent(
                 for: dimension,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             ) {
                 return .objectFaceDistance(objectFaceContext)
             }

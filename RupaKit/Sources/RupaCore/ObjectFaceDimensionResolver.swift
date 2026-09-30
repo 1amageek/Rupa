@@ -13,6 +13,8 @@ struct ObjectFaceDimensionResolver: Sendable {
         source: ObjectDimensionSource,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshot? = nil,
         operationName: String = "Object face dimension"
     ) throws -> ObjectFaceDimension? {
@@ -20,6 +22,8 @@ struct ObjectFaceDimensionResolver: Sendable {
             for: target,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology,
             operationName: operationName
         ) else {
@@ -46,6 +50,8 @@ struct ObjectFaceDimensionResolver: Sendable {
         second: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshot? = nil,
         operationName: String = "Object face-pair dimension"
     ) throws -> ObjectFaceDimension? {
@@ -56,12 +62,16 @@ struct ObjectFaceDimensionResolver: Sendable {
             for: first,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology,
             operationName: operationName
         ), let secondFace = try bodyFaceIfPresent(
             for: second,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology,
             operationName: operationName
         ) else {
@@ -69,8 +79,14 @@ struct ObjectFaceDimensionResolver: Sendable {
         }
 
         let sourceResolver = ObjectDimensionSourceResolver()
-        let firstSource = try sourceResolver.resolve(target: first, in: document)
-        let secondSource = try sourceResolver.resolve(target: second, in: document)
+        let firstSource = try sourceResolver.resolve(
+            target: first, in: document,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let secondSource = try sourceResolver.resolve(
+            target: second, in: document,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard firstSource.featureID == secondSource.featureID,
               firstSource.sceneNodeID == secondSource.sceneNodeID,
               firstSource.shape == secondSource.shape else {
@@ -97,6 +113,8 @@ struct ObjectFaceDimensionResolver: Sendable {
         for target: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshot?,
         operationName: String
     ) throws -> BodyFace? {
@@ -122,6 +140,8 @@ struct ObjectFaceDimensionResolver: Sendable {
             for: target,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             operationName: operationName
         )
     }

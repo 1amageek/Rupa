@@ -8,10 +8,15 @@ extension DesignDocument {
         target: SelectionTarget,
         cutter: SelectionTarget,
         options: CutCurveOptions = CutCurveOptions(),
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SketchEntityID] {
         if case .face = cutter.component {
-            return try cutSketchCurve(target: target, byFace: cutter, objectRegistry: objectRegistry)
+            return try cutSketchCurve(
+                target: target, byFace: cutter, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         }
         let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter, options: options)
         if case .circle = targetSelection.entity {
@@ -63,7 +68,9 @@ extension DesignDocument {
         targets: [SelectionTarget],
         cutters: [SelectionTarget],
         options: CutCurveOptions = CutCurveOptions(),
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SketchEntityID] {
         guard !targets.isEmpty, !cutters.isEmpty else {
             throw EditorError(code: .commandInvalid, message: "Cut Curve needs at least one target and one cutter.")
@@ -81,9 +88,15 @@ extension DesignDocument {
                 var next: [SelectionTarget] = []
                 for piece in pieces {
                     next.append(piece)
-                    guard try updated.cutCurveCrosses(target: piece, cutter: cutter, options: options) else { continue }
+                    // The evaluation describes this document only until the first cut changes it;
+                    // later reads find it stale and evaluate the cut document instead.
+                    guard try updated.cutCurveCrosses(
+                        target: piece, cutter: cutter, options: options, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+                    ) else { continue }
                     let made = try updated.cutSketchCurve(
-                        target: piece, cutter: cutter, options: options, objectRegistry: objectRegistry
+                        target: piece, cutter: cutter, options: options, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
                     )
                     wasCut = true
                     created += made
@@ -327,9 +340,15 @@ extension DesignDocument {
 extension DesignDocument {
     /// Cut Curve with a face as the cutter: the target is split wherever it crosses the face,
     /// inside the face's trim (`faceCutFractions`).
-    mutating func cutSketchCurve(target: SelectionTarget, byFace face: SelectionTarget, objectRegistry: ObjectTypeRegistry) throws -> [SketchEntityID] {
+    mutating func cutSketchCurve(
+        target: SelectionTarget, byFace face: SelectionTarget, objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?
+    ) throws -> [SketchEntityID] {
         let selection = try editableSketchEntity(for: target, operationName: "Cut Curve target")
-        let fractions = try faceCutFractions(target: target, face: face)
+        let fractions = try faceCutFractions(
+            target: target, face: face, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard !fractions.isEmpty else {
             throw EditorError(code: .commandInvalid, message: "Cut Curve: the face does not cross the target curve.")
         }
@@ -353,13 +372,19 @@ extension DesignDocument {
     /// target read in world space through its sketch's placement, its height along the face's
     /// outward normal (Swift-CAD's `FaceUVNChart`, in the face body's frame) sampled for sign
     /// changes and bisected, each crossing kept when it lies inside the face's trim.
-    func faceCutFractions(target: SelectionTarget, face: SelectionTarget) throws -> [Double] {
+    func faceCutFractions(
+        target: SelectionTarget, face: SelectionTarget, objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?
+    ) throws -> [Double] {
         let owner = "Cut Curve"
         let selection = try editableSketchEntity(for: target, operationName: "\(owner) target")
         if case .circle = selection.entity {
             throw EditorError(code: .commandInvalid, message: "\(owner): a face cuts lines, arcs and open splines.")
         }
-        let topology = try TopologySnapshotService().snapshot(document: self)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument,
               let entry = topology.entries.first(where: { $0.kind == .face && $0.selectionTarget() == face }),
               let reference = entry.stableReference else {

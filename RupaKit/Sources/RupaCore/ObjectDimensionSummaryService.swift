@@ -12,12 +12,16 @@ public struct ObjectDimensionSummaryService: Sendable {
         document: DesignDocument,
         targets: [SelectionTarget],
         displayUnit: LengthDisplayUnit,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> ObjectDimensionSummaryResult {
         let snapshot = try snapshotService.snapshot(
             document: document,
             targets: targets,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return ObjectDimensionSummaryResult(
             displayUnit: displayUnit,

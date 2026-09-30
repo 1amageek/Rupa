@@ -11,11 +11,16 @@ extension DesignDocument {
     public mutating func projectBodyIntersection(
         first: SelectionTarget,
         second: SelectionTarget,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let owner = "Project Body Body"
         let tolerance = modelingSettings.tolerance
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }

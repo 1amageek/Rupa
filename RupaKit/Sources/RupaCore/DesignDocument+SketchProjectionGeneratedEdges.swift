@@ -8,6 +8,8 @@ extension DesignDocument {
         targetSystem: SketchPlaneCoordinateSystem,
         operationName: String,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: inout TopologySnapshot?
     ) throws -> SketchEntity {
         guard case .edge(let componentID) = target.component,
@@ -20,7 +22,9 @@ extension DesignDocument {
         if topology == nil {
             topology = try TopologySnapshotService().snapshot(
                 document: self,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         guard let topology else {

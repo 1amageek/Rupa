@@ -35,13 +35,22 @@ public struct WorkspaceState: Sendable {
         self.surfaceFrameDisplays = surfaceFrameDisplays
     }
 
+    /// Applies `command` against `document`; `currentEvaluation`, the document's evaluation at
+    /// `currentGeneration`, is read by surface frame displays instead of evaluating the document.
     public mutating func apply(
         _ command: WorkspaceCommand,
-        document: DesignDocument
+        document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> WorkspaceCommandResult {
         var updated = self
-        try updated.applyWithoutRevision(command, document: document)
-        try updated.validate(against: document)
+        try updated.applyWithoutRevision(
+            command, document: document,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        try updated.validate(
+            against: document, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         updated.revision = try revision.advanced()
         self = updated
         return WorkspaceCommandResult(
@@ -96,7 +105,14 @@ public struct WorkspaceState: Sendable {
         }
     }
 
-    public func validate(against document: DesignDocument) throws {
+    /// Checks every display and reference against `document`; `currentEvaluation`, the document's
+    /// evaluation at `currentGeneration`, lets surface frame displays resolve against it instead of
+    /// evaluating the document again per display.
+    public func validate(
+        against document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
         try ruler.validate()
         if let activeConstructionPlaneID,
            document.productMetadata.constructionPlanes[activeConstructionPlaneID] == nil {
@@ -118,14 +134,18 @@ public struct WorkspaceState: Sendable {
             try display.validate()
             _ = try SurfaceFrameService().resolveFrames(
                 document: document,
-                queries: [display.query]
+                queries: [display.query],
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
     }
 
     private mutating func applyWithoutRevision(
         _ command: WorkspaceCommand,
-        document: DesignDocument
+        document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         switch command {
         case .setDisplayUnit(let unit):
@@ -160,7 +180,9 @@ public struct WorkspaceState: Sendable {
             try setSurfaceFrameDisplay(
                 query: query,
                 isVisible: isVisible,
-                document: document
+                document: document,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
     }

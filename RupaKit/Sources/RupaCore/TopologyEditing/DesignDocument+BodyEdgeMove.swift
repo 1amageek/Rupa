@@ -227,8 +227,10 @@ extension DesignDocument {
         )
     }
 
-    /// Appends one direct-edit feature on the selections' body and keeps it only if the document
-    /// still evaluates.
+    /// Appends one direct-edit feature on the selections' body. Whether the result evaluates is
+    /// decided where every command's result is: the store evaluates the candidate once, reusing
+    /// its current evaluation, and restores the document when it fails. Evaluating the whole
+    /// document here as well repeated that work from scratch on every edit.
     private mutating func appendDirectEdit(
         _ operation: FeatureOperation,
         name: String,
@@ -240,22 +242,15 @@ extension DesignDocument {
         )
         feature.name = name
         let previous = self
-        var didCommit = false
-        defer { if !didCommit { self = previous } }
-        try appendTopologyEdit(
-            FeatureGraphTransaction(features: [feature], primaryFeatureID: feature.id),
-            replacing: selections.first, objectRegistry: objectRegistry
-        )
         do {
-            _ = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
-                document: self, objectRegistry: objectRegistry,
-                currentEvaluation: nil, currentGeneration: nil,
-                failurePrefix: name
+            try appendTopologyEdit(
+                FeatureGraphTransaction(features: [feature], primaryFeatureID: feature.id),
+                replacing: selections.first, objectRegistry: objectRegistry
             )
-        } catch let error as EditorError {
-            throw EditorError(code: .commandInvalid, message: error.message)
+        } catch {
+            self = previous
+            throw error
         }
-        didCommit = true
     }
 }
 

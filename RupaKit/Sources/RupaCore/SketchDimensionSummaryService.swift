@@ -12,12 +12,16 @@ public struct SketchDimensionSummaryService: Sendable {
         document: DesignDocument,
         targets: [SelectionTarget],
         displayUnit: LengthDisplayUnit,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SketchDimensionSummaryResult {
         let snapshot = try snapshotService.snapshot(
             document: document,
             targets: targets,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return SketchDimensionSummaryResult(
             displayUnit: displayUnit,

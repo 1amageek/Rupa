@@ -250,12 +250,20 @@ extension DesignDocument {
         target: SelectionTarget,
         kind: ObjectDimensionKind,
         value: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
-        if try setFeatureDimension(target: target, kind: kind, value: value, objectRegistry: objectRegistry) {
+        if try setFeatureDimension(
+            target: target, kind: kind, value: value, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        ) {
             return
         }
-        let source = try ObjectDimensionSourceResolver().resolve(target: target, in: self)
+        let source = try ObjectDimensionSourceResolver().resolve(
+            target: target, in: self,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         let dimensions = (
             sizeX: source.sizeX,
             sizeY: source.sizeY,

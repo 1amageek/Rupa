@@ -15,7 +15,9 @@ extension DesignDocument {
         referenceFace: SelectionTarget,
         targetFace: SelectionTarget,
         options: CurveDeformationOptions,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let owner = "Deform Solid and Sheet"
         guard !targets.isEmpty else {
@@ -31,7 +33,10 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "\(owner): \(error)")
         }
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         func stableFace(_ face: SelectionTarget, role: String) throws -> StableSubshapeReference {
             guard case .face = face.component,
                   let entry = topology.entries.first(where: { $0.kind == .face && $0.selectionTarget() == face }),

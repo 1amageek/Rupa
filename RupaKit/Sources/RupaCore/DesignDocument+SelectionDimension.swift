@@ -10,18 +10,24 @@ public extension DesignDocument {
         first: SelectionTarget,
         second: SelectionTarget,
         target: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionDimensionID {
         let resolver = SelectionDimensionTargetResolver()
         let firstReference = try resolver.reference(
             for: first,
             in: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let secondReference = try resolver.reference(
             for: second,
             in: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         var updatedCADDocument = cadDocument
         let dimensionID: SelectionDimensionID
@@ -85,7 +91,9 @@ public extension DesignDocument {
     @discardableResult
     mutating func applySelectionDimensionTarget(
         id: SelectionDimensionID,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionDimension {
         let originalDocument = self
         do {
@@ -99,7 +107,9 @@ public extension DesignDocument {
             let dimension = cadDocument.selectionDimensions[dimensionIndex]
             let application = try sourceSelectionDimensionApplication(
                 for: dimension,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             switch application {
             case .lineLength(let context):
@@ -107,7 +117,9 @@ public extension DesignDocument {
                     target: context.target,
                     kind: .length,
                     value: dimension.target,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
 
                 let updatedLength = try sourceLineLength(
@@ -141,7 +153,9 @@ public extension DesignDocument {
                     target: context.target,
                     kind: .radius,
                     value: dimension.target,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
                     throw EditorError(
@@ -167,7 +181,9 @@ public extension DesignDocument {
                     target: context.target,
                     kind: .angle,
                     value: .angle(appliedAngle, .radian),
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
                     throw EditorError(
@@ -184,7 +200,9 @@ public extension DesignDocument {
                     target: context.target,
                     kind: .angle,
                     value: dimension.target,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 let updatedParameters = try sourceArcEndpointParameters(
                     featureID: context.featureID,
@@ -250,7 +268,9 @@ public extension DesignDocument {
                 try applyObjectFaceDistanceDimension(
                     dimension: dimension,
                     context: context,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
                     throw EditorError(

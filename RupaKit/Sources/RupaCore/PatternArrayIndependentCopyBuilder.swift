@@ -61,7 +61,9 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
     /// Captures copies in the array frame before stale outputs are removed.
     func sourceFragment(
         definition: ComponentDefinition, metadata: ProductMetadata, cadDocument: CADDocument,
-        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset]
+        authoredMeshAssets: [GeometrySourceID: AuthoredMeshAsset],
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SceneFragment {
         let hierarchy = try SceneNodeHierarchy(metadata: metadata)
         let sourceIDs = definition.rootSceneNodeIDs.flatMap { hierarchy.subtreeIDs(of: $0) }
@@ -81,7 +83,10 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         // The temporary copies are not generated outputs. Array metadata may be midway
         // through creation here; it does not own anything in this private realization.
         temporary.productMetadata.patternArrays = [:]
-        var roots = try temporary.pasteSceneFragment(definitionFragment, placements: [frame])
+        var roots = try temporary.pasteSceneFragment(
+            definitionFragment, placements: [frame],
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         while true {
             let current = try SceneNodeHierarchy(metadata: temporary.productMetadata)
             let ids = roots.flatMap { current.subtreeIDs(of: $0) }
@@ -89,7 +94,10 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
                   let node = temporary.productMetadata.sceneNodes[id],
                   let instanceID = node.reference?.componentInstanceID,
                   let instance = temporary.productMetadata.componentInstances[instanceID] else { break }
-            let expanded = try temporary.realizeComponentInstances(sceneNodeIDs: [id])
+            let expanded = try temporary.realizeComponentInstances(
+                sceneNodeIDs: [id],
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
             for root in expanded {
                 let visible = (temporary.productMetadata.sceneNodes[root]?.isVisible ?? false)
                     && node.isVisible && instance.isVisible

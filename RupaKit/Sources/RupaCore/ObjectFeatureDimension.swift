@@ -76,11 +76,16 @@ extension DesignDocument {
         target: SelectionTarget,
         kind: ObjectDimensionKind,
         value: CADExpression,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> Bool {
         let document = self
         guard let dimension = try ObjectFeatureDimension.resolve(target: target, in: self, topology: {
-            try TopologySnapshotService().snapshot(document: document, objectRegistry: objectRegistry, metricPolicy: .omit)
+            try TopologySnapshotService().snapshot(
+                document: document, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, metricPolicy: .omit
+            )
         }) else { return false }
         let meters = try resolvedPositiveLengthValue(value, owner: "Dimension")
         var updated = self

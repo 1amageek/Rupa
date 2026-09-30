@@ -9434,7 +9434,10 @@ private struct ProjectMainViewContent: View {
             return {
                 do {
                     bridgeEdgeSession = WorkspaceBridgeEdgeSession(
-                        nearest: try snapshot.document.document.spatialBridgeEnds(joining: targets)
+                        nearest: try snapshot.document.document.spatialBridgeEnds(
+                            joining: targets, objectRegistry: objectRegistry,
+                            currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+                        )
                     )
                     reportToolStatus("Bridge Edge: choose the sides, continuity and tension, then OK, Return or right-click.")
                 } catch {
@@ -9451,7 +9454,10 @@ private struct ProjectMainViewContent: View {
         }) else { return nil }
         return {
             submitSource(name: "Bridge", commands: { current in
-                let ends = try current.document.document.spatialBridgeEnds(joining: targets)
+                let ends = try current.document.document.spatialBridgeEnds(
+                    joining: targets, objectRegistry: current.objectRegistry,
+                    currentEvaluation: current.cadInteraction, currentGeneration: current.documentGeneration
+                )
                 return [.createBridgeCurveBetweenEnds(first: ends.0, second: ends.1, continuity: .g1)]
             })
         }
@@ -10800,7 +10806,9 @@ private struct ProjectMainViewContent: View {
             document: snapshot.document.document,
             sceneBrowserRows: sceneBrowserRows,
             selectionScope: selectionScope,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: snapshot.cadInteraction,
+            generation: snapshot.documentGeneration
         )
     }
 
@@ -12271,7 +12279,8 @@ private struct ProjectMainViewContent: View {
         let ids = shapes.map(\.id)
         submitSource(name: "setObjectSize") { current in
             try WorkspaceObjectShapeInspectorStateBuilder.sizeCommands(
-                axis, meters: meters, nodeIDs: ids, in: current.document.document)
+                axis, meters: meters, nodeIDs: ids, in: current.document.document,
+                currentEvaluation: current.cadInteraction, currentGeneration: current.documentGeneration)
         }
     }
 
@@ -13599,7 +13608,8 @@ private struct ProjectMainViewContent: View {
             let ids = shapes.map(\.id)
             submitSource(name: "setObjectDimension") { current in
                 try WorkspaceObjectShapeInspectorStateBuilder.dimensionCommands(
-                    dimension, meters: meters, nodeIDs: ids, in: current.document.document)
+                    dimension, meters: meters, nodeIDs: ids, in: current.document.document,
+                    currentEvaluation: current.cadInteraction, currentGeneration: current.documentGeneration)
             }
             return
         }

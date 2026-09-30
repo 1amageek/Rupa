@@ -179,9 +179,16 @@ extension DesignDocument {
     /// Target fractions strictly inside the target, in the parameter `splitSketchCurve` takes.
     /// Whether `cutter` cuts `target` at all: two crossings on a circle target, an interior
     /// crossing on any other target, with the cutter extended when `options` says so.
-    func cutCurveCrosses(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions) throws -> Bool {
+    func cutCurveCrosses(
+        target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil, currentGeneration: DocumentGeneration? = nil
+    ) throws -> Bool {
         if case .face = cutter.component {
-            return try !faceCutFractions(target: target, face: cutter).isEmpty
+            return try !faceCutFractions(
+                target: target, face: cutter, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            ).isEmpty
         }
         let (targetSelection, cutterSelection) = try placedCutSelections(target: target, cutter: cutter, options: options)
         try validateCutSketchCurveSelections(

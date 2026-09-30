@@ -449,7 +449,9 @@ extension DesignDocument {
         keepTools: Bool = false,
         targetMaterial: BooleanMaterial = .default,
         toolMaterial: BooleanMaterial = .default,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Boolean")
         guard targets.allSatisfy({ $0.placement == nil }), tools.allSatisfy({ $0.placement == nil }) else {
@@ -482,7 +484,9 @@ extension DesignDocument {
             asPieces: operation == .slice || operation == .region,
             besideTarget: boolean.firstTarget,
             consumed: targets.map(\.featureID) + (keepTools ? [] : tools.map(\.featureID)),
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
@@ -594,7 +598,9 @@ extension DesignDocument {
         asPieces: Bool,
         besideTarget target: FeatureID,
         consumed: [FeatureID],
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         let geometryRole: ObjectDescriptor.GeometryRole = boolean.resultPort == .sheet ? .surface : .solid
@@ -611,7 +617,10 @@ extension DesignDocument {
             try removeSceneNodes(presenting: consumed)
             return
         }
-        let pieceCount = try bodyComponentCount(of: boolean.featureID, objectRegistry: objectRegistry, owner: name)
+        let pieceCount = try bodyComponentCount(
+            of: boolean.featureID, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, owner: name
+        )
         for index in 0..<pieceCount {
             let pieceID = FeatureID()
             let pieceName = "\(name) \(index + 1)"
@@ -779,10 +788,15 @@ extension DesignDocument {
 
     /// How many components (solids with their voids, or sheet shells) the body `featureID`
     /// evaluates to now.
-    func bodyComponentCount(of featureID: FeatureID, objectRegistry: ObjectTypeRegistry, owner: String) throws -> Int {
+    func bodyComponentCount(
+        of featureID: FeatureID, objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?, owner: String
+    ) throws -> Int {
         let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
             document: self,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             failurePrefix: "\(owner) requires its result evaluated"
         )
         guard case let .body(bodyID) = evaluated.subshapes[SubshapeID(featureID: featureID, role: GeneratedSubshapeRole.body.rawValue, ordinal: 0)],

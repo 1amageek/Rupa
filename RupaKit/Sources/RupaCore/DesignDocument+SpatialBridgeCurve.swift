@@ -18,15 +18,21 @@ extension DesignDocument {
         second: SpatialBridgeEnd,
         continuity: BridgeCurveContinuity,
         tensions: (first: Double, second: Double) = (1, 1),
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let owner = "Bridge Curve"
         guard [tensions.first, tensions.second].allSatisfy({ $0.isFinite && $0 > 0 }) else {
             throw EditorError(code: .commandInvalid, message: "\(owner) tension must be positive.")
         }
         let tolerance = modelingSettings.tolerance
-        let start = try spatialBridgeFrame(first, owner: owner)
-        let end = try spatialBridgeFrame(second, owner: owner)
+        let topology = TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let start = try spatialBridgeFrame(first, owner: owner, topology: topology)
+        let end = try spatialBridgeFrame(second, owner: owner, topology: topology)
         let chord = (end.point - start.point).length
         // Each end's tension scales its end speed from the chord length.
         func constraint(
@@ -95,18 +101,36 @@ extension DesignDocument {
     }
 
     /// The nearest ends of two curves or edges, for Bridge on a selection of two.
-    public func spatialBridgeEnds(joining targets: [SelectionTarget]) throws -> (SpatialBridgeEnd, SpatialBridgeEnd) {
+    /// The body edges' topology is read once, from `currentEvaluation` when it describes this
+    /// document, for all four end pairings.
+    public func spatialBridgeEnds(
+        joining targets: [SelectionTarget],
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> (SpatialBridgeEnd, SpatialBridgeEnd) {
         guard targets.count == 2 else {
             throw EditorError(code: .commandInvalid, message: "Bridge Curve joins two curves or edges.")
         }
+        let topology = TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        var points: [[Point3D]] = []
+        for target in targets {
+            points.append(try [0.0, 1.0].map { fraction in
+                try spatialBridgeFrame(
+                    SpatialBridgeEnd(target: target, fraction: fraction), owner: "Bridge Curve", topology: topology
+                ).point
+            })
+        }
         var best: (distance: Double, ends: (SpatialBridgeEnd, SpatialBridgeEnd))?
-        for a in [0.0, 1.0] {
-            for b in [0.0, 1.0] {
-                let first = SpatialBridgeEnd(target: targets[0], fraction: a)
-                let second = SpatialBridgeEnd(target: targets[1], fraction: b)
-                let distance = (try spatialBridgeFrame(first, owner: "Bridge Curve").point
-                    - (try spatialBridgeFrame(second, owner: "Bridge Curve").point)).length
-                if best == nil || distance < best!.distance { best = (distance, (first, second)) }
+        for (aIndex, a) in [0.0, 1.0].enumerated() {
+            for (bIndex, b) in [0.0, 1.0].enumerated() {
+                let distance = (points[0][aIndex] - points[1][bIndex]).length
+                if best == nil || distance < best!.distance {
+                    best = (distance, (SpatialBridgeEnd(target: targets[0], fraction: a), SpatialBridgeEnd(target: targets[1], fraction: b)))
+                }
             }
         }
         return best!.ends
@@ -115,7 +139,7 @@ extension DesignDocument {
     /// A bridge end as exact world geometry: the curve, its parameter at the end's fraction, the
     /// point there, the outward direction the bridge leaves along, and the curve's derivative.
     private func spatialBridgeFrame(
-        _ end: SpatialBridgeEnd, owner: String
+        _ end: SpatialBridgeEnd, owner: String, topology: TopologySnapshotMemo
     ) throws -> (curve: Curve3D, parameter: Double, point: Point3D, outward: Vector3D, derivative: Vector3D) {
         guard end.fraction.isFinite, end.fraction >= 0, end.fraction <= 1 else {
             throw EditorError(code: .commandInvalid, message: "\(owner) end must lie on its curve.")
@@ -139,7 +163,7 @@ extension DesignDocument {
             ))
             parameter = local.parameter
         case .edge:
-            let topology = try TopologySnapshotService().snapshot(document: self)
+            let topology = try topology.get()
             guard let evaluated = topology.evaluatedDocument,
                   let entry = topology.entries.first(where: { $0.kind == .edge && $0.selectionTarget() == end.target }),
                   let reference = entry.stableReference else {
@@ -252,7 +276,9 @@ extension DesignDocument {
         _ second: SpatialBridgeEnd,
         continuity: BridgeCurveContinuity,
         tensions: SpatialBridgeTensions = SpatialBridgeTensions(),
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         if case .sketchEntity(let a) = first.target.component, case .sketchEntity(let b) = second.target.component,
            let firstReference = a.sketchEntityReference, let secondReference = b.sketchEntityReference,
@@ -268,7 +294,9 @@ extension DesignDocument {
         }
         return try createSpatialBridgeCurve(
             first: first, second: second, continuity: continuity,
-            tensions: (tensions.first, tensions.second), objectRegistry: objectRegistry
+            tensions: (tensions.first, tensions.second), objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 }

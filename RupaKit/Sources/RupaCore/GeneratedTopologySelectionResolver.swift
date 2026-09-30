@@ -13,7 +13,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for sceneNodeID: SceneNodeID,
         bodyFace requestedBodyFace: BodyFace,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionComponentID? {
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: sceneNodeID,
@@ -23,7 +25,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         )
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let context = try rectangleContextIfNeeded(
             for: requestedBodyFace,
@@ -62,7 +66,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for sceneNodeID: SceneNodeID,
         cornerEdge requestedCornerEdge: BodyCornerEdge,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionComponentID? {
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: sceneNodeID,
@@ -77,7 +83,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         )
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         for entry in topology.entries where entry.kind == .edge && entry.sceneNodeID == resolvedSceneNodeID.description {
             let resolvedEdge: BodyCornerEdge
@@ -104,7 +112,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for sceneNodeID: SceneNodeID,
         cornerVertex requestedCornerVertex: BodyCornerVertex,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionComponentID? {
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: sceneNodeID,
@@ -119,7 +129,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         )
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         for entry in topology.entries where entry.kind == .vertex && entry.sceneNodeID == resolvedSceneNodeID.description {
             let resolvedVertex: BodyCornerVertex
@@ -146,11 +158,15 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for target: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil,
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return try bodyFace(
             for: target,
@@ -213,6 +229,8 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for target: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil,
         operationName: String = "Generated topology edge"
     ) throws -> BodyCornerEdge {
         // The target and its body are checked before the snapshot is built, so a target no
@@ -220,7 +238,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         _ = try cornerTarget(target, .edge, in: document, operationName: operationName)
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return try cornerEdge(
             for: target,
@@ -259,6 +279,8 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         for target: SelectionTarget,
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil,
         operationName: String = "Generated topology vertex"
     ) throws -> BodyCornerVertex {
         // The target and its body are checked before the snapshot is built, so a target no
@@ -266,7 +288,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         _ = try cornerTarget(target, .vertex, in: document, operationName: operationName)
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return try cornerVertex(
             for: target,

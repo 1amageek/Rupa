@@ -7,7 +7,9 @@ extension DesignDocument {
         target: SelectionTarget,
         deltaX: CADExpression,
         deltaY: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let deltaXMeters = try resolvedLengthValue(deltaX, owner: "Vertex move delta X")
         let deltaYMeters = try resolvedLengthValue(deltaY, owner: "Vertex move delta Y")
@@ -38,7 +40,9 @@ extension DesignDocument {
         if isRectangleProfile(sketch) {
             let vertex = try editableBodyVertex(
                 for: resolvedTarget.target,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             nextSketch = try movedRectangleProfileSketch(
                 sketch,
@@ -60,7 +64,9 @@ extension DesignDocument {
                 sketchPlane: sketch.plane,
                 expectedKind: .vertex,
                 operationName: "Vertex move",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             nextSketch = try profileLoop.movedVertexSketch(
                 targetVertexIndex: index,

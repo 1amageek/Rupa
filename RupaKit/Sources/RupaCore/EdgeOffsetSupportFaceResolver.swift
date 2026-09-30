@@ -73,7 +73,9 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         edgeTarget: SelectionTarget,
         selection: SelectionModel,
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> EdgeOffsetSupportFaceResolution {
         guard case .edge(let edgeComponentID) = edgeTarget.component else {
             return .notApplicable("Offset Edge support face inference requires an edge target.")
@@ -93,7 +95,9 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         return try inferredCapSupportFaceTarget(
             for: edgeTarget,
             in: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
@@ -127,7 +131,9 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
     private func inferredCapSupportFaceTarget(
         for edgeTarget: SelectionTarget,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> EdgeOffsetSupportFaceResolution {
         guard case .edge(let edgeComponentID) = edgeTarget.component,
               let edgeSubshapeID = edgeComponentID.generatedTopologySubshapeID else {
@@ -138,7 +144,9 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
 
         let topology = try TopologySnapshotService().snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let edgeEntry = topology.entries.first(where: { entry in
             entry.kind == .edge &&

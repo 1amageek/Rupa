@@ -9,7 +9,9 @@ extension DesignDocument {
         ids: [SceneNodeID],
         plane: SceneMirrorPlane,
         options: SceneMirrorOptions,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SceneNodeID] {
         guard !(options.unionsHalves && options.makesInstances) else {
             throw EditorError(code: .commandInvalid, message: "Mirror cannot both join halves and make instances.")
@@ -30,14 +32,18 @@ extension DesignDocument {
                 // An instance shows the object as it is, so any object can be mirrored this way.
                 results += try updated.placeSceneNodes(
                     ids: [root], placements: [try plane.reflection()], output: .componentInstance,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
                 continue
             }
             if !options.cutsAtPlane && !options.unionsHalves,
                node.reference?.kind != .body && node.reference?.kind != .feature {
                 results += try updated.placeSceneNodes(
-                    ids: [root], placements: [try plane.reflection()], objectRegistry: objectRegistry)
+                    ids: [root], placements: [try plane.reflection()], objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration)
                 continue
             }
             let local = try mirrorPlane(plane, placedBy: world)
@@ -46,7 +52,9 @@ extension DesignDocument {
                 try updated.appendMirror(to: root, plane: local, output: .kept, cuts: true, objectRegistry: objectRegistry)
                 results += try updated.placeSceneNodes(
                     ids: [root], placements: [try plane.reflection()], output: .componentInstance,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
             } else if options.unionsHalves {
                 try updated.appendMirror(
@@ -55,7 +63,10 @@ extension DesignDocument {
                 results.append(root)
             } else {
                 // The reflection is an independent copy, so the copy is made before the object is cut.
-                let copies = try updated.placeSceneNodes(ids: [root], placements: [.identity], objectRegistry: objectRegistry)
+                let copies = try updated.placeSceneNodes(
+                    ids: [root], placements: [.identity], objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+                )
                 guard copies.count == 1, let copy = copies.first else {
                     throw EditorError(code: .commandInvalid, message: "Mirror copies one object at a time.")
                 }

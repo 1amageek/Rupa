@@ -8,7 +8,9 @@ extension DesignDocument {
         name: String,
         target: SelectionTarget,
         loop: [Point3D],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Face Knife"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
@@ -36,7 +38,9 @@ extension DesignDocument {
 
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let entry = topology.entries.first(where: { $0.subshapeID == identity }) else {
             throw EditorError(
@@ -109,7 +113,9 @@ extension DesignDocument {
         targets: [SelectionTarget],
         plane: SketchPlane,
         name: String? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Alternative Duplicate"
         guard targets.isEmpty == false else {
@@ -127,6 +133,8 @@ extension DesignDocument {
             name: name,
             defaultName: projectedSketchName(from:),
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: &topology
         )
     }
@@ -136,12 +144,16 @@ extension DesignDocument {
         targets: [SelectionTarget],
         face: SelectionTarget,
         name: String? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Project Curve Body"
         let evaluatedTopology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         var topology: TopologySnapshot? = evaluatedTopology
         let targetPlane = try ConstructionPlaneTargetResolver().planarGeneratedFacePlane(
@@ -157,6 +169,8 @@ extension DesignDocument {
             name: name,
             defaultName: projectedFaceProjectionName(from:),
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: &topology
         )
     }
@@ -168,6 +182,8 @@ extension DesignDocument {
         name: String?,
         defaultName: ([String]) -> String,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: inout TopologySnapshot?
     ) throws -> FeatureID {
         guard targets.isEmpty == false else {
@@ -193,6 +209,8 @@ extension DesignDocument {
                 targetSystem: targetSystem,
                 operationName: operationName,
                 objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
                 topology: &topology
             )
             let projectedEntity = projected.entity
@@ -240,7 +258,9 @@ extension DesignDocument {
         targets: [SelectionTarget],
         plane: SketchPlane,
         name: String? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Project Outline"
         guard targets.isEmpty == false else {
@@ -253,7 +273,9 @@ extension DesignDocument {
         let targetSystem = try SketchPlaneCoordinateSystem(plane: plane)
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(operationName) needs the evaluated document.")

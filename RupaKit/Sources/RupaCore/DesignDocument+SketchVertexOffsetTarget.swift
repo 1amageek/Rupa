@@ -11,7 +11,9 @@ extension DesignDocument {
 
     func generatedSketchVertexOffsetTarget(
         for target: SelectionTarget,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> GeneratedSketchVertexOffsetTarget {
         let operationName = "Generated vertex Offset Vertex"
         guard case .vertex(let componentID) = target.component,
@@ -45,7 +47,9 @@ extension DesignDocument {
 
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let entry = topology.entries.first(where: {
             $0.subshapeID == GeneratedSubshapeIdentity.string(for: subshapeID)

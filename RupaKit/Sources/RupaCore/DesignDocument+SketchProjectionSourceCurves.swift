@@ -8,6 +8,8 @@ extension DesignDocument {
         targetSystem: SketchPlaneCoordinateSystem,
         operationName: String,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: inout TopologySnapshot?
     ) throws -> (entity: SketchEntity, sourceName: String) {
         if case .sketchEntity = target.component {
@@ -35,6 +37,8 @@ extension DesignDocument {
                     targetSystem: targetSystem,
                     operationName: operationName,
                     objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration,
                     topology: &topology
                 ),
                 sourceName: "Generated Edge"

@@ -6,7 +6,9 @@ extension DesignDocument {
         target: SelectionTarget,
         materialID: MaterialID?,
         process: TopologyMaterialBinding.Process? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let identity = try topologyMaterialSubshapeIdentity(for: target)
         guard productMetadata.sceneNodes[target.sceneNodeID] != nil else {
@@ -34,7 +36,9 @@ extension DesignDocument {
         try process?.validate()
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard topology.entries.contains(where: {
             $0.kind == .face

@@ -36,7 +36,9 @@ public struct SketchDimensionTargetResolver: Sendable {
     public func resolve(
         document: DesignDocument,
         targets: [SelectionTarget],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [ResolvedTarget] {
         let sketchSummary = try sketchEntityService.snapshot(
             document: document,
@@ -74,7 +76,9 @@ public struct SketchDimensionTargetResolver: Sendable {
             if topologySummary == nil {
                 topologySummary = try topologyService.snapshot(
                     document: document,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration
                 )
             }
             return try resolveGeneratedEdge(

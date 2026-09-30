@@ -26,15 +26,22 @@ extension DesignDocument {
         profileLoop: EditableExtrudeProfileLoop,
         bounds: (minX: Double, minY: Double, maxX: Double, maxY: Double),
         operationName: String,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> Set<Int> {
         var targetIndices = Set<Int>()
-        let topology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
+        let topology = TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         for target in targets {
             let edge = try editableBodyEdge(
                 for: target,
                 operationName: operationName,
                 objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
                 topology: topology
             )
             let vertex = rectangleProfilePoint(for: edge, bounds: bounds)
@@ -71,10 +78,15 @@ extension DesignDocument {
         sketchPlane: SketchPlane,
         expectedKind: TopologySummaryResult.Entry.Kind,
         operationName: String,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> Set<Int> {
         var targetIndices = Set<Int>()
-        let topology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
+        let topology = TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         for target in targets {
             let index = try profileLoopVertexIndex(
                 for: target,
@@ -83,6 +95,8 @@ extension DesignDocument {
                 expectedKind: expectedKind,
                 operationName: operationName,
                 objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
                 topology: topology
             )
             targetIndices.insert(index)
@@ -97,6 +111,8 @@ extension DesignDocument {
         expectedKind: TopologySummaryResult.Entry.Kind,
         operationName: String,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshotMemo? = nil
     ) throws -> Int {
         let componentID: SelectionComponentID
@@ -117,7 +133,10 @@ extension DesignDocument {
                 message: "\(operationName) requires generated topology targets for non-rectangle profile loops."
             )
         }
-        let snapshot = try (topology ?? TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)).get()
+        let snapshot = try (topology ?? TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )).get()
         guard let entry = snapshot.entries.first(where: {
             $0.subshapeID == GeneratedSubshapeIdentity.string(for: subshapeID)
         }) else {

@@ -17,9 +17,14 @@ extension DesignDocument {
     @discardableResult
     public mutating func duplicateSceneNodes(
         ids: [SceneNodeID],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SceneNodeID] {
-        try placeSceneNodes(ids: ids, placements: [.identity], boolean: nil, objectRegistry: objectRegistry)
+        try placeSceneNodes(
+            ids: ids, placements: [.identity], boolean: nil, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
     }
 
     /// Places `ids` once per world-space placement of the selection and returns the new roots:
@@ -31,7 +36,9 @@ extension DesignDocument {
         placements: [Transform3D],
         output: SceneNodePlacementOutput = .independentCopy,
         boolean: SceneNodePlacementBoolean? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SceneNodeID] {
         if output == .componentInstance {
             guard boolean == nil else {
@@ -59,7 +66,9 @@ extension DesignDocument {
             destination: destination,
             parentWorld: parentWorld,
             boolean: boolean,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
@@ -70,7 +79,9 @@ extension DesignDocument {
         _ fragment: SceneFragment,
         placements: [Transform3D],
         boolean: SceneNodePlacementBoolean? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SceneNodeID] {
         let destination: SceneFragmentInserter.Attachment
         let parentWorld: Transform3D
@@ -87,7 +98,9 @@ extension DesignDocument {
             destination: destination,
             parentWorld: parentWorld,
             boolean: boolean,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
@@ -101,7 +114,9 @@ extension DesignDocument {
     @discardableResult
     public mutating func realizeComponentInstances(
         sceneNodeIDs ids: [SceneNodeID],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [SceneNodeID] {
         guard !ids.isEmpty else {
             throw EditorError(code: .commandInvalid, message: "Realize Instances takes component instances.")
@@ -137,7 +152,9 @@ extension DesignDocument {
             }
             realized += try updated.insertCopies(
                 of: fragment, placements: [placement], destination: destination,
-                parentWorld: parentWorld, boolean: nil, objectRegistry: objectRegistry
+                parentWorld: parentWorld, boolean: nil, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             try updated.deleteSceneNodes(ids: [id], objectRegistry: objectRegistry)
         }
@@ -270,7 +287,9 @@ extension DesignDocument {
         destination: SceneFragmentInserter.Attachment,
         parentWorld: Transform3D,
         boolean: SceneNodePlacementBoolean?,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> [SceneNodeID] {
         guard !placements.isEmpty else {
             throw EditorError(code: .commandInvalid, message: "Placing copies requires at least one placement.")
@@ -307,7 +326,10 @@ extension DesignDocument {
         updated.productMetadata = metadata
         updated.authoredMeshAssets = meshAssets
         if let boolean {
-            try updated.combinePlacedCopies(copiesByPlacement, rootIDs: copiedRootIDs, with: boolean, objectRegistry: objectRegistry)
+            try updated.combinePlacedCopies(
+                copiesByPlacement, rootIDs: copiedRootIDs, with: boolean, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         }
         self = updated
         return copiedRootIDs
@@ -322,7 +344,9 @@ extension DesignDocument {
         _ copiesByPlacement: [[SceneNodeID]],
         rootIDs: [SceneNodeID],
         with boolean: SceneNodePlacementBoolean,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         guard let targetNode = productMetadata.sceneNodes[boolean.targetSceneNodeID],
               let reference = targetNode.reference,
@@ -352,7 +376,9 @@ extension DesignDocument {
                 tools: toolFeatureIDs.map { BooleanToolReference(featureID: $0) },
                 operation: boolean.operation,
                 keepTools: false,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         for rootID in rootIDs {

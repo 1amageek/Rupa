@@ -6,7 +6,9 @@ extension DesignDocument {
     public mutating func chamferBodyEdges(
         targets: [SelectionTarget],
         distance: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let chamferMeters = try resolvedPositiveLengthValue(distance, owner: "Edge chamfer distance")
         guard !targets.isEmpty else {
@@ -86,7 +88,9 @@ extension DesignDocument {
                 profileLoop: profileLoop,
                 bounds: bounds,
                 operationName: "Edge chamfer",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         } else {
             targetIndices = try generatedProfileLoopVertexIndices(
@@ -95,7 +99,9 @@ extension DesignDocument {
                 sketchPlane: sketch.plane,
                 expectedKind: .edge,
                 operationName: "Edge chamfer",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         let nextSketch = try profileLoop.chamferedSketch(
@@ -132,7 +138,9 @@ extension DesignDocument {
         targets: [SelectionTarget],
         radius: CADExpression,
         segmentCount: Int,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let filletMeters = try resolvedPositiveLengthValue(radius, owner: "Edge fillet radius")
         guard (3 ... 64).contains(segmentCount) else {
@@ -218,7 +226,9 @@ extension DesignDocument {
                 profileLoop: profileLoop,
                 bounds: bounds,
                 operationName: "Edge fillet",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         } else {
             targetIndices = try generatedProfileLoopVertexIndices(
@@ -227,7 +237,9 @@ extension DesignDocument {
                 sketchPlane: sketch.plane,
                 expectedKind: .edge,
                 operationName: "Edge fillet",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         let nextSketch = try profileLoop.filletedSketch(

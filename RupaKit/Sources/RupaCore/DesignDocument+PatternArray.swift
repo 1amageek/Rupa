@@ -10,7 +10,9 @@ extension DesignDocument {
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode = .componentInstance,
         parentSceneNodeID: SceneNodeID? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> PatternArraySourceID {
         let trimmedName = try normalizedMetadataName(
             name,
@@ -70,7 +72,9 @@ extension DesignDocument {
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
             authoredMeshAssets: &updatedMeshAssets,
-            tolerance: modelingSettings.tolerance
+            tolerance: modelingSettings.tolerance,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
@@ -87,7 +91,9 @@ extension DesignDocument {
         copying rootSceneNodeIDs: [SceneNodeID],
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> PatternArraySourceID {
         if let refusal = productMetadata.sceneCopyRefusal(for: rootSceneNodeIDs) {
             throw refusal
@@ -113,7 +119,9 @@ extension DesignDocument {
             distribution: distribution,
             outputMode: outputMode,
             parentSceneNodeID: hierarchy.parentID(of: roots[0]),
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         self = updated
         return sourceID
@@ -125,7 +133,9 @@ extension DesignDocument {
         definitionID: ComponentDefinitionID? = nil,
         distribution: PatternArrayDistribution? = nil,
         outputMode: PatternArrayOutputMode? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         var updatedCADDocument = cadDocument
         var updatedMeshAssets = authoredMeshAssets
@@ -191,7 +201,9 @@ extension DesignDocument {
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
             authoredMeshAssets: &updatedMeshAssets,
-            tolerance: modelingSettings.tolerance
+            tolerance: modelingSettings.tolerance,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
         cadDocument = updatedCADDocument
@@ -202,7 +214,9 @@ extension DesignDocument {
     @discardableResult
     public mutating func explodePatternArray(
         id: PatternArraySourceID,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> PatternArrayExplodeResult {
         var updatedCADDocument = cadDocument
         var updatedMeshAssets = authoredMeshAssets
@@ -225,7 +239,9 @@ extension DesignDocument {
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument,
             authoredMeshAssets: &updatedMeshAssets,
-            tolerance: modelingSettings.tolerance
+            tolerance: modelingSettings.tolerance,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         updatedMetadata.patternArrays.removeValue(forKey: id)
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
@@ -236,7 +252,9 @@ extension DesignDocument {
     }
 
     public mutating func regeneratePatternArrays(
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         guard productMetadata.patternArrays.isEmpty == false else {
             return
@@ -254,7 +272,9 @@ extension DesignDocument {
                 metadata: &updatedMetadata,
                 cadDocument: &updatedCADDocument,
             authoredMeshAssets: &updatedMeshAssets,
-            tolerance: modelingSettings.tolerance
+            tolerance: modelingSettings.tolerance,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
         try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)

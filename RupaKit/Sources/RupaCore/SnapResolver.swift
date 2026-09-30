@@ -811,7 +811,9 @@ public struct SnapResolver: Sendable {
         candidates += try surfaceFrameCandidates(
             in: document,
             constructionPlane: constructionPlane,
-            displays: surfaceFrameDisplays
+            displays: surfaceFrameDisplays,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         candidates += try surfaceTrimCandidates(
             in: document,
@@ -901,7 +903,9 @@ public struct SnapResolver: Sendable {
     private func surfaceFrameCandidates(
         in document: DesignDocument,
         constructionPlane: SketchPlaneCoordinateSystem?,
-        displays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        displays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> [PrioritizedSnapCandidate] {
         let visibleDisplays = displays.values
             .filter(\.isVisible)
@@ -914,7 +918,9 @@ public struct SnapResolver: Sendable {
 
         let frames = try SurfaceFrameService().resolveFrames(
             document: document,
-            queries: visibleDisplays.map(\.query)
+            queries: visibleDisplays.map(\.query),
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return zip(visibleDisplays, frames).compactMap { display, frame in
             surfaceFrameCandidate(

@@ -28,7 +28,8 @@ struct WorkspaceBodyResizeTests {
         document.productMetadata.sceneNodes[node.id]?.localTransform = local
         let parent = try #require(try ViewportSceneNodeParentFrames(document: document).parentWorldTransform(of: node.id))
         let base = try #require(try ViewportBodyResizeBaseline.resolve(document: document, nodeID: node.id,
-            worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, local)))
+            worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, local),
+            currentEvaluation: nil, currentGeneration: nil))
         let member = ViewportObjectTransformMember(occurrenceID: "box", reference: try #require(node.reference),
             sceneNodeID: node.id, baseLocalTransform: local, parentWorldTransform: parent,
             bounds: .init(xMin: -1, xMax: 1, yMin: -1, yMax: 1, zMin: -1, zMax: 1), resize: base)
@@ -56,7 +57,8 @@ struct WorkspaceBodyResizeTests {
                 sizeZ: .length(target.size.z, .meter))
             changed.productMetadata.sceneNodes[node.id]?.localTransform = target.placement.localTransform
             let next = try #require(try ViewportBodyResizeBaseline.resolve(document: changed, nodeID: node.id,
-                worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, target.placement.localTransform)))
+                worldTransform: ViewportWorldTransformAlgebra.multiplied(parent, target.placement.localTransform),
+                currentEvaluation: nil, currentGeneration: nil))
             let committedCorners = try ViewportBodyVertex.allCases.map { try next.point(for: .vertexMove($0)) }
             for vertex in ViewportBodyVertex.allCases {
                 let before = try base.point(for: .vertexMove(vertex))

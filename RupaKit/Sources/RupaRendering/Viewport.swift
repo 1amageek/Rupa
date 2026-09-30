@@ -4536,7 +4536,9 @@ public struct Viewport: View {
             }
             var preview = document
             try preview.offsetBodyFace(target: selectionTarget, distance: .length(distance, .meter),
-                                       objectRegistry: objectRegistry)
+                                       objectRegistry: objectRegistry,
+                                       currentEvaluation: currentEvaluation,
+                                       currentGeneration: sceneDocumentGeneration)
             setDragPreviewDocument(preview, target: selectionTarget)
             return true
         case .profileEdgeChamfer(let selectionTarget, let edge):

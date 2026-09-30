@@ -89,7 +89,9 @@ public struct DefaultAutomationBatchPlanner: AutomationBatchPlanning, Sendable {
             document: context.document,
             selection: context.selection,
             objectRegistry: context.objectRegistry,
-            evaluationSnapshot: context.evaluationSnapshot
+            evaluationSnapshot: context.evaluationSnapshot,
+            currentEvaluation: context.currentEvaluation,
+            generation: context.generation
         )
         let resolved = try ContextResolvedEditorCommand(
             resolving: .offsetCurve(

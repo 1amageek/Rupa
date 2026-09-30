@@ -6,6 +6,10 @@ struct WorkspaceSelectionTargetResolver {
     var sceneBrowserRows: [SceneBrowserRow]
     var selectionScope: WorkspaceSelectionScope
     var objectRegistry: ObjectTypeRegistry
+    /// The document's current evaluation at `generation`, read by generated topology selection
+    /// instead of evaluating the document on every click.
+    var currentEvaluation: DocumentEvaluationContext?
+    var generation: DocumentGeneration?
 
     func selectionTarget(for hit: ViewportHit) -> SelectionTarget? {
         guard let sceneNodeID = sceneNodeID(for: hit) else {
@@ -171,7 +175,9 @@ struct WorkspaceSelectionTargetResolver {
                 for: sceneNodeID,
                 bodyFace: bodyFace,
                 in: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
         } catch {
             return nil
@@ -205,7 +211,9 @@ struct WorkspaceSelectionTargetResolver {
                 for: sceneNodeID,
                 cornerEdge: cornerEdge,
                 in: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
         } catch {
             return nil

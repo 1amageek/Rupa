@@ -17,7 +17,9 @@ extension DesignDocument {
         face: SelectionTarget,
         direction: Vector3D,
         bidirectional: Bool,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let owner = "Project Curve Body"
         guard !targets.isEmpty else {
@@ -30,7 +32,10 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "\(owner) needs a direction that is not zero.")
         }
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }
@@ -45,7 +50,10 @@ extension DesignDocument {
         let bodyDirection = try inverse.applyingLinearPart(to: unit).normalized(tolerance: tolerance.distance)
         if entry.surfaceKind == "plane", let normal = entry.normal,
            abs(abs(bodyDirection.dot(Vector3D(x: normal.x, y: normal.y, z: normal.z))) - 1) <= tolerance.angle {
-            return [try projectCurvesToGeneratedFace(targets: targets, face: face, objectRegistry: objectRegistry)]
+            return [try projectCurvesToGeneratedFace(
+                targets: targets, face: face, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )]
         }
         let surface = SurfaceReference(subshape: stableReference)
         let evaluator = SurfaceQueryEvaluator(tolerance: tolerance)

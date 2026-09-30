@@ -7,7 +7,9 @@ extension DesignDocument {
         name: String,
         expression: CADExpression,
         kind: QuantityKind,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata
@@ -20,7 +22,10 @@ extension DesignDocument {
         cadDocument = updatedCADDocument
         do {
             try regenerateAllBridgeCurves()
-            try regeneratePatternArrays(objectRegistry: objectRegistry)
+            try regeneratePatternArrays(
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         } catch {
             cadDocument = previousCADDocument
             productMetadata = previousProductMetadata
@@ -30,7 +35,9 @@ extension DesignDocument {
 
     public mutating func deleteParameter(
         name: String,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         guard cadDocument.parameterID(named: name) != nil else {
             throw EditorError(
@@ -53,7 +60,10 @@ extension DesignDocument {
         cadDocument = updatedCADDocument
         do {
             try regenerateAllBridgeCurves()
-            try regeneratePatternArrays(objectRegistry: objectRegistry)
+            try regeneratePatternArrays(
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         } catch {
             cadDocument = previousCADDocument
             productMetadata = previousProductMetadata
@@ -64,7 +74,9 @@ extension DesignDocument {
     public mutating func renameParameter(
         currentName: String,
         newName: String,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         guard currentName != newName else {
             throw EditorError(
@@ -95,7 +107,10 @@ extension DesignDocument {
         cadDocument = updatedCADDocument
         do {
             try regenerateAllBridgeCurves()
-            try regeneratePatternArrays(objectRegistry: objectRegistry)
+            try regeneratePatternArrays(
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
         } catch {
             cadDocument = previousCADDocument
             productMetadata = previousProductMetadata

@@ -558,7 +558,9 @@ public final class CADDocumentStore {
                     name: name,
                     expression: expression,
                     kind: kind,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 try commitMutation()
                 evaluateCurrentDocument()
@@ -576,7 +578,9 @@ public final class CADDocumentStore {
                 try updatedDocument.renameParameter(
                     currentName: currentName,
                     newName: newName,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -592,7 +596,10 @@ public final class CADDocumentStore {
                     )
                 }
                 var updatedDocument = document
-                try updatedDocument.deleteParameter(name: name, objectRegistry: objectRegistry)
+                try updatedDocument.deleteParameter(
+                    name: name, objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: generation
+                )
                 document = updatedDocument
                 try commitMutation()
                 evaluateCurrentDocument()
@@ -750,7 +757,9 @@ public final class CADDocumentStore {
                     definitionID: definitionID,
                     distribution: distribution,
                     outputMode: outputMode,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -764,7 +773,9 @@ public final class CADDocumentStore {
                 copying: rootSceneNodeIDs,
                 distribution: distribution,
                 outputMode: outputMode,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -784,7 +795,9 @@ public final class CADDocumentStore {
                     definitionID: definitionID,
                     distribution: distribution,
                     outputMode: outputMode,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -802,7 +815,9 @@ public final class CADDocumentStore {
                 var updatedDocument = document
                 try updatedDocument.explodePatternArray(
                     id: id,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -956,7 +971,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .mirrorSceneNodes(let ids, let plane, let options):
             var updatedDocument = document
-            try updatedDocument.mirrorSceneNodes(ids: ids, plane: plane, options: options, objectRegistry: objectRegistry)
+            try updatedDocument.mirrorSceneNodes(
+                ids: ids, plane: plane, options: options, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
@@ -965,17 +983,27 @@ public final class CADDocumentStore {
                 var updatedDocument = document
                 switch command {
                 case .duplicateSceneNodes(let ids):
-                    try updatedDocument.duplicateSceneNodes(ids: ids, objectRegistry: objectRegistry)
+                    try updatedDocument.duplicateSceneNodes(
+                        ids: ids, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
                 case .realizeComponentInstances(let ids):
-                    try updatedDocument.realizeComponentInstances(sceneNodeIDs: ids, objectRegistry: objectRegistry)
+                    try updatedDocument.realizeComponentInstances(
+                        sceneNodeIDs: ids, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
                 case .placeSceneNodes(let ids, let placements, let output, let boolean):
                     try updatedDocument.placeSceneNodes(
                         ids: ids, placements: placements, output: output, boolean: boolean,
-                        objectRegistry: objectRegistry
+                        objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation,
+                        currentGeneration: generation
                     )
                 case .pasteSceneFragment(let fragment, let placements, let boolean):
                     try updatedDocument.pasteSceneFragment(
-                        fragment, placements: placements, boolean: boolean, objectRegistry: objectRegistry
+                        fragment, placements: placements, boolean: boolean, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation,
+                        currentGeneration: generation
                     )
                 default:
                     throw EditorError(code: .commandInvalid, message: "Command dispatch expected a scene copy command.")
@@ -1032,7 +1060,9 @@ public final class CADDocumentStore {
                     target: target,
                     materialID: materialID,
                     process: process,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1162,7 +1192,9 @@ public final class CADDocumentStore {
                 createdConstructionPlaneID = try updatedDocument.createConstructionPlaneFromTarget(
                     name: name,
                     target: target,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1182,7 +1214,9 @@ public final class CADDocumentStore {
                     name: name,
                     targets: targets,
                     viewNormal: viewNormal,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1463,7 +1497,9 @@ public final class CADDocumentStore {
                     name: name,
                     target: target,
                     loop: loop,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1483,7 +1519,9 @@ public final class CADDocumentStore {
                     targets: targets,
                     plane: plane,
                     name: name,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1503,7 +1541,9 @@ public final class CADDocumentStore {
                     targets: targets,
                     face: face,
                     name: name,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1551,7 +1591,9 @@ public final class CADDocumentStore {
                     targets: targets,
                     plane: plane,
                     name: name,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1758,7 +1800,9 @@ public final class CADDocumentStore {
                     target: target,
                     kind: kind,
                     value: value,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1780,7 +1824,9 @@ public final class CADDocumentStore {
                     first: first,
                     second: second,
                     target: target,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1817,7 +1863,9 @@ public final class CADDocumentStore {
                 var updatedDocument = document
                 try updatedDocument.applySelectionDimensionTarget(
                     id: id,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1856,7 +1904,9 @@ public final class CADDocumentStore {
                     distance: distance,
                     options: options,
                     vertexHandle: vertexHandle,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1964,7 +2014,9 @@ public final class CADDocumentStore {
                 try updatedDocument.offsetBodyFace(
                     target: target,
                     distance: distance,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -1982,7 +2034,9 @@ public final class CADDocumentStore {
                 var updatedDocument = document
                 try updatedDocument.deleteBodyFaces(
                     targets: targets,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2002,7 +2056,9 @@ public final class CADDocumentStore {
                     targets: targets,
                     neutralTarget: neutralTarget,
                     angle: angle,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2080,7 +2136,9 @@ public final class CADDocumentStore {
                 try updatedDocument.chamferBodyEdges(
                     targets: targets,
                     distance: distance,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2100,7 +2158,9 @@ public final class CADDocumentStore {
                     targets: targets,
                     radius: radius,
                     segmentCount: segmentCount,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2120,7 +2180,9 @@ public final class CADDocumentStore {
                     target: target,
                     deltaX: deltaX,
                     deltaY: deltaY,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2140,7 +2202,9 @@ public final class CADDocumentStore {
                     target: target,
                     deltaX: deltaX,
                     deltaY: deltaY,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2304,7 +2368,9 @@ public final class CADDocumentStore {
                     target: target,
                     kind: kind,
                     value: value,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2548,7 +2614,9 @@ public final class CADDocumentStore {
                     target: target,
                     cutter: cutter,
                     options: options,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2563,14 +2631,19 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case let .extendSketchCurveToCurve(target, limit, shape):
             var updatedDocument = document
-            try updatedDocument.extendSketchCurve(target: target, until: limit, shape: shape, objectRegistry: objectRegistry)
+            try updatedDocument.extendSketchCurve(
+                target: target, until: limit, shape: shape, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case let .createBridgeCurveBetweenEnds(first, second, continuity, tensions):
             var updatedDocument = document
             try updatedDocument.createBridgeCurve(
-                clicked: first, second, continuity: continuity, tensions: tensions, objectRegistry: objectRegistry
+                clicked: first, second, continuity: continuity, tensions: tensions, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2583,13 +2656,19 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case let .projectBodyIntersection(first, second):
             var updatedDocument = document
-            try updatedDocument.projectBodyIntersection(first: first, second: second, objectRegistry: objectRegistry)
+            try updatedDocument.projectBodyIntersection(
+                first: first, second: second, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case let .createBodyOutlines(targets, plane):
             var updatedDocument = document
-            try updatedDocument.createBodyOutlines(targets: targets, plane: plane, objectRegistry: objectRegistry)
+            try updatedDocument.createBodyOutlines(
+                targets: targets, plane: plane, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
@@ -2597,7 +2676,9 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.projectCurvesAlongDirection(
                 targets: targets, face: face, direction: direction,
-                bidirectional: bidirectional, objectRegistry: objectRegistry
+                bidirectional: bidirectional, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2606,7 +2687,9 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.deformCurves(
                 targets: targets, referenceFace: referenceFace, targetFace: targetFace,
-                options: options, objectRegistry: objectRegistry
+                options: options, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2615,7 +2698,9 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.deformBodies(
                 targets: targets, referenceFace: referenceFace, targetFace: targetFace,
-                options: options, objectRegistry: objectRegistry
+                options: options, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2647,7 +2732,9 @@ public final class CADDocumentStore {
         case let .cutSketchCurves(targets, cutters, options):
             var updatedDocument = document
             try updatedDocument.cutSketchCurves(
-                targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry
+                targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2796,7 +2883,9 @@ public final class CADDocumentStore {
                     keepTools: keepTools,
                     targetMaterial: targetMaterial,
                     toolMaterial: toolMaterial,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -2806,7 +2895,9 @@ public final class CADDocumentStore {
         case let .cut(name, targets, cutters, options):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.cut(
-                name: name, targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry
+                name: name, targets: targets, cutters: cutters, options: options, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             document = updatedDocument
             try commitMutation()
@@ -2814,7 +2905,9 @@ public final class CADDocumentStore {
         case let .duplicateBodyFaces(name, targets):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.duplicateBodyFaces(
-                name: name, targets: targets, objectRegistry: objectRegistry
+                name: name, targets: targets, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             ).last
             document = updatedDocument
             try commitMutation()
@@ -2930,7 +3023,9 @@ public final class CADDocumentStore {
                     uDistance: uDistance,
                     vDistance: vDistance,
                     normalDistance: normalDistance,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()
@@ -3090,7 +3185,9 @@ public final class CADDocumentStore {
                 try updatedDocument.setSurfaceTrimLoops(
                     target: target,
                     trimLoops: trimLoops,
-                    objectRegistry: objectRegistry
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: generation
                 )
                 document = updatedDocument
                 try commitMutation()

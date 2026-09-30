@@ -41,7 +41,9 @@ extension DesignDocument {
         targets: [SceneNodeID],
         cutters: [CutCutter],
         options: CutOptions = CutOptions(),
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Cut"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
@@ -77,6 +79,7 @@ extension DesignDocument {
         let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
             document: self,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
             failurePrefix: "\(operationName) requires its targets evaluated"
         )
         let reach = try targetReach(targets: targets, features: targetFeatures, in: evaluated, owner: operationName)
@@ -84,7 +87,10 @@ extension DesignDocument {
         var cutterFeatures: [FeatureID] = []
         // Face cutters name faces of the document as it stood before any cutter was appended, so
         // one snapshot of that document serves them all.
-        let cutterTopology = TopologySnapshotMemo(document: self, objectRegistry: objectRegistry)
+        let cutterTopology = TopologySnapshotMemo(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         for (index, cutter) in cutters.enumerated() {
             let cutterName = "\(trimmedName) Cutter \(index + 1)"
             switch cutter {
@@ -136,7 +142,9 @@ extension DesignDocument {
         }
         try publishBooleanResult(
             last, name: trimmedName, asPieces: true, besideTarget: targetFeatures[0],
-            consumed: consumed, objectRegistry: objectRegistry
+            consumed: consumed, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)

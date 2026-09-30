@@ -47,7 +47,9 @@ struct PatternArrayDocumentSynchronizer {
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
         authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
-        tolerance: ModelingTolerance
+        tolerance: ModelingTolerance,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         guard var source = metadata.patternArrays[sourceID] else {
             throw EditorError(
@@ -110,7 +112,9 @@ struct PatternArrayDocumentSynchronizer {
                 authoredMeshAssets: authoredMeshAssets)
             let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
                 definition: definition, metadata: metadata, cadDocument: cadDocument,
-                authoredMeshAssets: authoredMeshAssets)
+                authoredMeshAssets: authoredMeshAssets,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration)
             removePatternArrayComponentInstanceOutputs(
                 source: source,
                 rootNode: rootNode,
@@ -405,7 +409,9 @@ struct PatternArrayDocumentSynchronizer {
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument,
         authoredMeshAssets: inout [GeometrySourceID: AuthoredMeshAsset],
-        tolerance: ModelingTolerance
+        tolerance: ModelingTolerance,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> PatternArrayExplodeResult {
         guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
             throw EditorError(
@@ -432,7 +438,9 @@ struct PatternArrayDocumentSynchronizer {
             }
             let fragment = try PatternArrayIndependentCopyBuilder().sourceFragment(
                 definition: definition, metadata: metadata, cadDocument: cadDocument,
-                authoredMeshAssets: authoredMeshAssets)
+                authoredMeshAssets: authoredMeshAssets,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration)
             removePatternArrayComponentInstanceOutputs(
                 source: source,
                 rootNode: rootNode,

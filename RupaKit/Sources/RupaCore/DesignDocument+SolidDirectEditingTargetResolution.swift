@@ -5,7 +5,9 @@ import RupaCoreTypes
 extension DesignDocument {
     func editableBodyFace(
         for target: SelectionTarget,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> EditableBodyFace {
         guard case .face(let componentID) = target.component else {
             throw EditorError(
@@ -18,6 +20,8 @@ extension DesignDocument {
                 for: target,
                 in: self,
                 objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
                 operationName: "Face offset"
             )
             return editableBodyFace(for: bodyFace)
@@ -68,6 +72,8 @@ extension DesignDocument {
         for target: SelectionTarget,
         operationName: String = "Edge chamfer",
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshotMemo? = nil
     ) throws -> EditableBodyEdge {
         guard case .edge(let componentID) = target.component else {
@@ -81,7 +87,11 @@ extension DesignDocument {
             let cornerEdge = if let topology {
                 try resolver.cornerEdge(for: target, in: self, topology: try topology.get(), operationName: operationName)
             } else {
-                try resolver.cornerEdge(for: target, in: self, objectRegistry: objectRegistry, operationName: operationName)
+                try resolver.cornerEdge(
+                    for: target, in: self, objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                    operationName: operationName
+                )
             }
             return editableBodyEdge(for: cornerEdge)
         }
@@ -117,7 +127,9 @@ extension DesignDocument {
 
     func editableBodyVertex(
         for target: SelectionTarget,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> EditableBodyVertex {
         guard case .vertex(let componentID) = target.component else {
             throw EditorError(
@@ -130,6 +142,8 @@ extension DesignDocument {
                 for: target,
                 in: self,
                 objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
                 operationName: "Vertex move"
             )
             return editableBodyVertex(for: cornerVertex)

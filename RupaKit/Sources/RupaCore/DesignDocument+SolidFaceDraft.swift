@@ -9,7 +9,9 @@ extension DesignDocument {
         neutralTarget: SelectionTarget,
         angle: CADExpression,
         name: String = "Draft Face",
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let operationName = "Draft Face"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
@@ -35,7 +37,9 @@ extension DesignDocument {
 
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let entriesBySubshapeID = Dictionary(
             uniqueKeysWithValues: topology.entries.map { ($0.subshapeID, $0) }

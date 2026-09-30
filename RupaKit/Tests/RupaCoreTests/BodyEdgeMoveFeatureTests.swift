@@ -50,11 +50,15 @@ import Testing
         let target = try #require(top.selectionTarget())
         let topZ = try #require(top.curveCenter?.z)
 
-        let before = document
+        // The kernel refuses the sideways move when the store evaluates the candidate, and the
+        // store restores the document.
+        let store = CADDocumentStore(document: document)
+        store.evaluateCurrentDocument()
         #expect(throws: EditorError.self) {
-            try document.moveBodyEdges(targets: [target], direction: .unitX, distance: .length(0.01, .meter))
+            try store.apply(.moveBodyEdges(targets: [target], direction: .unitX, distance: .length(0.01, .meter)))
         }
-        #expect(document.cadDocument.designGraph == before.cadDocument.designGraph)
+        #expect(store.document.cadDocument.designGraph == document.cadDocument.designGraph)
+        #expect(store.evaluationStatus == .valid)
 
         try document.moveBodyEdges(targets: [target], direction: .unitZ, distance: .length(0.01, .meter))
         let moved = try edges(of: document).filter { $0.curveKind == "circle" }

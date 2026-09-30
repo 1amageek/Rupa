@@ -168,11 +168,14 @@ ProjectOperating and FeatureEvaluating remain the authority and kernel ports.
   owns what can move. It re-solves the planar faces around the moved vertices as
   planes, or as bilinear patches where a four-sided face warps. It keeps curved
   faces elsewhere, and moves a circular edge along its axis with the cap it
-  bounds. The candidate is evaluated before it is kept, so a refused move leaves
-  the document unchanged. `topologyTargets(following:to:)` follows the moved
+  bounds. The store evaluates the candidate before it is kept, reusing its
+  current evaluation, and restores the document when the kernel refuses it, so a
+  refused move leaves the document unchanged; the edit itself evaluates nothing
+  (no duplicate candidate evaluation inside preparation, as above). The sheet
+  edit likewise leaves validation and evaluation to that boundary. `topologyTargets(following:to:)` follows the moved
   edges, faces or vertices through the lineage so a selection survives the move.
-  `BodyEdgeMoveFeatureTests` owns a straight edge, a circular edge and a refused
-  sideways circle move. `BodyTopologyMoveTests` owns a face move, a vertex move
+  `BodyEdgeMoveFeatureTests` owns a straight edge, a circular edge and a
+  sideways circle move refused through the store. `BodyTopologyMoveTests` owns a face move, a vertex move
   and a refused target of the wrong kind. `BodyTopologyTransformTests` owns a
   shared corner moved once and a turned face. `TopologyMotionDecompositionTests`
   owns the exact read-back of moves, turns and scales and the refused shear.

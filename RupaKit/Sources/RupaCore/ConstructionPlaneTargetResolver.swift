@@ -18,7 +18,9 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     public func plane(
         alignedTo target: SelectionTarget,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SketchPlane {
         switch target.component {
         case .constructionPlane:
@@ -30,7 +32,9 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             return try facePlane(
                 alignedTo: target,
                 in: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         case .region(let componentID):
             return try regionPlane(
@@ -50,7 +54,9 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         from targets: [SelectionTarget],
         in document: DesignDocument,
         viewNormal: Vector3D? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SketchPlane {
         let uniqueTargets = uniqueTargets(targets)
         guard uniqueTargets.isEmpty == false else {
@@ -63,13 +69,17 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             return try plane(
                 alignedTo: target,
                 in: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         }
 
         let topology = try TopologySnapshotService().snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let pointTargets = uniqueTargets.filter(isPointTarget)
         if pointTargets.count == uniqueTargets.count {
@@ -133,11 +143,15 @@ public struct ConstructionPlaneTargetResolver: Sendable {
     private func facePlane(
         alignedTo target: SelectionTarget,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SketchPlane {
         let topology = try TopologySnapshotService().snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let reference = try faceReference(alignedTo: target, topology: topology)
         return try plane(

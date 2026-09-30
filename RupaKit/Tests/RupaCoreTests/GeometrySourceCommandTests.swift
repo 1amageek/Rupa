@@ -1083,8 +1083,8 @@ private struct FailingMeshEditPlanExecutor: MeshEditPlanExecuting {
             let command = try authoredMeshCommand(
                 target: target, plan: movePlan(source, to: Double(round) + 5, id: "move-\(round)")
             )
-            let probe = DocumentValidationProbe()
-            let result = try DocumentValidationProbe.$current.withValue(probe) {
+            let probe = DocumentWorkProbe()
+            let result = try DocumentWorkProbe.$current.withValue(probe) {
                 try store.apply(command, using: DefaultGeometrySourceCommandApplier())
             }
             #expect(result.didMutate)
@@ -1105,8 +1105,8 @@ private struct FailingMeshEditPlanExecutor: MeshEditPlanExecuting {
             target: authoredMeshTarget(for: fixture),
             plan: movePlan(source, to: try source.position(of: source.vertexIDs[0]).x, id: "stay")
         )
-        let probe = DocumentValidationProbe()
-        let result = try DocumentValidationProbe.$current.withValue(probe) {
+        let probe = DocumentWorkProbe()
+        let result = try DocumentWorkProbe.$current.withValue(probe) {
             try store.apply(command, using: DefaultGeometrySourceCommandApplier())
         }
         #expect(!result.didMutate)
@@ -1122,8 +1122,8 @@ private struct FailingMeshEditPlanExecutor: MeshEditPlanExecuting {
         let command = try authoredMeshCommand(
             target: authoredMeshTarget(for: fixture), plan: movePlan(source, to: 9, id: "staged")
         )
-        let probe = DocumentValidationProbe()
-        let result = try DocumentValidationProbe.$current.withValue(probe) {
+        let probe = DocumentWorkProbe()
+        let result = try DocumentWorkProbe.$current.withValue(probe) {
             try session.execute(command)
         }
         #expect(result.didMutate)

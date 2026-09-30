@@ -93,12 +93,16 @@ extension DesignDocument {
     public mutating func createConstructionPlaneFromTarget(
         name: String,
         target: SelectionTarget,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneTargetResolver().plane(
             alignedTo: target,
             in: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return try createConstructionPlane(
             name: name,
@@ -112,13 +116,17 @@ extension DesignDocument {
         name: String,
         targets: [SelectionTarget],
         viewNormal: Vector3D? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> ConstructionPlaneSourceID {
         let plane = try ConstructionPlaneTargetResolver().plane(
             from: targets,
             in: self,
             viewNormal: viewNormal,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return try createConstructionPlane(
             name: name,

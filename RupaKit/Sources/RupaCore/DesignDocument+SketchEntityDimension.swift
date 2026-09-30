@@ -7,7 +7,9 @@ extension DesignDocument {
         target: SelectionTarget,
         kind: SketchEntityDimensionKind,
         value: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let resolvedValue = try resolvedSketchEntityDimensionValue(
             value,
@@ -17,7 +19,9 @@ extension DesignDocument {
         let editTarget = try sketchEntityDimensionEditTarget(
             for: target,
             kind: kind,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let selection = try editableSketchEntity(for: editTarget, operationName: "Sketch entity dimension update")
         try validateResolvedSketchEntityDimensionValue(
@@ -238,7 +242,9 @@ extension DesignDocument {
     private func sketchEntityDimensionEditTarget(
         for target: SelectionTarget,
         kind: SketchEntityDimensionKind,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SelectionTarget {
         if case .sketchEntity = target.component {
             return target
@@ -252,7 +258,9 @@ extension DesignDocument {
         let summary = try SketchDimensionSnapshotService().snapshot(
             document: self,
             targets: [target],
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let entry = summary.entries.first(where: { $0.kind == kind }) else {
             throw EditorError(

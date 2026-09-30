@@ -8,12 +8,16 @@ public struct SketchDimensionSnapshotService: Sendable {
     public func snapshot(
         document: DesignDocument,
         targets: [SelectionTarget],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SketchDimensionSnapshot {
         let resolvedTargets = try SketchDimensionTargetResolver().resolve(
             document: document,
             targets: targets,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let entries = try resolvedTargets.flatMap { target in
             try rectangleEntries(for: target, in: document) ?? dimensionEntries(for: target)

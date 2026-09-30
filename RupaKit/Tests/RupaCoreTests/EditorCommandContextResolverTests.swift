@@ -96,7 +96,9 @@ import Testing
         document: .empty(),
         selection: .empty,
         objectRegistry: .builtIn,
-        evaluationSnapshot: EvaluationSnapshot()
+        evaluationSnapshot: EvaluationSnapshot(),
+        currentEvaluation: nil,
+        generation: nil
     )
 
     #expect(try DefaultEditorCommandContextResolver().resolve(command, in: context) == command)
@@ -193,7 +195,9 @@ private func planningContext(for session: EditorSession) -> EditorCommandPlannin
         document: session.document,
         selection: session.selection,
         objectRegistry: session.objectRegistry,
-        evaluationSnapshot: session.evaluationSnapshot
+        evaluationSnapshot: session.evaluationSnapshot,
+        currentEvaluation: session.currentEvaluation,
+        generation: session.generation
     )
 }
 

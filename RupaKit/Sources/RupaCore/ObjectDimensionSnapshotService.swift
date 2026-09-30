@@ -8,7 +8,9 @@ public struct ObjectDimensionSnapshotService: Sendable {
     public func snapshot(
         document: DesignDocument,
         targets: [SelectionTarget],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> ObjectDimensionSnapshot {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -27,13 +29,17 @@ public struct ObjectDimensionSnapshotService: Sendable {
         let topology = try topologyIfGeneratedFaceTargetsExist(
             for: dimensionTargets,
             in: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let summaryEntries: [ObjectDimensionSummaryResult.Entry]
         if let facePairEntry = try facePairEntryIfPresent(
             for: dimensionTargets,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology
         ) {
             summaryEntries = [facePairEntry]
@@ -41,16 +47,24 @@ public struct ObjectDimensionSnapshotService: Sendable {
             let faceResolver = ObjectFaceDimensionResolver()
             summaryEntries = try dimensionTargets.flatMap { target in
                 if let featureDimension = try ObjectFeatureDimension.resolve(target: target, in: document, topology: {
-                    try topology ?? TopologySnapshotService().snapshot(document: document, objectRegistry: objectRegistry)
+                    try topology ?? TopologySnapshotService().snapshot(
+                        document: document, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+                    )
                 }) {
                     return featureDimension.entries(for: target)
                 }
-                let source = try resolver.resolve(target: target, in: document)
+                let source = try resolver.resolve(
+                    target: target, in: document,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+                )
                 let faceDimension = try faceResolver.resolveSingleIfPresent(
                     target: target,
                     source: source,
                     in: document,
                     objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration,
                     topology: topology,
                     operationName: "Object dimension face summary"
                 )
@@ -70,6 +84,8 @@ public struct ObjectDimensionSnapshotService: Sendable {
         for targets: [SelectionTarget],
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?,
         topology: TopologySnapshot?
     ) throws -> ObjectDimensionSummaryResult.Entry? {
         guard targets.count == 2,
@@ -82,6 +98,8 @@ public struct ObjectDimensionSnapshotService: Sendable {
             second: second,
             in: document,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             topology: topology,
             operationName: "Object dimension face-pair summary"
         ) else {
@@ -107,14 +125,18 @@ public struct ObjectDimensionSnapshotService: Sendable {
     private func topologyIfGeneratedFaceTargetsExist(
         for targets: [SelectionTarget],
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> TopologySnapshot? {
         guard targets.contains(where: isGeneratedFaceTarget) else {
             return nil
         }
         return try TopologySnapshotService().snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 

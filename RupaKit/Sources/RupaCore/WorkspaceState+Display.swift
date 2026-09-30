@@ -61,7 +61,9 @@ extension WorkspaceState {
     mutating func setSurfaceFrameDisplay(
         query: SurfaceFrameQuery,
         isVisible: Bool?,
-        document: DesignDocument
+        document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         let displayID = try SurfaceFrameDisplayID(query: query)
         let existing = surfaceFrameDisplays[displayID]
@@ -70,7 +72,10 @@ extension WorkspaceState {
             surfaceFrameDisplays.removeValue(forKey: displayID)
             return
         }
-        _ = try SurfaceFrameService().resolveFrames(document: document, queries: [query])
+        _ = try SurfaceFrameService().resolveFrames(
+            document: document, queries: [query],
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         let display = try SurfaceFrameDisplay(query: query, isVisible: true)
         try display.validate()
         surfaceFrameDisplays[displayID] = display

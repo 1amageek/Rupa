@@ -11,14 +11,19 @@ extension DesignDocument {
     public mutating func duplicateBodyFaces(
         name: String = "Alternative Duplicate",
         targets: [SelectionTarget],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let operationName = "Alternative Duplicate"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
         guard targets.isEmpty == false else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) requires at least one face.")
         }
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         let entriesBySubshapeID = Dictionary(uniqueKeysWithValues: topology.entries.map { ($0.subshapeID, $0) })
         // The faces of each body, bodies in the order their first face was chosen.
         var groups: [(featureID: FeatureID, sceneNodeID: SceneNodeID, faces: [StableSubshapeReference])] = []
@@ -49,7 +54,9 @@ extension DesignDocument {
             }
         }
         let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
-            document: self, objectRegistry: objectRegistry, failurePrefix: "\(operationName) requires its bodies evaluated"
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "\(operationName) requires its bodies evaluated"
         )
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata

@@ -109,14 +109,11 @@ extension DesignDocument {
         }
         try surfaceFeature.validate(tolerance: modelingSettings.tolerance)
         feature.operation = .bSplineSurface(surfaceFeature)
+        // Whether the moved sheet validates and evaluates is decided at the store's evaluation
+        // boundary, which restores the document when it does not.
         let previousCADDocument = cadDocument
         do {
             try cadDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
-            try validate(objectRegistry: objectRegistry)
-            _ = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
-                document: self, objectRegistry: objectRegistry,
-                currentEvaluation: nil, currentGeneration: nil, failurePrefix: owner
-            )
         } catch {
             cadDocument = previousCADDocument
             throw EditorError(code: .commandInvalid, message: "\(owner) produced invalid sheet geometry: \(error.localizedDescription)")

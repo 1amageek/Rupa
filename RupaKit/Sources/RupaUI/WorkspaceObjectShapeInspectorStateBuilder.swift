@@ -36,7 +36,8 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
             var sizeLabels = ["X", "Y", "Z"]
             if object.typeID == .cube || object.typeID == .cylinder {
                 let source = try ObjectDimensionSourceResolver().resolve(
-                    target: SelectionTarget(sceneNodeID: node.id), in: document)
+                    target: SelectionTarget(sceneNodeID: node.id), in: document,
+                    currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration)
                 let axes = try Self.sizeAxes(featureID: source.featureID, in: document)
                 sizeLabels = axes.map(\.label)
                 let values = axes.map { axis in
@@ -126,15 +127,24 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
         }
     }
 
+    /// `currentEvaluation`, the document's evaluation at `currentGeneration`, is read instead of
+    /// evaluating the document for each edited object.
     static func sizeCommands(
-        _ axis: InspectorObjectAxis, meters: Double, nodeIDs: [SceneNodeID], in document: DesignDocument
+        _ axis: InspectorObjectAxis, meters: Double, nodeIDs: [SceneNodeID], in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil, currentGeneration: DocumentGeneration? = nil
     ) throws -> [EditorCommand] {
         var seen = Set<FeatureID>()
         return try nodeIDs.flatMap { id -> [EditorCommand] in
-            let source = try ObjectDimensionSourceResolver().resolve(target: .init(sceneNodeID: id), in: document)
+            let source = try ObjectDimensionSourceResolver().resolve(
+                target: .init(sceneNodeID: id), in: document,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
             let axes = try sizeAxes(featureID: source.featureID, in: document)
             let index = axis == .x ? 0 : axis == .y ? 1 : 2
-            let commands = try dimensionCommands(axes[index].kind, meters: meters, nodeIDs: [id], in: document)
+            let commands = try dimensionCommands(
+                axes[index].kind, meters: meters, nodeIDs: [id], in: document,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
             return seen.insert(source.featureID).inserted ? commands : []
         }
     }
@@ -157,7 +167,8 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
     }
 
     static func dimensionCommands(
-        _ kind: ObjectDimensionKind, meters: Double, nodeIDs: [SceneNodeID], in document: DesignDocument
+        _ kind: ObjectDimensionKind, meters: Double, nodeIDs: [SceneNodeID], in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil, currentGeneration: DocumentGeneration? = nil
     ) throws -> [EditorCommand] {
         guard meters.isFinite, meters > 0 else {
             throw EditorError(code: .commandInvalid, message: "Source size must be finite and positive.")
@@ -171,7 +182,10 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                 throw EditorError(code: .commandInvalid, message: "Unlock selected objects before changing their dimensions.")
             }
             let target = SelectionTarget(sceneNodeID: id)
-            let source = try ObjectDimensionSourceResolver().resolve(target: target, in: document)
+            let source = try ObjectDimensionSourceResolver().resolve(
+                target: target, in: document,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
             guard features.insert(source.featureID).inserted else { return nil }
             return .setObjectDimension(target: target, kind: kind, value: .length(meters, .meter))
         }

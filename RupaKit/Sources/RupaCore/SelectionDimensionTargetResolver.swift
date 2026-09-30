@@ -17,7 +17,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
     public func reference(
         for target: SelectionTarget,
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionReference {
         guard document.productMetadata.sceneNodes[target.sceneNodeID] != nil else {
             throw EditorError(
@@ -38,7 +40,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 target: target,
                 kind: .face,
                 document: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         case .edge(let componentID):
             return try generatedTopologyReference(
@@ -46,7 +50,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 target: target,
                 kind: .edge,
                 document: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         case .vertex(let componentID):
             return try generatedTopologyReference(
@@ -54,7 +60,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 target: target,
                 kind: .vertex,
                 document: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         case .sketchEntity(let componentID):
             return try sketchReference(
@@ -76,7 +84,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
         target: SelectionTarget,
         kind: TopologySummaryResult.Entry.Kind,
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> SelectionReference {
         guard let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
@@ -87,7 +97,9 @@ public struct SelectionDimensionTargetResolver: Sendable {
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let topology = try topologyService.snapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let entry = topology.entries.first(where: {
             $0.kind == kind &&

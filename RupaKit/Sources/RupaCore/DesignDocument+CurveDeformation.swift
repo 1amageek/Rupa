@@ -13,7 +13,9 @@ extension DesignDocument {
         referenceFace: SelectionTarget,
         targetFace: SelectionTarget,
         options: CurveDeformationOptions,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         let owner = "Deform Curve"
         guard !targets.isEmpty else {
@@ -22,7 +24,10 @@ extension DesignDocument {
         try options.validate()
         let offsetN = try resolvedLengthValue(options.offsetN, owner: "\(owner) N offset")
         let tolerance = modelingSettings.tolerance
-        let topology = try TopologySnapshotService().snapshot(document: self, objectRegistry: objectRegistry)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }

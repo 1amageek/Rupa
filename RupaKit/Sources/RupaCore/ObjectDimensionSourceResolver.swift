@@ -7,7 +7,9 @@ package struct ObjectDimensionSourceResolver: Sendable {
 
     package func resolve(
         target: SelectionTarget,
-        in document: DesignDocument
+        in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> ObjectDimensionSource {
         switch target.component {
         case .object, .face(_):
@@ -71,7 +73,9 @@ package struct ObjectDimensionSourceResolver: Sendable {
             target: target,
             featureID: featureID,
             sketchPlane: sketch.plane,
-            document: document
+            document: document,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         if let profile = try document.recognizedCylinderProfile(in: sketch) {
             let radius = try resolvedPositiveLengthValue(
@@ -126,7 +130,9 @@ package struct ObjectDimensionSourceResolver: Sendable {
         target: SelectionTarget,
         featureID: FeatureID,
         sketchPlane: SketchPlane,
-        document: DesignDocument
+        document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         guard case .edge(let componentID) = target.component else {
             return
@@ -139,7 +145,10 @@ package struct ObjectDimensionSourceResolver: Sendable {
         }
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let sceneNodeDescription = target.sceneNodeID.description
-        let topology = try TopologySnapshotService().snapshot(document: document)
+        let topology = try TopologySnapshotService().snapshot(
+            document: document,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let entry = topology.entries.first(where: { entry in
             entry.kind == .edge &&
                 entry.sceneNodeID == sceneNodeDescription &&

@@ -75,10 +75,15 @@ extension DesignDocument {
         target: SelectionTarget,
         until limit: SelectionTarget,
         shape: ExtendCurveShape = .natural,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         if limit.component == .object, productMetadata.sceneNodes[limit.sceneNodeID]?.reference?.kind == .body {
-            try extendSketchCurve(target: target, untilBody: limit, shape: shape, objectRegistry: objectRegistry)
+            try extendSketchCurve(
+                target: target, untilBody: limit, shape: shape, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
             return
         }
         let owner = "Extend Curve to a curve"
@@ -796,7 +801,8 @@ extension DesignDocument {
     /// body's faces in world space (`faceCrossingFractions`), and the extended curve ends at the
     /// first crossing past the original end; an extension that meets no face is refused.
     mutating func extendSketchCurve(
-        target: SelectionTarget, untilBody body: SelectionTarget, shape: ExtendCurveShape, objectRegistry: ObjectTypeRegistry
+        target: SelectionTarget, untilBody body: SelectionTarget, shape: ExtendCurveShape, objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?
     ) throws {
         let owner = "Extend Curve to a body"
         let selection = try editableSketchEntityBase(for: target, operationName: owner)
@@ -806,7 +812,10 @@ extension DesignDocument {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) could not resolve the curve end.")
         }
         let system = try placedSketchSystem(for: target, plane: selection.sketch.plane)
-        let topology = try TopologySnapshotService().snapshot(document: self)
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
         guard let evaluated = topology.evaluatedDocument else {
             throw EditorError(code: .referenceUnresolved, message: "\(owner) needs the evaluated document.")
         }

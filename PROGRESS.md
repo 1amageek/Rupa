@@ -418,7 +418,7 @@
   - [x] DF1 swift-CAD: one streaming SHA-256 without per-block allocation, and a validated document's source fingerprint computed once and carried to the evaluation engine; fingerprint values unchanged (swift-CAD 625da25). `depends:none` `parallel:none`
   - [x] DF2 RupaKit: the stable SHA-256 hasher hashes without per-block allocation or range iteration; digests unchanged. `depends:DF1` `parallel:none`
   - [x] DF3 A Geometry source command validates its document once: the applier starts from the store's validated source and hands back the validated result the store adopts. `depends:DF2` `parallel:none`
-  - [ ] DF4 Commands that read topology receive the store's current evaluation instead of evaluating the whole document again, and a direct edit's "still evaluates" check is the store's own evaluation boundary. `depends:DF3` `parallel:none`
+  - [x] DF4 Commands that read topology receive the store's current evaluation instead of evaluating the whole document again, and a direct edit's "still evaluates" check is the store's own evaluation boundary. `depends:DF3` `parallel:none`
   - [ ] DF5 Project staging: initial, edit and history staging share one pipeline that keeps the package round-trip contract and carries each validated document, so validation, source fingerprint, projection and evaluation happen once per candidate. `depends:DF4` `parallel:none`
   - [ ] DF6 Kernel incremental evaluation: validated document transitions survive store mutations so unchanged documents and graph-stable edits skip the whole-graph comparison. `depends:DF5` `parallel:none`
   - [ ] DF7 Hover, snap and placement form their own overlay layer: a pointer move rebuilds that layer only, and selection and document overlays are kept. `depends:DF6` `parallel:none`

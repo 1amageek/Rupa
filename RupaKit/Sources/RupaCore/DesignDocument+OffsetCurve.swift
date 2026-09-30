@@ -9,7 +9,9 @@ extension DesignDocument {
         distance: CADExpression,
         options: OffsetCurveOptions,
         vertexHandle: SketchEntityPointHandle? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID] {
         if options.mode == .slot {
             let featureID = try createSlotFromOffsetCurve(
@@ -243,7 +245,9 @@ extension DesignDocument {
                 distanceMeters: distanceMeters,
                 options: options,
                 vertexHandle: vertexHandle,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             return [featureID]
         case .edge:
@@ -253,7 +257,9 @@ extension DesignDocument {
                 distanceMeters: distanceMeters,
                 options: options,
                 vertexHandle: vertexHandle,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             return [featureID]
         case .vertex:
@@ -266,7 +272,9 @@ extension DesignDocument {
             try validateOffsetCurveVertexOptions(options)
             let resolvedTarget = try generatedSketchVertexOffsetTarget(
                 for: target,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             try offsetSketchVertex(
                 target: resolvedTarget.target,
@@ -290,7 +298,9 @@ extension DesignDocument {
         distanceMeters: Double,
         options: OffsetCurveOptions,
         vertexHandle: SketchEntityPointHandle?,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> FeatureID {
         let operationName = "Offset Face Loop"
         guard vertexHandle == nil else {
@@ -341,7 +351,9 @@ extension DesignDocument {
 
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         guard let entry = topology.entries.first(where: { $0.subshapeID == faceIdentity }) else {
             throw EditorError(
@@ -416,7 +428,9 @@ extension DesignDocument {
         distanceMeters: Double,
         options: OffsetCurveOptions,
         vertexHandle: SketchEntityPointHandle?,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> FeatureID {
         let operationName = "Offset Edge"
         guard vertexHandle == nil else {
@@ -485,11 +499,15 @@ extension DesignDocument {
 
         let topology = try TopologySnapshotService().snapshot(
             document: self,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         let evaluatedDocument = try DocumentEvaluationContextResolver().evaluatedDocument(
             document: self,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
             failurePrefix: "\(operationName) requires current generated topology"
         )
         guard let edgeEntry = topology.entries.first(where: { $0.subshapeID == edgeIdentity }) else {

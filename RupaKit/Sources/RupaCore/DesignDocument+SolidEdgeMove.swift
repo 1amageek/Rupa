@@ -7,7 +7,9 @@ extension DesignDocument {
         target: SelectionTarget,
         deltaX: CADExpression,
         deltaY: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws {
         let deltaXMeters = try resolvedLengthValue(deltaX, owner: "Body edge move delta X")
         let deltaYMeters = try resolvedLengthValue(deltaY, owner: "Body edge move delta Y")
@@ -29,7 +31,9 @@ extension DesignDocument {
                 bodyFeatureID: resolvedTarget.featureID,
                 deltaX: deltaX,
                 deltaY: deltaY,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             ) {
                 return
             }
@@ -39,7 +43,9 @@ extension DesignDocument {
             resolvedTarget: resolvedTarget,
             deltaXMeters: deltaXMeters,
             deltaYMeters: deltaYMeters,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
@@ -48,14 +54,18 @@ extension DesignDocument {
         bodyFeatureID: FeatureID,
         deltaX: CADExpression,
         deltaY: CADExpression,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> Bool {
         let resolved: [SketchDimensionTargetResolver.ResolvedTarget]
         do {
             resolved = try SketchDimensionTargetResolver().resolve(
                 document: self,
                 targets: [target],
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
         } catch let error as EditorError where error.code == .referenceUnresolved {
             return false
@@ -174,7 +184,9 @@ extension DesignDocument {
         resolvedTarget: EditableBodyTargetResolution,
         deltaXMeters: Double,
         deltaYMeters: Double,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws {
         let featureID = resolvedTarget.featureID
         guard var feature = cadDocument.designGraph.nodes[featureID],
@@ -194,7 +206,9 @@ extension DesignDocument {
             let edge = try editableBodyEdge(
                 for: resolvedTarget.target,
                 operationName: "Body edge move",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             nextSketch = try movedRectangleProfileSketch(
                 sketch,
@@ -216,7 +230,9 @@ extension DesignDocument {
                 sketchPlane: sketch.plane,
                 expectedKind: .edge,
                 operationName: "Body edge move",
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
             )
             nextSketch = try profileLoop.movedVertexSketch(
                 targetVertexIndex: index,

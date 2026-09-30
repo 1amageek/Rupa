@@ -291,7 +291,7 @@ public final class EditorSession {
     }
 
     func publishWorkspaceState(_ state: WorkspaceState) throws {
-        try state.validate(against: document)
+        try state.validate(against: document, currentEvaluation: currentEvaluation, currentGeneration: generation)
         workspaceState = state
     }
 
@@ -623,7 +623,9 @@ public final class EditorSession {
     public func execute(
         _ command: WorkspaceCommand
     ) throws -> WorkspaceCommandResult {
-        try workspaceState.apply(command, document: document)
+        try workspaceState.apply(
+            command, document: document, currentEvaluation: currentEvaluation, currentGeneration: generation
+        )
     }
 
     @discardableResult
@@ -699,7 +701,9 @@ public final class EditorSession {
             document: document,
             selection: selection,
             objectRegistry: objectRegistry,
-            evaluationSnapshot: evaluationSnapshot
+            evaluationSnapshot: evaluationSnapshot,
+            currentEvaluation: currentEvaluation,
+            generation: generation
         )
         return try commandContextResolver.resolve(command, in: context)
     }

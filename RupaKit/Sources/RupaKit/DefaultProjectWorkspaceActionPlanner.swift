@@ -30,7 +30,9 @@ public struct DefaultProjectWorkspaceActionPlanner: ProjectWorkspaceActionPlanni
             document: snapshot.document.document,
             selection: snapshot.selection,
             objectRegistry: snapshot.objectRegistry,
-            evaluationSnapshot: snapshot.evaluationSnapshot
+            evaluationSnapshot: snapshot.evaluationSnapshot,
+            currentEvaluation: snapshot.cadInteraction,
+            generation: snapshot.documentGeneration
         )
         let resolvedCommands = try commands.map { command in
             try ContextResolvedEditorCommand(
