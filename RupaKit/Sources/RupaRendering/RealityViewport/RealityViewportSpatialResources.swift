@@ -30,6 +30,20 @@ final class RealityViewportSpatialResources {
     private var referenceAnnotationRoot: Entity?
     private var gridPlacement: ModelEntity?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
+    /// One native entity per world-mesh group: a handle's mesh alone, or every handle-free mesh
+    /// of one attachment as parts of one mesh. `parts` are the prepared parts, in the order of
+    /// `meshOrdinals`, which a suppression filters without rebuilding the mesh.
+    private struct WorldMeshGroup {
+        let entity: ModelEntity
+        let mesh: LowLevelMesh
+        let parts: [LowLevelMesh.Part]
+        let meshOrdinals: [Int]
+    }
+    private var worldMeshGroups: [WorldMeshGroup] = []
+    private var planarPaths: [ModelEntity] = []
+    /// The prepared items a hover delta withholds (`RealityViewportSpatialDelta`). A withheld
+    /// item keeps its native resources, draws nothing and answers no hit.
+    private(set) var suppression = RealityViewportSpatialDelta.Suppression()
     struct MarkerCollision {
         let visual: Entity
         let collider: Entity
@@ -150,6 +164,79 @@ final class RealityViewportSpatialResources {
             return (record.index, false, record.depth, record.attachment)
         }
         return nil
+    }
+
+    /// Withholds the prepared items `suppression` names and restores every other one, so the
+    /// frame draws exactly its prepared items minus these.
+    ///
+    /// World meshes and planar paths take effect at once: a grouped mesh drops the withheld
+    /// parts from its native part list, and every other entity is disabled. A withheld
+    /// camera-relative item and every collider of a withheld item stop drawing and answering at
+    /// once; a restored camera-relative item is drawn again by the next placement
+    /// (`updatePlacement` or `updateCamera`).
+    func suppress(_ suppression: RealityViewportSpatialDelta.Suppression) throws {
+        try validate(suppression)
+        let previous = self.suppression
+        self.suppression = suppression
+        for group in worldMeshGroups {
+            // Rewriting an unchanged part list would resubmit the mesh for nothing.
+            guard group.meshOrdinals.contains(where: {
+                previous.meshes.contains($0) != suppression.meshes.contains($0)
+            }) else { continue }
+            let parts = zip(group.meshOrdinals, group.parts).compactMap { ordinal, part in
+                suppression.meshes.contains(ordinal) ? nil : part
+            }
+            group.mesh.parts.replaceAll(parts)
+            group.entity.isEnabled = !parts.isEmpty
+        }
+        for (ordinal, entity) in planarPaths.enumerated() {
+            entity.isEnabled = !suppression.paths.contains(ordinal)
+        }
+        for ordinal in suppression.labels {
+            labels[ordinal].0.isEnabled = false
+            labels[ordinal].2?.isEnabled = false
+        }
+        for ordinal in suppression.markers { markers[ordinal].0.isEnabled = false }
+        for ordinal in suppression.cameraLines { cameraLines[ordinal].0.isEnabled = false }
+        for ordinal in suppression.cameraPaths {
+            cameraPaths[ordinal].0.isEnabled = false
+            cameraPaths[ordinal].2?.isEnabled = false
+        }
+        for record in markerCollisions.values where !record.visual.isEnabled { record.collider.isEnabled = false }
+        for record in labelCollisions.values where !record.visual.isEnabled { record.collider.isEnabled = false }
+        for record in lineCollisions where !record.visual.isEnabled { record.collider.isEnabled = false }
+    }
+
+    /// Throws unless every ordinal `suppression` names is a prepared item of its kind.
+    func validate(_ suppression: RealityViewportSpatialDelta.Suppression) throws {
+        for (ordinals, count) in [(suppression.meshes, batch.meshes.count), (suppression.paths, planarPaths.count),
+                                  (suppression.labels, labels.count), (suppression.markers, markers.count),
+                                  (suppression.cameraLines, cameraLines.count),
+                                  (suppression.cameraPaths, cameraPaths.count)] {
+            guard ordinals.allSatisfy({ (0..<count).contains($0) }) else {
+                throw RealityViewportSpatialBatch.invalid("A hover delta withholds an item the mounted overlay did not prepare.")
+            }
+        }
+    }
+
+    /// The number of handle records the prepared batch's indexes name.
+    var handleCount: Int { batch.handleCount }
+
+    /// The native parts the world meshes draw; a withheld part is not drawn.
+    var drawnWorldMeshPartCount: Int {
+        worldMeshGroups.reduce(0) { $0 + ($1.entity.isEnabled ? $1.mesh.parts.count : 0) }
+    }
+
+    /// Places the camera-relative items again for the camera already applied and recomputes the
+    /// collision bounds, leaving the grid, axes and rulers as they are. A hover delta changes
+    /// which items are drawn, not where the camera is.
+    func updatePlacement(camera: Entity, content: RealityViewCameraContent,
+                         objectPreviews: [String: Transform3D]) throws {
+        guard let projection = cameraProjection(camera: camera, content: content) else {
+            throw CameraReadinessError.projectionUnavailable
+        }
+        try place(projection: projection, objectPreviews: objectPreviews)
+        try updateCollisionBounds(projection: projection)
     }
 
     func projectedHandleDistance(
@@ -675,12 +762,58 @@ final class RealityViewportSpatialResources {
         scaleReadout = nil
     }
 
+    /// The admission of a delta layer drawn over `base`: `base`'s prepared counts (its surface,
+    /// its batch and its native preparation, suppressed items included, since they keep their
+    /// resources) plus `batch`'s own items and the complete overlay's records.
+    private init(delta batch: RealityViewportSpatialBatch, over base: RealityViewportSpatialResources) throws {
+        guard !batch.includesGrid, !batch.includesAxes, batch.gridPlacement == nil, batch.boundsRulers == nil else {
+            throw RealityViewportSpatialBatch.invalid("A hover delta cannot carry the grid, axes, grid placement or bounds rulers.")
+        }
+        guard batch.renderOrigin == base.batch.renderOrigin, batch.limits == base.batch.limits,
+              batch.retainedSurfaceByteCount == base.batch.admittedByteCount else {
+            throw RealityViewportSpatialBatch.invalid("A hover delta was not admitted over the mounted overlay.")
+        }
+        func sum(_ prepared: Int, _ added: Int, limit: Int) throws -> Int {
+            let total = prepared.addingReportingOverflow(added)
+            guard !total.overflow, total.partialValue <= limit else { throw RealityViewportSpatialBatch.exhausted() }
+            return total.partialValue
+        }
+        self.batch = batch
+        preparedItemCount = try sum(base.preparedItemCount, batch.itemCount, limit: batch.limits.maxItemCount)
+        preparedPositionCount = try sum(base.preparedPositionCount, batch.positionCount, limit: batch.limits.maxPositionCount)
+        preparedTriangleCount = try sum(base.preparedTriangleCount, batch.triangleCount, limit: batch.limits.maxTriangleCount)
+        byteLimit = base.byteLimit
+        // `batch.admittedByteCount` already charges the mounted batch as its retained surface;
+        // the base's native preparation beyond its batch is charged here.
+        preparedByteCount = try sum(base.preparedByteCount - base.batch.admittedByteCount,
+                                    batch.admittedByteCount, limit: base.byteLimit)
+        surfacePositionCount = base.surfacePositionCount
+        hasSectionedCameraGeometry = batch.labels.contains { $0.attachment == .sectionedGeometry }
+            || batch.markers.contains { $0.attachment == .sectionedGeometry }
+            || batch.cameraLines.contains { $0.attachment == .sectionedGeometry }
+            || batch.cameraPaths.contains { $0.attachment == .sectionedGeometry }
+        scaleReadout = nil
+    }
+
     static func prepare(batch: RealityViewportSpatialBatch,
                         surfacePlan: MeshSourcePresentationRenderPlan? = nil,
                         reusing previous: RealityViewportSpatialResources? = nil) async throws -> RealityViewportSpatialResources {
         try Task.checkCancellation()
         try batch.validate(surfacePlan: surfacePlan)
-        let result = RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan)
+        return try await populate(RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan), reusing: previous)
+    }
+
+    /// Prepares the items a hover delta adds over the mounted `base`, off-scene. Its handle
+    /// indexes name the complete overlay's records; its admission continues `base`'s.
+    static func prepareDelta(batch: RealityViewportSpatialBatch,
+                             over base: RealityViewportSpatialResources) async throws -> RealityViewportSpatialResources {
+        try Task.checkCancellation()
+        return try await populate(RealityViewportSpatialResources(delta: batch, over: base), reusing: base)
+    }
+
+    private static func populate(_ result: RealityViewportSpatialResources,
+                                 reusing previous: RealityViewportSpatialResources?) async throws -> RealityViewportSpatialResources {
+        let batch = result.batch
         result.lineCollisions.reserveCapacity(batch.lineCollisionCount)
         result.lineCollisionIndex.reserveCapacity(batch.lineCollisionCount)
         if batch.includesGrid {
@@ -814,6 +947,8 @@ final class RealityViewportSpatialResources {
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: geometry.appearances.map { material($0.color, depth: $0.depth) })
+            result.worldMeshGroups.append(.init(entity: entity, mesh: mesh, parts: geometry.parts,
+                                                meshOrdinals: group.meshIndices))
             result.register(entity, handleIndex: group.handleIndex)
             result.root(for: group.attachment).addChild(entity)
             if let index = group.handleIndex {
@@ -855,6 +990,7 @@ final class RealityViewportSpatialResources {
             let entity = ModelEntity(mesh: resource, materials: [material(path.color, depth: path.depth)])
             entity.position = try RealityViewportSpatialBatch.nativePoint(path.origin, relativeTo: batch.renderOrigin)
             orient(entity, on: path)
+            result.planarPaths.append(entity)
             result.register(entity, handleIndex: path.handleIndex)
             result.root(for: path.attachment).addChild(entity)
             if let index = path.handleIndex, let tolerance = path.hitTolerancePoints {
@@ -1216,9 +1352,65 @@ final class RealityViewportSpatialResources {
         }
         try updateAxes(projection: projection, viewportSize: gridSize,
                        safeRect: safeRect, excludedRects: excludedRects)
-        for (entity, path, collider) in cameraPaths {
+        try place(projection: projection, objectPreviews: objectPreviews)
+        try updateBoundsRulers(projection: projection, safeRect: safeRect, excludedRects: excludedRects)
+        try updateCollisionBounds(projection: projection)
+        do {
+            if let gridRuler {
+                guard grid != nil else { throw RealityViewportSpatialBatch.invalid("The mounted frame did not admit a grid.") }
+                let remaining = batch.limits.maxItemCount - preparedItemCount
+                guard excludedRects.count <= remaining else { throw RealityViewportSpatialBatch.exhausted() }
+                let plane = ViewportCanvasPlane.displayed(for: gridBasis)
+                var scaleAnchor: Point3D?
+                for screen in [CGPoint(x: gridSize.width / 2, y: gridSize.height / 2), .zero,
+                               CGPoint(x: gridSize.width, y: 0), CGPoint(x: 0, y: gridSize.height),
+                               CGPoint(x: gridSize.width, y: gridSize.height)] {
+                    if let point = projection.unproject(screen, onto: plane, origin: batch.renderOrigin) {
+                        scaleAnchor = point
+                        break
+                    }
+                }
+                guard let scaleAnchor else {
+                    hideGrid()
+                    return nil
+                }
+                let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(scaleAnchor, relativeTo: batch.renderOrigin)
+                let projectedScale = hypot(projection.forward.c, projection.forward.d)
+                    / CGFloat(projection.depthScale(projection.local(nativeAnchor)))
+                let frame = try ViewportProjectedGrid.makeNativeFrame(.init(
+                    ruler: gridRuler, basis: gridBasis, viewportSize: gridSize,
+                    projectedScale: projectedScale,
+                    project: { point in
+                        let relative = SIMD3(Float(point.x - self.batch.renderOrigin.x),
+                                             Float(point.y - self.batch.renderOrigin.y), Float(point.z - self.batch.renderOrigin.z))
+                        return projection.project(relative)
+                    },
+                    unproject: { projection.unproject($0, onto: $1, origin: self.batch.renderOrigin) },
+                    chromeExclusionRects: excludedRects, visualSpacingMode: gridSpacing
+                ))
+                if let frame {
+                    try updateGrid(frame, projection: projection)
+                } else {
+                    hideGrid()
+                }
+            } else {
+                hideGrid()
+            }
+        } catch let error as MeshSourcePresentationRenderError {
+            return error
+        } catch {
+            return RealityViewportSpatialBatch.invalid("Native grid frame failed: \(error)")
+        }
+        return nil
+    }
+
+    /// Places every camera-relative item for `projection`: camera paths, labels, markers and
+    /// their colliders, and camera lines. A suppressed item stays disabled.
+    private func place(projection: CameraProjection, objectPreviews: [String: Transform3D]) throws {
+        for (ordinal, (entity, path, collider)) in cameraPaths.enumerated() {
             entity.isEnabled = false
             collider?.isEnabled = false
+            guard !suppression.cameraPaths.contains(ordinal) else { continue }
             let point = try RealityViewportSpatialBatch.CameraPoint(anchor: path.anchor, offset: path.offset)
                 .applying(path.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] })
             guard let placement = placement(anchor: point.anchor, offset: point.offset, projection: projection) else {
@@ -1228,9 +1420,10 @@ final class RealityViewportSpatialResources {
             entity.scale = SIMD3(repeating: placement.metersPerPoint)
             entity.isEnabled = true
         }
-        for (entity, label, collider) in labels {
+        for (ordinal, (entity, label, collider)) in labels.enumerated() {
             entity.isEnabled = false
             collider?.isEnabled = false
+            guard !suppression.labels.contains(ordinal) else { continue }
             guard let placement = placement(anchor: label.anchor, offset: label.offset, projection: projection) else {
                 continue
             }
@@ -1249,7 +1442,11 @@ final class RealityViewportSpatialResources {
             entity.isEnabled = true
         }
         var updatedBox: LowLevelMesh?
-        for (entity, marker, orientedBox) in markers {
+        for (ordinal, (entity, marker, orientedBox)) in markers.enumerated() {
+            guard !suppression.markers.contains(ordinal) else {
+                entity.isEnabled = false
+                continue
+            }
             let mutation = marker.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }
             let point = try RealityViewportSpatialBatch.CameraPoint(anchor: marker.anchor, offset: marker.offset)
                 .applying(mutation)
@@ -1276,7 +1473,11 @@ final class RealityViewportSpatialResources {
                 rect: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2),
                 anchor: record.visual.position, projection: projection)
         }
-        for (entity, mesh, line, proxies, strokes) in cameraLines {
+        for (ordinal, (entity, mesh, line, proxies, strokes)) in cameraLines.enumerated() {
+            guard !suppression.cameraLines.contains(ordinal) else {
+                entity.isEnabled = false
+                continue
+            }
             let mutation = line.objectPreviewOccurrenceID.flatMap { objectPreviews[$0] }
             let isWorldPolyline = line.isWorldPolyline
             var valid = true
@@ -1346,55 +1547,6 @@ final class RealityViewportSpatialResources {
             }
             entity.isEnabled = valid
         }
-        try updateBoundsRulers(projection: projection, safeRect: safeRect, excludedRects: excludedRects)
-        try updateCollisionBounds(projection: projection)
-        do {
-            if let gridRuler {
-                guard grid != nil else { throw RealityViewportSpatialBatch.invalid("The mounted frame did not admit a grid.") }
-                let remaining = batch.limits.maxItemCount - preparedItemCount
-                guard excludedRects.count <= remaining else { throw RealityViewportSpatialBatch.exhausted() }
-                let plane = ViewportCanvasPlane.displayed(for: gridBasis)
-                var scaleAnchor: Point3D?
-                for screen in [CGPoint(x: gridSize.width / 2, y: gridSize.height / 2), .zero,
-                               CGPoint(x: gridSize.width, y: 0), CGPoint(x: 0, y: gridSize.height),
-                               CGPoint(x: gridSize.width, y: gridSize.height)] {
-                    if let point = projection.unproject(screen, onto: plane, origin: batch.renderOrigin) {
-                        scaleAnchor = point
-                        break
-                    }
-                }
-                guard let scaleAnchor else {
-                    hideGrid()
-                    return nil
-                }
-                let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(scaleAnchor, relativeTo: batch.renderOrigin)
-                let projectedScale = hypot(projection.forward.c, projection.forward.d)
-                    / CGFloat(projection.depthScale(projection.local(nativeAnchor)))
-                let frame = try ViewportProjectedGrid.makeNativeFrame(.init(
-                    ruler: gridRuler, basis: gridBasis, viewportSize: gridSize,
-                    projectedScale: projectedScale,
-                    project: { point in
-                        let relative = SIMD3(Float(point.x - self.batch.renderOrigin.x),
-                                             Float(point.y - self.batch.renderOrigin.y), Float(point.z - self.batch.renderOrigin.z))
-                        return projection.project(relative)
-                    },
-                    unproject: { projection.unproject($0, onto: $1, origin: self.batch.renderOrigin) },
-                    chromeExclusionRects: excludedRects, visualSpacingMode: gridSpacing
-                ))
-                if let frame {
-                    try updateGrid(frame, projection: projection)
-                } else {
-                    hideGrid()
-                }
-            } else {
-                hideGrid()
-            }
-        } catch let error as MeshSourcePresentationRenderError {
-            return error
-        } catch {
-            return RealityViewportSpatialBatch.invalid("Native grid frame failed: \(error)")
-        }
-        return nil
     }
 
     private func hideGrid() {

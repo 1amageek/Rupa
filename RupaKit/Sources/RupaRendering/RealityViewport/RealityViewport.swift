@@ -28,6 +28,8 @@ final class RealityViewport {
     private(set) var maximumNativeUploadDuration: Duration = .zero
     private var surfaceResources: SurfaceResources?
     private var spatialResources: RealityViewportSpatialResources?
+    /// The hover delta drawn over `spatialResources`, if any (`applySpatialDelta(_:)`).
+    private var spatialDelta: RealityViewportSpatialDeltaLayer?
     private var spatialCameraState: SpatialCameraState?
     private(set) var spatialCameraUpdateCount = 0
 
@@ -45,6 +47,8 @@ final class RealityViewport {
     private let geometryRoot = Entity()
     private var bounds = BoundingBox()
     private var fixedBounds = BoundingBox()
+    /// `fixedBounds` as prepared, before any hover delta's sectioned items joined it.
+    private var preparedFixedBounds = BoundingBox()
     private var entries: [(surface: ModelEntity, lines: ModelEntity?)] = []
     private var objectPreviews: [Int: RealityViewportObjectPreview] = [:]
     private var appliedObjectPreviews: [String: Transform3D] = [:]
@@ -214,8 +218,99 @@ final class RealityViewport {
 
     /// Frame-local provenance only. The host must still match its preparation
     /// identity before resolving a CAD operation from this index.
+    /// Indexes name the records of the overlay drawn: the complete overlay's once a hover delta
+    /// is drawn.
     func spatialHandleIndex(for entity: Entity) -> UInt32? {
-        spatialResources?.handleIndex(for: entity)
+        if let added = spatialDelta?.added, let index = added.handleIndex(for: entity) { return index }
+        guard let index = spatialResources?.handleIndex(for: entity) else { return nil }
+        guard let spatialDelta else { return index }
+        return spatialDelta.retainedHandles[index]
+    }
+
+    /// The native parts the drawn world meshes draw, the delta layer's included.
+    var drawnWorldMeshPartCount: Int {
+        (spatialResources?.drawnWorldMeshPartCount ?? 0) + (spatialDelta?.added?.drawnWorldMeshPartCount ?? 0)
+    }
+
+    /// Prepares `delta` over this frame's overlay, off-scene: the frame draws nothing new until
+    /// `applySpatialDelta(_:)`.
+    func prepareSpatialDelta(_ delta: RealityViewportSpatialDelta) async throws -> RealityViewportSpatialDeltaLayer {
+        guard let base = spatialResources else {
+            throw RealityViewportSpatialBatch.invalid("A hover delta requires a prepared spatial overlay.")
+        }
+        var added: RealityViewportSpatialResources?
+        if let batch = delta.added {
+            added = try await RealityViewportSpatialResources.prepareDelta(batch: batch, over: base)
+        }
+        try Task.checkCancellation()
+        return RealityViewportSpatialDeltaLayer(base: base, suppressed: delta.suppressed, added: added,
+            retainedHandles: delta.retainedHandles, handleCount: delta.records.count)
+    }
+
+    /// Draws `layer` in place of the delta drawn so far, or the prepared overlay alone for nil.
+    ///
+    /// Everything is validated before anything changes, so a refused layer leaves the drawn
+    /// overlay as it was. Once applied, the frame draws exactly the prepared overlay minus the
+    /// withheld items plus the added ones, and every hit names the complete overlay's records.
+    /// Camera-relative items are placed at once for the camera already applied. While the native
+    /// camera has no projection yet, the next camera update places them, as it does for a newly
+    /// mounted frame; any other placement failure is thrown with the layer applied and no camera
+    /// state recorded, so the next camera update places everything again.
+    func applySpatialDelta(_ layer: RealityViewportSpatialDeltaLayer?) throws {
+        guard let base = spatialResources else {
+            if layer == nil { return }
+            throw RealityViewportSpatialBatch.invalid("A hover delta requires a prepared spatial overlay.")
+        }
+        if let layer {
+            guard layer.base === base else {
+                throw RealityViewportSpatialBatch.invalid("A hover delta was prepared over a different overlay.")
+            }
+            guard layer.retainedHandles.allSatisfy({ Int($0.key) < base.handleCount && Int($0.value) < layer.handleCount }) else {
+                throw RealityViewportSpatialBatch.invalid("A hover delta retains a handle outside its record tables.")
+            }
+        }
+        let suppression = layer?.suppressed ?? .init()
+        try base.validate(suppression)
+        spatialDelta?.added?.root.removeFromParent()
+        spatialDelta?.added?.sectionedRoot.removeFromParent()
+        try base.suppress(suppression)
+        if let added = layer?.added {
+            // Children of the prepared roots share their origin, enablement and clipping.
+            base.root.addChild(added.root)
+            base.sectionedRoot.addChild(added.sectionedRoot)
+        }
+        spatialDelta = layer
+        fixedBounds = preparedFixedBounds
+        if let added = layer?.added, !added.sectionedRoot.children.isEmpty {
+            fixedBounds.formUnion(added.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
+        }
+        bounds = fixedBounds
+        guard spatialCameraState != nil, let content else {
+            spatialCameraState = nil
+            return
+        }
+        do {
+            try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
+            _ = try layer?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
+            try updateSectionedBounds()
+        } catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable {
+            spatialCameraState = nil
+        } catch {
+            spatialCameraState = nil
+            throw error
+        }
+    }
+
+    /// Recomputes the section containment from the camera-placed sectioned items.
+    private func updateSectionedBounds() throws {
+        guard let spatialResources,
+              spatialResources.hasSectionedCameraGeometry
+                || spatialDelta?.added?.hasSectionedCameraGeometry == true else { return }
+        bounds = fixedBounds
+        bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
+        if let requestedSection {
+            try updateSection(plane: requestedSection.plane, side: requestedSection.side, tolerance: requestedSection.tolerance)
+        }
     }
 
     /// The scale readout published by the current native grid frame. It is
@@ -266,6 +361,7 @@ final class RealityViewport {
             }
         }
         prepared.fixedBounds = prepared.bounds
+        prepared.preparedFixedBounds = prepared.bounds
         try prepared.validateSurfaceCompleteness()
         try Task.checkCancellation()
         return prepared
@@ -776,7 +872,7 @@ final class RealityViewport {
             return
         }
         let available = surfaceResources.plan.nativePreparationByteLimit
-            - (spatialResources?.preparedByteCount ?? surfaceResources.plan.retainedByteCount)
+            - ((spatialDelta?.added ?? spatialResources)?.preparedByteCount ?? surfaceResources.plan.retainedByteCount)
         for index in Array(objectPreviews.keys) where
             mutations[surfaceResources.plan.occurrences[index].occurrenceID.rawValue] == nil {
             objectPreviews.removeValue(forKey: index)
@@ -943,14 +1039,10 @@ final class RealityViewport {
                                            gridRuler: gridRuler, gridBasis: appliedLayout.basis,
                                            gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing,
                                            objectPreviews: appliedObjectPreviews)
+        // A delta layer has no grid, axes or rulers, so it reports no grid failure.
+        _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
         try updateCameraCalibration(content: content)
-        if let spatialResources, spatialResources.hasSectionedCameraGeometry {
-            bounds = fixedBounds
-            bounds.formUnion(spatialResources.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
-            if let requestedSection {
-                try updateSection(plane: requestedSection.plane, side: requestedSection.side, tolerance: requestedSection.tolerance)
-            }
-        }
+        try updateSectionedBounds()
         if gridError == nil { spatialCameraState = state }
         return gridError
     }
@@ -1435,7 +1527,8 @@ final class RealityViewport {
               root.isEnabled, clipper.isEnabled, content != nil, root.scene != nil else {
             throw Self.queryFailure("The native handle query requires a finite point and matching mounted frame.")
         }
-        guard let spatialResources, spatialResources.collisionBounds != nil else { return [] }
+        guard let spatialResources,
+              spatialResources.collisionBounds != nil || spatialDelta?.added?.collisionBounds != nil else { return [] }
         // Preview surfaces no longer match committed collision geometry.
         // Annotation handles remain authoritative through their live colliders.
         let previewing = !appliedObjectPreviews.isEmpty
@@ -1461,11 +1554,11 @@ final class RealityViewport {
         var candidates: [(index: UInt32, annotation: Bool, marker: Bool, projected: CGFloat, distance: Float)] = []
         for hit in query.hits where hit.entity.isEnabledInHierarchy
             && hit.entity.components[CollisionComponent.self]?.filter.group == Self.spatialCollisionGroup {
-            guard let metadata = spatialResources.handleMetadata(for: hit.entity) else {
+            guard let (owner, metadata) = try spatialHandle(for: hit.entity, base: spatialResources) else {
                 throw Self.queryFailure("The native collision hit has no prepared handle provenance.")
             }
             if previewing && metadata.depth != .annotation { continue }
-            guard let distance = try spatialResources.projectedHandleDistance(for: hit.entity, at: point,
+            guard let distance = try owner.projectedHandleDistance(for: hit.entity, at: point,
                 section: metadata.attachment == .sectionedGeometry ? section : nil, project: {
                 self.content?.project(point: $0, to: .local)
             }) else { continue }
@@ -1494,6 +1587,30 @@ final class RealityViewport {
         }
         var seen: Set<UInt32> = []
         return candidates.compactMap { seen.insert($0.index).inserted ? $0.index : nil }
+    }
+
+    /// The resources that prepared `entity`'s collider and its handle metadata, whose index names
+    /// the records of the overlay drawn: a delta layer's own, and a prepared handle's remapped to
+    /// the complete overlay once a delta is drawn.
+    private func spatialHandle(
+        for entity: Entity, base: RealityViewportSpatialResources
+    ) throws -> (owner: RealityViewportSpatialResources, metadata: (
+        index: UInt32, isMarker: Bool, depth: RealityViewportSpatialBatch.Depth,
+        attachment: RealityViewportSpatialBatch.Attachment
+    ))? {
+        if let added = spatialDelta?.added, let metadata = added.handleMetadata(for: entity) {
+            return (added, metadata)
+        }
+        guard var metadata = base.handleMetadata(for: entity) else { return nil }
+        if let spatialDelta {
+            // A withheld item's colliders are disabled, so an enabled one always carries a
+            // retained handle.
+            guard let index = spatialDelta.retainedHandles[metadata.index] else {
+                throw Self.queryFailure("A withheld native handle answered a hit.")
+            }
+            metadata.index = index
+        }
+        return (base, metadata)
     }
 
     /// Collision winding copies never create a new editable CAD face.
@@ -2023,7 +2140,8 @@ final class RealityViewport {
         origin: SIMD3<Float>, direction: SIMD3<Float>, length: Float, near: Float, far: Float
     ) {
         var queryBounds = entries.isEmpty ? nil : bounds
-        if let spatialBounds = spatialResources?.collisionBounds {
+        for spatialBounds in [spatialResources?.collisionBounds, spatialDelta?.added?.collisionBounds] {
+            guard let spatialBounds else { continue }
             if queryBounds == nil { queryBounds = spatialBounds }
             else { queryBounds?.formUnion(spatialBounds) }
         }

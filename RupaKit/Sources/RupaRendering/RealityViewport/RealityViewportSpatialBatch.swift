@@ -426,7 +426,8 @@ struct RealityViewportSpatialBatch: Sendable {
             try validateHitTolerance(path.hitTolerancePoints)
             try Task.checkCancellation()
             try item()
-            try charge(1, stride: MemoryLayout<PlanarPath>.stride)
+            // The native owner keeps each path's entity so a hover delta can withhold it.
+            try charge(1, stride: MemoryLayout<PlanarPath>.stride + MemoryLayout<ModelEntity>.stride)
             if path.handleIndex != nil, path.hitTolerancePoints != nil {
                 try charge(1, stride: MemoryLayout<CollisionComponent>.stride
                            + MemoryLayout<[ShapeResource]>.stride
@@ -693,10 +694,12 @@ struct RealityViewportSpatialBatch: Sendable {
             try charge(buckets, stride: MemoryLayout<ObjectIdentifier>.stride + MemoryLayout<Int>.stride + MemoryLayout<UInt64>.stride)
             try charge(128, stride: 1)
         }
-        // A grouped mesh retains a bounded source-index list and native owner.
-        // Reserving once per source mesh covers the worst case of distinct handles.
+        // A grouped mesh retains a bounded source-index list, its prepared parts (which a hover
+        // delta filters) and native owner. Reserving once per source mesh covers the worst case
+        // of distinct handles.
         try charge(meshes.count, stride: 2 * MemoryLayout<Int>.stride
                    + 2 * MemoryLayout<(Attachment, UInt32?, [Int])>.stride
+                   + MemoryLayout<LowLevelMesh.Part>.stride
                    + MemoryLayout<(ModelEntity, LowLevelMesh)>.stride)
         for (count, keyStride) in [(paths.count + cameraPaths.count, MemoryLayout<CGPath>.stride),
                                    (labels.count + rulerLabelCount, MemoryLayout<String>.stride)] where count > 0 {
