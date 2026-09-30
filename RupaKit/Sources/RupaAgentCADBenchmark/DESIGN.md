@@ -2287,18 +2287,15 @@ The earlier `runReference(candidate:)` check remains the candidate-planning
 boundary, while category facades must not duplicate or weaken this shared
 preflight rule.
 
-The transform facade uses this contract to build the public source primitive
-as the initial challenge condition with a pre-owned `SceneNodeID`. Its routing
-closure may then lower the candidate's public transform to exactly one
-`setSceneNodeTransform` command for that ID. Initial-source construction is not
-counted as an Agent mutation; the measured transform must still traverse the
-registered controller and publish exactly once. The transform oracle compares
-the immutable initial and final snapshots to prove source identity and geometry
-were preserved and only the requested local/world placement changed. Focused
-shared-harness tests must prove the default path is unchanged, a seeded known-ID
-source reaches the real transform command with one publication and cleanup,
-and provider failure cannot publish. This authority-neutral foundation changes
-neither activated IDs nor public candidate/JSON/CLI schemas.
+The transform facade no longer seeds its source (the seed-provider and
+transform-seed boundaries were deleted; see the planner contract above). One
+semantic program creates the typed source in its first node and places that
+local scene output in its second, so a realized transform case runs two
+commands in one transaction: document generation +2, transaction revision +1,
+one publication, workspace unchanged. The transform oracle compares the
+immutable initial and final snapshots to prove the source's identity and
+geometry and that only the requested local/world placement differs from the
+created source.
 
 The kernel's analytic sphere constructor is a separate lower-level capability;
 the production Agent route currently exposes no sphere action or capability
@@ -2679,9 +2676,9 @@ snapshot; their sibling designs own the transport details and aggregate digest.
 
 The transform action is a single bounded value containing translation, the
 explicit source-world axis point, a finite non-zero rotation axis, and the
-rotation angle. The runner seeds the source through the category-neutral initial
-document provider, then sends one `setSceneNodeTransform` command through the
-registered `ProjectAgentCommandController`. The transform oracle compares exact
+rotation angle. The runner sends the planned two-node program (source, then
+placement of its local scene output) through the registered
+`ProjectAgentCommandController`. The transform oracle compares exact
 initial/final source identity and placement; TRN-001's wrong translation and
 TRN-002's wrong-order translation `(-17.67766952966369, 17.67766952966369, 0)`
 mm, TRN-003's wrong-order translation `(0, -50, 0)` mm, and TRN-004's

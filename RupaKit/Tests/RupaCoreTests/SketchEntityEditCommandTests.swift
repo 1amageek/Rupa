@@ -975,7 +975,7 @@ import Testing
         Issue.record("Nonparallel arc projection must fail before mutation.")
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("circle and arc"))
+        #expect(error.message.contains("stretched into an ellipse"))
     }
 
     let after = try SketchEntitySnapshotService().snapshot(document: session.document)

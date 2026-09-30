@@ -159,9 +159,11 @@ struct CADTransformCategoryCheckpointTests {
                 result.routeEvidence.finalPublicationSequence
                     == result.routeEvidence.initialPublicationSequence + 1
             )
+            // The program creates its source in one command and places it in a second, both in
+            // one transaction and one publication; each command advances the document generation.
             #expect(
                 result.routeEvidence.finalDocumentGeneration.value
-                    == result.routeEvidence.initialDocumentGeneration.value + 1
+                    == result.routeEvidence.initialDocumentGeneration.value + 2
             )
             #expect(
                 result.routeEvidence.finalTransactionRevision.value
@@ -180,7 +182,7 @@ struct CADTransformCategoryCheckpointTests {
             sceneNodeCounts.append(result.telemetry.sceneNodeCount)
             bodyCounts.append(result.telemetry.bodyCount)
             #expect(result.telemetry.actionCount == 1)
-            #expect(result.telemetry.commandCount == 1)
+            #expect(result.telemetry.commandCount == 2)
             #expect(result.telemetry.planningWallNanoseconds > 0)
             #expect(result.telemetry.routeWallNanoseconds > 0)
             #expect(result.telemetry.oracleWallNanoseconds > 0)
