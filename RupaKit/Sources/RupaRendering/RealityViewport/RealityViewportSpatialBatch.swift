@@ -18,7 +18,7 @@ struct RealityViewportSpatialBatch: Sendable {
         let depth: Depth
     }
 
-    enum Offset: Sendable {
+    enum Offset: Equatable, Sendable {
         case fixed(CGPoint)
         case directed(toward: Point3D, parallel: CGFloat, perpendicular: CGFloat)
         case projected(toward: Point3D, minimumLength: CGFloat, parallel: CGFloat, perpendicular: CGFloat)
@@ -40,7 +40,7 @@ struct RealityViewportSpatialBatch: Sendable {
         static var zero: Self { .fixed(.zero) }
     }
 
-    struct Mesh: Sendable {
+    struct Mesh: Equatable, Sendable {
         let positions: [Point3D]
         let indices: [UInt32]
         let topology: Topology
@@ -51,7 +51,7 @@ struct RealityViewportSpatialBatch: Sendable {
         var hitTolerancePoints: Float? = nil
     }
 
-    struct PlanarPath: Sendable {
+    struct PlanarPath: Equatable, Sendable {
         let path: Path
         let origin: Point3D
         let xAxis: SIMD3<Double>
@@ -63,8 +63,8 @@ struct RealityViewportSpatialBatch: Sendable {
         var hitTolerancePoints: Float? = nil
     }
 
-    struct Label: Sendable {
-        enum Alignment: Sendable { case leading, center, trailing }
+    struct Label: Equatable, Sendable {
+        enum Alignment: Equatable, Sendable { case leading, center, trailing }
         let text: String
         let anchor: Point3D
         let offset: Offset
@@ -77,8 +77,8 @@ struct RealityViewportSpatialBatch: Sendable {
         var hitRectPoints: CGRect? = nil
     }
 
-    struct Marker: Sendable {
-        enum Shape: Sendable { case sphere, box, cone }
+    struct Marker: Equatable, Sendable {
+        enum Shape: Equatable, Sendable { case sphere, box, cone }
         let shape: Shape
         let anchor: Point3D
         let diameterPoints: Float
@@ -112,7 +112,7 @@ struct RealityViewportSpatialBatch: Sendable {
     }
 
     /// Native filled/stroked Path coordinates are screen points about this world anchor.
-    struct CameraPath: Sendable {
+    struct CameraPath: Equatable, Sendable {
         let path: Path
         let anchor: Point3D
         let offset: Offset
@@ -125,7 +125,7 @@ struct RealityViewportSpatialBatch: Sendable {
     }
 
     /// A screen offset at an explicit world anchor's depth, never guessed depth.
-    struct CameraPoint: Sendable {
+    struct CameraPoint: Equatable, Sendable {
         let anchor: Point3D
         let offset: Offset
 
@@ -146,7 +146,7 @@ struct RealityViewportSpatialBatch: Sendable {
         }
     }
 
-    struct CameraLine: Sendable {
+    struct CameraLine: Equatable, Sendable {
         let points: [CameraPoint]
         let color: SIMD4<Float>
         var widthPoints: Float? = nil
@@ -164,14 +164,14 @@ struct RealityViewportSpatialBatch: Sendable {
         }
     }
 
-    struct BoundsRulers: Sendable {
+    struct BoundsRulers: Equatable, Sendable {
         let input: ViewportMeasurementBoundsRulerInput
         let heightPoints: Float
         let color: SIMD4<Float>
     }
 
     /// Missing dimensions consume the current native grid step, not a captured camera value.
-    struct GridPlacement: Sendable {
+    struct GridPlacement: Equatable, Sendable {
         let center: Point3D
         let uAxis: SIMD3<Double>
         let vAxis: SIMD3<Double>
