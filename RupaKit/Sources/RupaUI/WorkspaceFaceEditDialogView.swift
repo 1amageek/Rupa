@@ -5,7 +5,7 @@ import SwiftCAD
 /// The options of the running local face operation (`WorkspaceFaceEditSession`), laid out in the
 /// context panel: Push Face's Distance and Angle Adjacent, Draft Face's Degrees and Offset, Match
 /// Face's Front, and the Grow mode they share; Remove Fillets' Max Radius and Convexity; Align
-/// Surface's Continuity, Tension and Blend rows.
+/// Surface's Continuity, Tension, Blend rows, Influence, Partial Start and End, and Degree/Spans.
 struct WorkspaceFaceEditDialogView: View {
     @Binding var dialog: WorkspaceFaceEditSession
     var displayUnit: LengthDisplayUnit
@@ -46,6 +46,22 @@ struct WorkspaceFaceEditDialogView: View {
             Stepper("Blend \(dialog.blendRows)", value: $dialog.blendRows, in: 0...64)
                 .fixedSize()
                 .accessibilityIdentifier("WorkspaceFaceEdit.blendRows")
+            if dialog.blendRows > 0 {
+                TextField("Influence", value: $dialog.inputShapeInfluence, format: .number)
+                    .frame(width: 56)
+                    .accessibilityIdentifier("WorkspaceFaceEdit.inputShapeInfluence")
+            }
+            TextField("Partial Start", value: $dialog.partialStart, format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceFaceEdit.partialStart")
+            TextField("Partial End", value: $dialog.partialEnd, format: .number)
+                .frame(width: 56)
+                .accessibilityIdentifier("WorkspaceFaceEdit.partialEnd")
+            Toggle("Degree/Spans", isOn: $dialog.refitsLayout)
+                .accessibilityIdentifier("WorkspaceFaceEdit.refitsLayout")
+            if dialog.refitsLayout {
+                layoutFields($dialog.layout)
+            }
         case .hollow:
             lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
         case .thicken:
@@ -70,6 +86,23 @@ struct WorkspaceFaceEditDialogView: View {
             .fixedSize()
             .accessibilityIdentifier("WorkspaceFaceEdit.grow")
         }
+    }
+
+    /// A surface layout's degrees and spans along U and V.
+    @ViewBuilder
+    private func layoutFields(_ layout: Binding<SurfaceControlLayout>) -> some View {
+        Stepper("Degree U \(layout.wrappedValue.uDegree)", value: layout.uDegree, in: SurfaceControlLayout.degrees)
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.uDegree")
+        Stepper("V \(layout.wrappedValue.vDegree)", value: layout.vDegree, in: SurfaceControlLayout.degrees)
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.vDegree")
+        Stepper("Spans U \(layout.wrappedValue.uSpans)", value: layout.uSpans, in: SurfaceControlLayout.spans)
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.uSpans")
+        Stepper("V \(layout.wrappedValue.vSpans)", value: layout.vSpans, in: SurfaceControlLayout.spans)
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.vSpans")
     }
 
     /// A length typed in the display unit and kept in meters.

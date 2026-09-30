@@ -264,7 +264,8 @@ as a new solid object beside the body. Hollow and Thicken are measured as the so
 evaluate to. Extend Sheet (`extendSheet(name:targets:distance:shape:modifies:)`) appends
 `sheetExtend` on open edges of one sheet object: modifying, the sheet shows the extended sheet in
 its place; otherwise the extensions are a new sheet object beside it, measured as a sheet. Align
-Surface (`alignSurface(name:targets:continuity:tension:blendRows:)`) appends `surfaceAlign` with
+Surface (`alignSurface(name:targets:continuity:tension:blendRows:inputShapeInfluence:partialStart:partialEnd:layout:)`)
+appends `surfaceAlign` with
 the first target, an edge of a sheet object, following the second, an edge of another object
 placed where it is shown; the sheet shows the result in its place, measured as a sheet. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
 `BodyFaceDraftCommandTests` own these contracts.

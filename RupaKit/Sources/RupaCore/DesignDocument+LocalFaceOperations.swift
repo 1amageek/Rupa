@@ -265,8 +265,10 @@ extension DesignDocument {
 extension DesignDocument {
     /// Align Surface: the first target, an edge of a sheet object, follows the second, an edge of
     /// another object where it is shown, with `continuity`, the speed across the edge scaled by
-    /// `tension` and the change faded over `blendRows` further control rows (Swift-CAD
-    /// `surfaceAlign`). The sheet shows the result in its place.
+    /// `tension` and the change faded over `blendRows` further control rows keeping
+    /// `inputShapeInfluence` of their shape, faded in and out over `partialStart` and `partialEnd`
+    /// of the edge, the sheet refitted to `layout` first when given (Swift-CAD `surfaceAlign`). The
+    /// sheet shows the result in its place.
     @discardableResult
     public mutating func alignSurface(
         name: String = "Align Surface",
@@ -274,6 +276,10 @@ extension DesignDocument {
         continuity: SurfaceContinuityLevel,
         tension: Double,
         blendRows: Int,
+        inputShapeInfluence: Double = 1,
+        partialStart: Double = 0,
+        partialEnd: Double = 0,
+        layout: SurfaceControlLayout? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -288,6 +294,19 @@ extension DesignDocument {
         }
         guard (0...64).contains(blendRows) else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) blends from none to 64 further rows.")
+        }
+        guard (0...1).contains(inputShapeInfluence) else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) input shape influence runs from 0 to 1.")
+        }
+        guard (0...1).contains(partialStart), (0...1).contains(partialEnd), partialStart + partialEnd <= 1 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) partial start and end are fractions of the edge that do not overlap.")
+        }
+        if let layout {
+            do {
+                try layout.validate()
+            } catch {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) layout: \(error)")
+            }
         }
         let object = try offsetObject(for: [targets[0]], operationName: operationName)
         let source = try offsetObject(for: [targets[1]], operationName: operationName)
@@ -309,7 +328,8 @@ extension DesignDocument {
             .surfaceAlign(SurfaceAlignFeature(
                 target: PatternTargetReference(featureID: object.featureID), targetEdge: targetEdge,
                 reference: PatternTargetReference(featureID: source.featureID), referenceEdge: referenceEdge,
-                referencePlacement: placement, continuity: continuity, tension: tension, blendRows: blendRows
+                referencePlacement: placement, continuity: continuity, tension: tension, blendRows: blendRows,
+                inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd, layout: layout
             )),
             name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
         )

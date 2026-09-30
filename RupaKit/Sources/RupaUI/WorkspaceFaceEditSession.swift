@@ -52,6 +52,13 @@ struct WorkspaceFaceEditSession: Equatable {
     var continuity: SurfaceContinuityLevel = .tangentPlane
     var tension = 1.0
     var blendRows = 0
+    /// Align Surface's input shape influence on the blended rows, its partial start and end along
+    /// the edge, and, when `refitsLayout`, the degrees and spans the sheet is refitted to first.
+    var inputShapeInfluence = 1.0
+    var partialStart = 0.0
+    var partialEnd = 0.0
+    var refitsLayout = false
+    var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
 
     init(kind: Kind) {
         self.kind = kind
@@ -119,7 +126,11 @@ struct WorkspaceFaceEditSession: Equatable {
         case let .extendSheet(edges):
             return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies)
         case let .alignSurface(edge, reference):
-            return .alignSurface(targets: [edge, reference], continuity: continuity, tension: tension, blendRows: blendRows)
+            return .alignSurface(
+                targets: [edge, reference], continuity: continuity, tension: tension, blendRows: blendRows,
+                inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
+                layout: refitsLayout ? layout : nil
+            )
         case let .hollow(targets):
             return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))
         case let .thicken(targets):

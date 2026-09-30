@@ -206,4 +206,37 @@ import Testing
             _ = try session.execute(.alignSurface(targets: [edge, edge]))
         }
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aPartialAlignmentOnARefittedLayoutKeepsTheEdgesEnds() throws {
+        let session = EditorSession()
+        let row = { (y: Double) in [Point3D(x: 0, y: y, z: 0), Point3D(x: 0.05, y: y, z: 0.05), Point3D(x: 0.1, y: y, z: 0)] }
+        _ = try session.execute(.createBSplineSurface(name: "Arch", surface: BSplineSurface3D(
+            uDegree: 2, vDegree: 1, uKnots: [0, 0, 0, 1, 1, 1], vKnots: [0, 0, 1, 1], controlPoints: [row(0), row(0.1)]
+        )))
+        _ = try session.execute(.createBSplineSurface(name: "Flat", surface: .bilinearPatch(
+            bottomLeft: Point3D(x: 0.12, y: 0, z: 0), bottomRight: Point3D(x: 0.2, y: 0, z: 0),
+            topRight: Point3D(x: 0.2, y: 0.1, z: 0), topLeft: Point3D(x: 0.12, y: 0.1, z: 0))))
+        let nodes = session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }
+        let arch = try #require(nodes.first { $0.name.hasPrefix("Arch") }).id
+        let flat = try #require(nodes.first { $0.name.hasPrefix("Flat") }).id
+        func edges(atX x: Double, of node: SceneNodeID) throws -> [TopologySummaryResult.Entry] {
+            try TopologySnapshotService().snapshot(document: session.document).entries.filter {
+                $0.kind == .edge && $0.sceneNodeID == node.description
+                    && abs(($0.start?.x ?? -1) - x) < 1e-9 && abs(($0.end?.x ?? -1) - x) < 1e-9
+            }
+        }
+        let edge = try #require(try edges(atX: 0.12, of: flat).first?.selectionTarget())
+        let reference = try #require(try edges(atX: 0.1, of: arch).first?.selectionTarget())
+        _ = try session.execute(.alignSurface(
+            targets: [edge, reference], continuity: .curvature, partialStart: 0.3, partialEnd: 0.3,
+            layout: SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 8)
+        ))
+        #expect(session.evaluationStatus == .valid)
+        // Faded out at both ends, the edge still runs between its old corners.
+        #expect(try edges(atX: 0.12, of: flat).count == 1)
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.alignSurface(targets: [edge, reference], partialStart: 0.6, partialEnd: 0.6))
+        }
+    }
 }

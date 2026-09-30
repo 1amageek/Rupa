@@ -268,7 +268,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case hollow(targets: [SelectionTarget], thickness: CADExpression)
     case thicken(targets: [SelectionTarget], front: CADExpression, back: CADExpression)
     case extendSheet(targets: [SelectionTarget], distance: CADExpression, shape: SheetExtensionShape = .natural, modifies: Bool = true)
-    case alignSurface(targets: [SelectionTarget], continuity: SurfaceContinuityLevel = .tangentPlane, tension: Double = 1, blendRows: Int = 0)
+    case alignSurface(
+        targets: [SelectionTarget], continuity: SurfaceContinuityLevel = .tangentPlane, tension: Double = 1, blendRows: Int = 0,
+        inputShapeInfluence: Double = 1, partialStart: Double = 0, partialEnd: Double = 0, layout: SurfaceControlLayout? = nil
+    )
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
