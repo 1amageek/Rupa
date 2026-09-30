@@ -1573,8 +1573,8 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
         #expect(matchedSurface.weights[2][uIndex] == expectedSecond.weight)
     }
     for u in [0.25, 0.5, 0.75] {
-        let matchedGeometry = try matchedSurface.differentialGeometry(atU: u, v: 0.0, tolerance: document.modelingSettings.tolerance)
-        let referenceGeometry = try storedReferenceSurface.differentialGeometry(atU: u, v: 1.0, tolerance: document.modelingSettings.tolerance)
+        let matchedGeometry = try matchedSurface.differentialGeometry(u: u, v: 0.0, tolerance: document.modelingSettings.tolerance)
+        let referenceGeometry = try storedReferenceSurface.differentialGeometry(u: u, v: 1.0, tolerance: document.modelingSettings.tolerance)
         #expect(matchedGeometry.position.isApproximatelyEqual(
             to: referenceGeometry.position,
             tolerance: 1.0e-12

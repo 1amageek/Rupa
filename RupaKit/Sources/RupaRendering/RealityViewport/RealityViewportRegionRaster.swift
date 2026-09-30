@@ -463,7 +463,7 @@ final class RealityViewportRegionRaster {
                 let y = Double(row) + 0.5
                 for column in firstX...finalX {
                     guard let weights = triangle.barycentric(
-                        atX: Double(column) + 0.5, y: y
+                        x: Double(column) + 0.5, y: y
                     ) else { continue }
                     let depth = triangle.depth(
                         at: weights, perspective: perspective
@@ -684,7 +684,7 @@ final class RealityViewportRegionRaster {
         guard index >= 0 else { return nil }
         let triangle = triangles[Int(index)]
         guard let weights = triangle.barycentric(
-            atX: Double(column) + 0.5, y: Double(row) + 0.5
+            x: Double(column) + 0.5, y: Double(row) + 0.5
         ) else {
             throw Self.queryFailure(
                 "A drawn device pixel lies outside the triangle drawing it."

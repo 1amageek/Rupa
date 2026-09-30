@@ -1632,7 +1632,7 @@ func snapResolverTopologyEdgeParameterMeasurementPreservesValidationFailure() as
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
-    let expected = try surface.differentialGeometry(atU: 0.2, v: 0.2, tolerance: document.modelingSettings.tolerance).position
+    let expected = try surface.differentialGeometry(u: 0.2, v: 0.2, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
@@ -1684,7 +1684,7 @@ func snapResolverTopologyEdgeParameterMeasurementPreservesValidationFailure() as
     let summary = try SurfaceSourceSummaryService().summarize(document: document, displayUnit: .millimeter)
     let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
     let selectionReference = try #require(trimEdge.selectionReference)
-    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
+    let expected = try surface.differentialGeometry(u: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
@@ -1739,7 +1739,7 @@ func snapResolverTopologyEdgeParameterMeasurementPreservesValidationFailure() as
         target: faceReference,
         trimLoops: [snapResolverAuthoredTrimLoop()]
     )
-    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
+    let expected = try surface.differentialGeometry(u: 0.52, v: 0.42, tolerance: document.modelingSettings.tolerance).position
 
     let result = try SnapResolver().resolve(
         point: Point2D(x: expected.y + 0.00001, y: expected.z + 0.00001),

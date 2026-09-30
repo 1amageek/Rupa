@@ -711,7 +711,7 @@ public struct ViewportSceneBuilder {
                         )))
                         let start = try parameterCurve.startParameter(tolerance: tolerance)
                         let startGeometry = try surfaceFeature.surface.differentialGeometry(
-                            atU: start.u,
+                            u: start.u,
                             v: start.v,
                             tolerance: tolerance
                         )
@@ -726,7 +726,7 @@ public struct ViewportSceneBuilder {
                         ))
                         let end = try parameterCurve.endParameter(tolerance: tolerance)
                         let endGeometry = try surfaceFeature.surface.differentialGeometry(
-                            atU: end.u,
+                            u: end.u,
                             v: end.v,
                             tolerance: tolerance
                         )
@@ -789,7 +789,7 @@ public struct ViewportSceneBuilder {
                         )))
                         for controlPoint in surfaceTrimControlPointParameters(parameterCurve) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
-                                atU: controlPoint.parameter.u,
+                                u: controlPoint.parameter.u,
                                 v: controlPoint.parameter.v,
                                 tolerance: tolerance
                             )
@@ -957,7 +957,7 @@ public struct ViewportSceneBuilder {
             }
             let u = direction == .u ? value : crossParameter
             let v = direction == .u ? crossParameter : value
-            let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
+            let geometry = try surface.differentialGeometry(u: u, v: v, tolerance: tolerance)
             displays.append(ViewportSurfaceKnotDisplay(
                 selectionReference: .surface(.knot(SurfaceKnotReference(
                     surface: surfaceReference,
@@ -1000,7 +1000,7 @@ public struct ViewportSceneBuilder {
             let value = (lowerBound + upperBound) * 0.5
             let u = direction == .u ? value : crossParameter
             let v = direction == .u ? crossParameter : value
-            let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
+            let geometry = try surface.differentialGeometry(u: u, v: v, tolerance: tolerance)
             displays.append(ViewportSurfaceSpanDisplay(
                 selectionReference: .surface(.span(SurfaceSpanReference(
                     surface: surfaceReference,
@@ -1103,7 +1103,7 @@ public struct ViewportSceneBuilder {
                         )
                         for knot in surfaceTrimKnotParameters(parameterCurve, tolerance: tolerance) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
-                                atU: knot.parameter.u,
+                                u: knot.parameter.u,
                                 v: knot.parameter.v,
                                 tolerance: tolerance
                             )
@@ -1149,7 +1149,7 @@ public struct ViewportSceneBuilder {
                         )
                         for span in surfaceTrimSpanParameters(parameterCurve, tolerance: tolerance) {
                             let geometry = try surfaceFeature.surface.differentialGeometry(
-                                atU: span.parameter.u,
+                                u: span.parameter.u,
                                 v: span.parameter.v,
                                 tolerance: tolerance
                             )

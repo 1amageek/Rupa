@@ -46,7 +46,7 @@ struct RealityViewportProjectedTriangle {
     /// The barycentric weights of a device-pixel centre, or `nil` when the
     /// centre lies outside the triangle. A degenerate triangle never reaches
     /// here, because it is dropped before it is stored.
-    func barycentric(atX x: Double, y: Double) -> SIMD3<Double>? {
+    func barycentric(x: Double, y: Double) -> SIMD3<Double>? {
         let first = ((thirdX - secondX) * (y - secondY)
             - (thirdY - secondY) * (x - secondX)) * inverseDoubledArea
         guard first >= 0 else { return nil }

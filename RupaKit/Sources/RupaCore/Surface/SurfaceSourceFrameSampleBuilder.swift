@@ -77,7 +77,7 @@ struct SurfaceSourceFrameSampleBuilder: Sendable {
         v: Double,
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     ) throws -> SurfaceSourceSummaryResult.FrameSample {
-        let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
+        let geometry = try surface.differentialGeometry(u: u, v: v, tolerance: tolerance)
         let uAxis = try geometry.tangentU.normalized(tolerance: tolerance.distance)
         let normal = geometry.normal
         let vAxis = try normal.cross(uAxis).normalized(tolerance: tolerance.distance)

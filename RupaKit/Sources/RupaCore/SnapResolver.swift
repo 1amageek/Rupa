@@ -1999,7 +1999,7 @@ public struct SnapResolver: Sendable {
             return nil
         }
         let geometry = try surface.differentialGeometry(
-            atU: parameter.u,
+            u: parameter.u,
             v: parameter.v,
             tolerance: tolerance
         )

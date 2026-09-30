@@ -130,7 +130,7 @@ public struct SurfaceFrameService: Sendable {
         let uBounds = try parameterBounds(surface.uDomain)
         let vBounds = try parameterBounds(surface.vDomain)
         let parameter = try resolvedParameter(target, surface: surface)
-        let geometry = try surface.differentialGeometry(atU: parameter.u, v: parameter.v, tolerance: tolerance)
+        let geometry = try surface.differentialGeometry(u: parameter.u, v: parameter.v, tolerance: tolerance)
         let orientationScale = face.orientation == .forward ? 1.0 : -1.0
         let orientedNormal = face.orientation == .forward ? geometry.normal : -geometry.normal
         let uAxis = try geometry.tangentU.normalized(tolerance: tolerance.distance)

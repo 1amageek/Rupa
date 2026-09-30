@@ -139,7 +139,7 @@ public struct SurfaceAnalysisService: Sendable {
             var row: [SurfaceSampleState] = []
             row.reserveCapacity(uParameters.count)
             for u in uParameters {
-                let geometry = try surface.differentialGeometry(atU: u, v: v, tolerance: tolerance)
+                let geometry = try surface.differentialGeometry(u: u, v: v, tolerance: tolerance)
                 let orientationScale = face.orientation == .forward ? 1.0 : -1.0
                 let position = geometry.position
                 let normal = face.orientation == .forward ? geometry.normal : -geometry.normal
