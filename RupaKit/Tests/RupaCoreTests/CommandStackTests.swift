@@ -673,9 +673,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
-    #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
+    #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
     #expect(edgeOffset.supportFace.subshapeID == supportSubshapeID)
-    #expect(session.selection.selectedTargets == [supportFaceTarget, edgeTarget])
+    // The offset sews the body anew, so the old edge and face are no longer selectable.
+    #expect(session.selection.selectedTargets.contains(edgeTarget) == false)
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -726,9 +727,10 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
-    #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
+    #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
     #expect(edgeOffset.supportFace == expectedSupportFace)
-    #expect(session.selection.selectedTargets == [edgeTarget])
+    // The offset sews the body anew, so the old edge is no longer selectable.
+    #expect(session.selection.selectedTargets.contains(edgeTarget) == false)
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -4616,8 +4618,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         id: dependentFeatureID,
         name: "Downstream Output Dependent",
         operation: .faceLoopOffset(FaceLoopOffsetFeature(
-            target: FaceLoopOffsetTargetReference(featureID: firstCloneBodyFeatureID),
-            face: cloneStartFaceReference,
+            target: PatternTargetReference(featureID: firstCloneBodyFeatureID),
+            faces: [cloneStartFaceReference],
             distance: .length(1.0, .millimeter)
         )),
         inputs: [FeatureInput(featureID: firstCloneBodyFeatureID, role: .target)],

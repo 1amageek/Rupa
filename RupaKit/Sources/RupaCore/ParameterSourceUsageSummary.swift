@@ -142,6 +142,10 @@ public struct ParameterSourceUsageService: Sendable {
              .unjoinBody,
              .unjoinFaces,
              .reverseSheet,
+             .isoparam,
+             .imprintBody,
+             .imprintCurves,
+             .untrimFace,
              .extract,
              .projectCurve:
             break
@@ -376,6 +380,14 @@ public struct ParameterSourceUsageService: Sendable {
             "unjoinFaces"
         case .reverseSheet:
             "reverseSheet"
+        case .isoparam:
+            "isoparam"
+        case .imprintBody:
+            "imprintBody"
+        case .imprintCurves:
+            "imprintCurves"
+        case .untrimFace:
+            "untrimFace"
         case .extract:
             "extract"
         case .wrap:

@@ -128,6 +128,8 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
         return .supported(candidate, source: .selectedFace)
     }
 
+    /// The face the edge is offset over when none is selected: of the faces the edge bounds, the
+    /// one a start or end cap is, when exactly one is.
     private func inferredCapSupportFaceTarget(
         for edgeTarget: SelectionTarget,
         in document: DesignDocument,
@@ -139,39 +141,29 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
               let edgeSubshapeID = edgeComponentID.generatedTopologySubshapeID else {
             return .unavailable("Offset Edge requires a generated topology edge target.")
         }
-        let edgeIdentity = GeneratedSubshapeIdentity.string(for: edgeSubshapeID)
-        let sceneNodeDescription = edgeTarget.sceneNodeID.description
-
         let topology = try TopologySnapshotService().snapshot(
             document: document,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        guard let edgeEntry = topology.entries.first(where: { entry in
-            entry.kind == .edge &&
-                entry.sceneNodeID == sceneNodeDescription &&
-                entry.subshapeID == edgeIdentity
-        }) else {
+        guard let evaluated = topology.evaluatedDocument,
+              case .edge(let edgeID) = evaluated.subshapes[edgeSubshapeID] else {
             return .unavailable("Offset Edge generated topology edge was not found in the current evaluation.")
         }
-        guard edgeEntry.curveKind == "line",
-              let start = edgeEntry.start,
-              let end = edgeEntry.end else {
-            return .unavailable("Offset Edge currently supports generated line edges with resolvable endpoints.")
-        }
-
         let candidates = topology.entries.compactMap { entry -> SelectionTarget? in
             guard entry.kind == .face,
                   entry.sceneNodeID == edgeTarget.sceneNodeID.description,
                   entry.generatedRole == "startFace" || entry.generatedRole == "endFace",
-                  edgeEndpoints(start, end, lieOnPlaneOf: entry),
+                  let reference = entry.stableReference,
+                  case .face(let faceID) = evaluated.subshapes[reference.subshapeID],
+                  let face = evaluated.brep.faces[faceID],
+                  face.loops.contains(where: { evaluated.brep.loops[$0]?.coedges.contains { $0.edgeID == edgeID } == true }),
                   let target = entry.selectionTarget() else {
                 return nil
             }
             return target
         }
-
         guard candidates.count <= 1 else {
             return .ambiguous(Self.ambiguousCapSupportFaceMessage)
         }
@@ -179,37 +171,5 @@ public struct EdgeOffsetSupportFaceResolver: Sendable {
             return .unavailable(Self.missingSupportFaceMessage)
         }
         return .supported(candidate, source: .inferredCapFace)
-    }
-
-    private func edgeEndpoints(
-        _ start: TopologySummaryResult.Entry.Point,
-        _ end: TopologySummaryResult.Entry.Point,
-        lieOnPlaneOf face: TopologySummaryResult.Entry
-    ) -> Bool {
-        guard face.surfaceKind == "plane",
-              let origin = face.surfaceOrigin,
-              let normal = face.surfaceNormal else {
-            return false
-        }
-        let tolerance = 1.0e-8
-        return point(start, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance) &&
-            point(end, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance)
-    }
-
-    private func point(
-        _ point: TopologySummaryResult.Entry.Point,
-        liesOnPlaneOrigin origin: TopologySummaryResult.Entry.Point,
-        normal: TopologySummaryResult.Entry.Point,
-        tolerance: Double
-    ) -> Bool {
-        let normalLength = sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z)
-        guard normalLength > tolerance else {
-            return false
-        }
-        let signedDistanceNumerator =
-            (point.x - origin.x) * normal.x +
-            (point.y - origin.y) * normal.y +
-            (point.z - origin.z) * normal.z
-        return abs(signedDistanceNumerator) <= tolerance * normalLength
     }
 }

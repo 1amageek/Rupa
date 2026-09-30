@@ -1316,24 +1316,18 @@ import Testing
         return
     }
     let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let generatedOffsetEdges = topology.entries.filter {
-        $0.kind == .edge &&
-            $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "faceLoopOffset.offsetEdge"
-    }
     let offsetSceneNode = try #require(bodySceneNode(for: offsetFeatureID, in: session.document))
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(session.generation == (try beforeGeneration.advanced()))
-    #expect(faceLoopOffset.target == FaceLoopOffsetTargetReference(featureID: bodyFeatureID))
+    #expect(faceLoopOffset.target == PatternTargetReference(featureID: bodyFeatureID))
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(topology.counts.bodyCount == 1)
     #expect(topology.counts.faceCount == 7)
     #expect(topology.counts.edgeCount == 16)
     #expect(topology.counts.vertexCount == 12)
-    #expect(generatedOffsetEdges.count == 4)
     #expect(offsetSceneNode.object?.sourceSection == nil)
     #expect(offsetSceneNode.object?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
@@ -1403,18 +1397,13 @@ import Testing
         return
     }
     let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let generatedOffsetEdges = topology.entries.filter {
-        $0.kind == .edge &&
-            $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "edgeOffset.offsetEdge"
-    }
     let offsetSceneNode = try #require(bodySceneNode(for: offsetFeatureID, in: session.document))
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(session.generation == (try beforeGeneration.advanced()))
-    #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.edge == (try #require(edgeEntry.stableReference)))
+    #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
+    #expect(edgeOffset.edges == [try #require(edgeEntry.stableReference)])
     #expect(edgeOffset.supportFace == (try #require(supportFaceEntry.stableReference)))
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
@@ -1422,8 +1411,6 @@ import Testing
     #expect(topology.counts.faceCount == 7)
     #expect(topology.counts.edgeCount == 15)
     #expect(topology.counts.vertexCount == 10)
-    #expect(generatedOffsetEdges.count == 1)
-    #expect(topology.entries.contains { $0.subshapeID == edgeEntry.subshapeID })
     #expect(offsetSceneNode.object?.sourceSection == nil)
     #expect(offsetSceneNode.object?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
@@ -1493,16 +1480,11 @@ import Testing
         return
     }
     let topology = try TopologySnapshotService().snapshot(document: session.document)
-    let generatedOffsetEdges = topology.entries.filter {
-        $0.kind == .edge &&
-            $0.sourceFeatureID == offsetFeatureID.description &&
-            $0.generatedRole == "edgeOffset.offsetEdge"
-    }
 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(session.generation == (try beforeGeneration.advanced()))
-    #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
+    #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
     #expect(edgeOffset.isSymmetric)
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
@@ -1510,8 +1492,6 @@ import Testing
     #expect(topology.counts.faceCount == 8)
     #expect(topology.counts.edgeCount == 18)
     #expect(topology.counts.vertexCount == 12)
-    #expect(generatedOffsetEdges.count == 2)
-    #expect(topology.entries.contains { $0.subshapeID == edgeEntry.subshapeID })
     #expect(session.evaluationStatus == .valid)
 }
 

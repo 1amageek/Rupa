@@ -1061,6 +1061,14 @@ public struct MeasurementService {
                     sourceFeatureID: unjoin.target.featureID,
                     operationName: "Unjoin Body"
                 )
+            case .isoparam(let imprint):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Isoparam")
+            case .imprintBody(let imprint):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .imprintCurves(let imprint):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .untrimFace(let untrim):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: untrim.target.featureID, operationName: "Untrim")
             case .reverseSheet(let reverse):
                 try measureEvaluatedBodyOperationCase(
                     node: node,

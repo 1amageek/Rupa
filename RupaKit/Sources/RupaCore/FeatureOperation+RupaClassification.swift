@@ -53,6 +53,10 @@ extension FeatureOperation {
              .unjoinBody,
              .unjoinFaces,
              .reverseSheet,
+             .isoparam,
+             .imprintBody,
+             .imprintCurves,
+             .untrimFace,
              .extract,
              .wrap,
              .bridgeSurface,
@@ -133,6 +137,10 @@ extension FeatureOperation {
              .unjoinBody,
              .unjoinFaces,
              .reverseSheet,
+             .isoparam,
+             .imprintBody,
+             .imprintCurves,
+             .untrimFace,
              .extract,
              .wrap:
             return true
@@ -235,6 +243,16 @@ extension FeatureOperation {
         // Reverse consumes the sheet it turns over.
         case .reverseSheet(let feature):
             return [feature.target.featureID]
+        // Imprinting splits its target's faces in its place; the tool and curves stay.
+        case .isoparam(let feature):
+            return [feature.target.featureID]
+        case .imprintBody(let feature):
+            return [feature.target.featureID]
+        case .imprintCurves(let feature):
+            return [feature.target.featureID]
+        // Untrim makes a sheet beside its body.
+        case .untrimFace:
+            return []
         // An extraction copies part of a body that stays: one extraction never replaces its
         // source. A source every component of which is extracted is replaced by its pieces, which
         // only the document's extractions together tell (`MeasurementService`).

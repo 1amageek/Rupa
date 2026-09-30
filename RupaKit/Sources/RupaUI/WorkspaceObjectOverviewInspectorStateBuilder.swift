@@ -332,19 +332,17 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Face Loop"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(faceLoopOffset.target.featureID)),
-                WorkspaceInspectorTextRow(
-                    title: "Face",
-                    value: faceLoopOffset.face.subshapeID.role
-                ),
+                WorkspaceInspectorTextRow(title: "Faces", value: "\(faceLoopOffset.faces.count)"),
+                WorkspaceInspectorTextRow(title: "Side", value: faceLoopOffset.side.rawValue.capitalized),
+                WorkspaceInspectorTextRow(title: "Gap Fill", value: faceLoopOffset.gapFill.rawValue.capitalized),
             ]
         case .edgeOffset(let edgeOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Edge"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(edgeOffset.target.featureID)),
-                WorkspaceInspectorTextRow(
-                    title: "Support Face",
-                    value: edgeOffset.supportFace.subshapeID.role
-                ),
+                WorkspaceInspectorTextRow(title: "Edges", value: "\(edgeOffset.edges.count)"),
+                WorkspaceInspectorTextRow(title: "Symmetric", value: edgeOffset.isSymmetric ? "On" : "Off"),
+                WorkspaceInspectorTextRow(title: "Gap Fill", value: edgeOffset.gapFill.rawValue.capitalized),
             ]
         case .faceKnife(let faceKnife):
             return [
@@ -620,6 +618,31 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Unjoin Body"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(unjoin.target.featureID)),
+            ]
+        case .isoparam(let isoparam):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Isoparam"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(isoparam.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Direction", value: isoparam.direction == .u ? "U" : "V"),
+                WorkspaceInspectorTextRow(title: "Lines", value: "\(isoparam.fractions.count)"),
+            ]
+        case .imprintBody(let imprint):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Imprint Body Body"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(imprint.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Tool", value: WorkspaceInspectorNumberText.shortID(imprint.tool.featureID)),
+            ]
+        case .imprintCurves(let imprint):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Imprint Curve Body"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(imprint.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Curves", value: "\(imprint.curves.count)"),
+            ]
+        case .untrimFace(let untrim):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Untrim"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(untrim.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Keep Edges", value: untrim.keepsEdges ? "On" : "Off"),
             ]
         case .reverseSheet(let reverse):
             return [

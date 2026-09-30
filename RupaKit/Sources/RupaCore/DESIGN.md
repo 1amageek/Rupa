@@ -192,6 +192,19 @@ span, and `MeasurementAnnotationResolver` resolves a curvature measurement to
 `.combed` combs instead of anchor points; drawings do not project them.
 `OrientationDegreeAnalysisCommandTests` own these contracts.
 
+Offset Edge (`offsetEdges(name:targets:supportFace:distance:isSymmetric:gapFill:)`)
+and Offset Face Loop (`offsetFaceLoops(name:targets:distance:isSymmetric:gapFill:isIndividual:)`)
+append Swift-CAD `edgeOffset` and `faceLoopOffset` features on one object's edges or
+faces, which offset over any face, planar or curved, of a solid or a sheet, and the
+object shows the result in its place, keeping its name. Every chosen edge must bound
+the support face, checked before anything changes. A face loop's negative distance
+offsets over the faces around it (the kernel takes the size and a
+`FaceLoopOffsetSide`), and symmetry offsets both ways. `offsetCurve` dispatches an
+edge or a face target to them; an edge's support face is the selected face or, when
+none is, the one start or end cap the edge bounds (`EdgeOffsetSupportFaceResolver`).
+Because the offset sews the body anew, earlier selections of its edges and faces no
+longer resolve.
+
 Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
 face and curve cutters and shows every piece as an object of its own. Each
 cutter becomes a sheet kept by a hidden object placed where the cutter is: a face
