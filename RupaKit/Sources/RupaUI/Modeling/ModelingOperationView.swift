@@ -290,10 +290,16 @@ struct ModelingOperationView: View {
         case .sweep:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }
             Text("Select the section first, optional guides next, and the path last.").font(.caption).foregroundStyle(.secondary)
+            Picker("Alignment", selection: $draft.sweepAlignment) {
+                ForEach(ModelingOperationDraft.SweepAlignmentChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .contentShape(Rectangle())
             TextField("Twist angle (degrees)", text: $draft.twistAngle)
             Toggle("Reverse twist at midpoint (double helix)", isOn: $draft.doubleHelical)
             lengthField("Positional approximation allowance", text: $draft.approximationTolerance)
-            Text("Twisted sweeps require a straight path normal to the section and no guides. For double helix, the angle is reached at the midpoint and returns to zero at the end. The allowance is a shape error bound, not display quality or manufacturing tolerance.")
+            Text("Twisted sweeps require a straight path normal to the section and no guides. For double helix, the angle is reached at the midpoint and returns to zero at the end. A Normal sweep along a curved path also needs the allowance. The allowance is a shape error bound, not display quality or manufacturing tolerance.")
                 .font(.caption).foregroundStyle(.secondary)
         case .loft:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }

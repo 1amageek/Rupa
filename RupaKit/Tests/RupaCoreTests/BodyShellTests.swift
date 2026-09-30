@@ -55,7 +55,8 @@ struct BodyShellTests {
             let result = try DocumentEvaluator.modelingDefault(for: session.document).evaluateExact(session.document.cadDocument)
             try result.brep.validate(level: .volumetric, tolerance: document.modelingSettings.tolerance)
             #expect(result.brep.bodies.count == 1)
-            #expect(result.brep.faces.count == 14)
+            // Five outer walls, five inner walls, and the opening's rim as one planar ring.
+            #expect(result.brep.faces.count == 11)
             #expect(abs(try result.brep.volume(tolerance: document.modelingSettings.tolerance)
                 - (0.001 - 0.096 * 0.096 * 0.098)) < 1e-12)
             for (id, feature) in document.cadDocument.designGraph.nodes {

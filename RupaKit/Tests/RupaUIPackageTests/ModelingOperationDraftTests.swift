@@ -152,6 +152,56 @@ struct ModelingOperationDraftTests {
         ])
     }
 
+    @Test func aNormalSweepFollowsACurvedPathWithinItsAllowance() throws {
+        var document = DesignDocument.empty()
+        let circle = try document.createCircleSketch(name: "Section", plane: .xy,
+            center: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)), radius: .length(0.003, .meter))
+        // A planar cubic in the ZX plane leaving the origin along +Z (sketch x is world z).
+        let controls: [(Double, Double)] = [(0, 0), (0.02, 0), (0.04, 0.01), (0.05, 0.03)]
+        let path = try document.createSplineSketch(name: "Path", plane: .zx, spline: SketchSpline(controlPoints: controls.map {
+            SketchPoint(x: .length($0.0, .meter), y: .length($0.1, .meter))
+        }))
+        let circleNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(circle) })
+        let pathNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
+        var draft = makeDraft(.sweep, targets: [.init(sceneNodeID: circleNode.id), .init(sceneNodeID: pathNode.id)])
+        draft.approximationTolerance = "0.0001 mm"
+        guard case .createSweep(_, _, _, _, _, let options) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(options.alignment == .normal && options.approximationTolerance == .length(1e-7, .meter))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.evaluationStatus == .valid)
+        // Pappus: the circle's area times the path's length, within the allowance over the side.
+        let nodes = [-0.906179845938664, -0.5384693101056831, 0, 0.5384693101056831, 0.906179845938664]
+        let weights = [0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891]
+        func speed(_ t: Double) -> Double {
+            let a = 3 * (1 - t) * (1 - t), b = 6 * (1 - t) * t, c = 3 * t * t
+            let dz = a * (controls[1].0 - controls[0].0) + b * (controls[2].0 - controls[1].0) + c * (controls[3].0 - controls[2].0)
+            let dx = a * (controls[1].1 - controls[0].1) + b * (controls[2].1 - controls[1].1) + c * (controls[3].1 - controls[2].1)
+            return (dz * dz + dx * dx).squareRoot()
+        }
+        let length = (0..<256).reduce(0.0) { sum, index in
+            let lower = Double(index) / 256, half = 0.5 / 256
+            return sum + zip(nodes, weights).reduce(0.0) { $0 + $1.1 * speed(lower + half * (1 + $1.0)) } * half
+        }
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let exact = Double.pi * 0.003 * 0.003 * length
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - exact) <= 2 * Double.pi * 0.003 * length * 1e-7 + 1e-12)
+        // Without the allowance the curved Normal sweep is refused; Parallel keeps the section's
+        // orientation instead.
+        draft.approximationTolerance = ""
+        let refused = CADDocumentStore(document: document)
+        #expect(throws: EditorError.self) { _ = try refused.apply(draft.command(in: document)) }
+        draft.sweepAlignment = .parallel
+        guard case .createSweep(_, _, _, _, _, let parallel) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(parallel.alignment == .parallel && parallel.approximationTolerance == nil)
+    }
+
     @Test func sheetDraftsUseNativeSourceCommands() throws {
         var patch = makeDraft(.surfacePatch)
         patch.width = "100 mm"

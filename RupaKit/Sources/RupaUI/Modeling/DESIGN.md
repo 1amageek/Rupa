@@ -190,7 +190,7 @@ native preview and cannot be applied.
 | PolySplines | Native inline-mesh reconstruction exists | Authored-Mesh conversion/provenance UI; arbitrary mesh and global G2 claims are unsupported |
 | Revolve | Profile and certified spatial-curve revolution, explicit Sheet/Solid output; a curve closed on itself or along the axis as a solid; axis by origin and direction or by two points; Thickness walling a one-loop line and tangent-arc section; Boolean (Union/Difference/Intersect/Slice) with the bodies selected after the section, and Keep Tools | Normal/Binormal/Tangent axis controls (their meaning is undecided); thin sections with holes |
 | Square | Native inline four-boundary Coons builder exists | Referenced boundary authoring, UV degree/span and derivative constraints |
-| Sweep | Curve/profile section and independent path, explicit sheet result | Face operands, remaining path-normal/twist/scale combinations, ordered multiple guides with Point/Chord/Curve behavior, Round corners and Simplify; retained options require actual geometry |
+| Sweep | Curve/profile section and independent path, explicit sheet result; Normal or Parallel alignment; a Normal sweep along a curved path within the positional allowance | Face operands, twist/scale along curved paths, ordered multiple guides with Point/Chord/Curve behavior, Mitre/Round corners, Boolean targets and Simplify; retained options require actual geometry |
 | XNURBS | No authoring entry or substitute Fill/Bridge dispatch | General constrained N-sided solver, G1/G2, guides, UV flow and quality guarantees |
 
 Specification references: [Bridge Surface](https://doc.plasticity.xyz/solid/bridge-surface),
@@ -326,6 +326,10 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   extrusion is one `createExtrusion` of solid output, Keep Tools keeping only the
   extruded tool; Core places each target where it is shown and takes its object
   away, as a Boolean does.
+- Sweep's Alignment picks Normal (the section turns with the path) or Parallel (it keeps
+  its orientation). The positional allowance is sent whenever it is filled in: a twist
+  needs it, and so does a Normal sweep along a curved path; without it the kernel
+  refuses such a sweep and the store stays unchanged.
 - Revolve's axis runs through its origin along a direction, or from its start to its end
   point; its Thickness, Boolean picker and Keep Tools behave as Extrude's, in one
   `revolveSection`. A revolved curve may ask for a solid: the kernel closes it along the

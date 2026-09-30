@@ -161,6 +161,20 @@ struct ModelingOperationDraft: Equatable {
     var vBounds = ["0", "1"]
     var twistAngle = "0"
     var doubleHelical = false
+    /// How a sweep's section follows its path: turning with it (Normal) or keeping its
+    /// orientation (Parallel).
+    enum SweepAlignmentChoice: String, CaseIterable, Identifiable {
+        case normal = "Normal"
+        case parallel = "Parallel"
+        var id: Self { self }
+        var alignment: SweepAlignment {
+            switch self {
+            case .normal: .normal
+            case .parallel: .parallel
+            }
+        }
+    }
+    var sweepAlignment = SweepAlignmentChoice.normal
     var approximationTolerance = ""
     /// Thicken's back thickness; the distance field is its front.
     var thickenBack = "0"
@@ -425,10 +439,16 @@ struct ModelingOperationDraft: Equatable {
             let degrees = try number(twistAngle, label: "Twist angle")
             var options = SweepOptions()
             options.resultKind = createsSheet ? .sheet : .solid
-            if degrees != 0 || doubleHelical {
+            options.alignment = sweepAlignment.alignment
+            // The allowance bounds whichever approximation the sweep needs: a twist, or a Normal
+            // sweep along a curved path. A twist cannot go without it.
+            let twists = degrees != 0 || doubleHelical
+            if twists || !approximationTolerance.trimmingCharacters(in: .whitespaces).isEmpty {
                 let allowance = try length(approximationTolerance, label: "Positional approximation allowance")
                 guard allowance > 0 else { throw invalid("Positional approximation allowance must be positive.") }
                 options.approximationTolerance = .length(allowance, .meter)
+            }
+            if twists {
                 if doubleHelical {
                     options.twistLaw = [
                         .init(position: 0, angle: .angle(0, .degree)),
