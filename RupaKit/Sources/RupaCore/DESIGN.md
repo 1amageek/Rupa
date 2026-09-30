@@ -945,6 +945,18 @@ document the caller did not ask about. `SnapResolver.init` takes the
 evaluator refuses to run and read the difference between a matching context and
 no context as success against failure.
 
+Everything a resolve builds except the pointer's own candidates (every sketch
+entity with its samples and discrete points, every pair's intersections,
+measurements, surface frames and trims, regions and the topology snapshot)
+depends on the document state, not on the pointer, and one pointer event
+resolves up to three snaps. `SnapPreparationCache` (one shared by every
+resolver, `Mutex`-guarded, a few recent states) keeps that preparation for a
+document whose current evaluation the caller hands, keyed by document,
+generation, construction plane, surface frame displays and whether topology is
+snapped; the resolve then adds only the closest point on, and the relations to,
+each entity, in the order a fresh preparation gives. A document without its
+evaluation is prepared on every resolve as before (`SnapPreparationCacheTests`).
+
 A matching context also spares the validation: it was made from this very
 document at this generation once it validated. Every read-only service that
 takes a context (topology and mesh snapshots, surface analysis, continuity,

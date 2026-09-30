@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import SwiftCAD
 import RupaCoreTypes
 
@@ -522,18 +523,81 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
     }
 }
 
+/// The point-independent part of object snapping for one published document state: every sketch
+/// entity with its discrete candidates, and the candidates that do not move with the pointer
+/// (intersections, measurements, surface frames and trims, regions, topology).
+private struct SnapPreparation: Sendable {
+    var entities: [SnapEntity]
+    var candidates: [PrioritizedSnapCandidate]
+}
+
+/// Snap preparations for recent published document states, shared by every resolver.
+///
+/// A pointer event resolves up to three snaps, and each built the whole preparation again: a
+/// topology snapshot of every face and edge, every sketch entity's samples, and every pair of
+/// entities' intersections, although none of it depends on the pointer. A preparation is kept only
+/// for a document whose current evaluation the caller hands (so the generation names its state),
+/// keyed by the document, generation, construction plane, surface frame displays and whether
+/// topology is snapped. It is made outside the lock; two resolvers racing for one key may both make
+/// it, and either result is the same.
+public final class SnapPreparationCache: Sendable {
+    public static let shared = SnapPreparationCache()
+
+    fileprivate struct Key: Equatable, Sendable {
+        var documentID: DocumentID
+        var generation: DocumentGeneration
+        var constructionPlane: SketchPlane?
+        var surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+        var includesTopology: Bool
+    }
+
+    private struct State: Sendable {
+        var entries: [(key: Key, preparation: SnapPreparation)] = []
+        var preparationCount = 0
+    }
+
+    private static let capacity = 4
+    private let state = Mutex(State())
+
+    public init() {}
+
+    /// How many preparations this cache has made, so a test can tell a reuse from a rebuild.
+    var preparationCount: Int {
+        state.withLock { $0.preparationCount }
+    }
+
+    fileprivate func preparation(for key: Key, make: () throws -> SnapPreparation) rethrows -> SnapPreparation {
+        if let cached = state.withLock({ state in state.entries.first { $0.key == key }?.preparation }) {
+            return cached
+        }
+        let made = try make()
+        state.withLock { state in
+            state.preparationCount += 1
+            state.entries.removeAll { $0.key == key }
+            state.entries.append((key, made))
+            if state.entries.count > Self.capacity {
+                state.entries.removeFirst(state.entries.count - Self.capacity)
+            }
+        }
+        return made
+    }
+}
+
 public struct SnapResolver: Sendable {
     private static let exactHitToleranceMeters = 1.0e-10
 
     private let curveSampler: SketchCurveSampler
     private let topologySnapshotService: TopologySnapshotService
+    private let preparationCache: SnapPreparationCache
 
     public init(
         curveSampler: SketchCurveSampler = SketchCurveSampler(),
-        topologySnapshotService: TopologySnapshotService = TopologySnapshotService()
+        topologySnapshotService: TopologySnapshotService = TopologySnapshotService(),
+        preparationCache: SnapPreparationCache = .shared
     ) {
         self.curveSampler = curveSampler
         self.topologySnapshotService = topologySnapshotService
+        self.preparationCache = preparationCache
     }
 
     public func resolve(
@@ -560,6 +624,7 @@ public struct SnapResolver: Sendable {
                 searchRadiusMeters: normalizedOptions.objectSearchRadiusMeters,
                 referencePoint: normalizedOptions.referencePoint,
                 constructionPlane: constructionPlane,
+                constructionSketchPlane: normalizedOptions.constructionPlane,
                 surfaceFrameDisplays: surfaceFrameDisplays,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: currentGeneration
@@ -636,10 +701,64 @@ public struct SnapResolver: Sendable {
         searchRadiusMeters: Double,
         referencePoint: Point2D?,
         constructionPlane: SketchPlaneCoordinateSystem?,
+        constructionSketchPlane: SketchPlane?,
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         currentEvaluation: DocumentEvaluationContext?,
         currentGeneration: DocumentGeneration?
     ) throws -> [PrioritizedSnapCandidate] {
+        let includesTopology = MeasurementAnnotationResolver.requiresTopology(document)
+            || (searchRadiusMeters > 0.0 && document.cadDocument.hasActiveRenderableTopologyFeatures)
+        let make = {
+            try snapPreparation(
+                in: document,
+                includesTopology: includesTopology,
+                constructionPlane: constructionPlane,
+                surfaceFrameDisplays: surfaceFrameDisplays,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
+            )
+        }
+        // Only a document the caller's current evaluation describes is named by its generation.
+        let preparation: SnapPreparation
+        if let currentGeneration, currentEvaluation?.matches(document: document, generation: currentGeneration) == true {
+            preparation = try preparationCache.preparation(for: .init(
+                documentID: document.id, generation: currentGeneration, constructionPlane: constructionSketchPlane,
+                surfaceFrameDisplays: surfaceFrameDisplays, includesTopology: includesTopology
+            ), make: make)
+        } else {
+            preparation = try make()
+        }
+        // The pointer only picks the closest point on, and the relations to, each entity.
+        var candidates: [PrioritizedSnapCandidate] = []
+        for snapEntity in preparation.entities {
+            candidates += snapEntity.discreteCandidates
+            if let closestCandidate = try closestCandidate(near: point, entity: snapEntity) {
+                candidates.append(closestCandidate)
+            }
+            if let referencePoint {
+                candidates += relationCandidates(
+                    near: point,
+                    referencePoint: referencePoint,
+                    entity: snapEntity
+                )
+            }
+        }
+        candidates += preparation.candidates
+        return candidates.compactMap { candidate in
+            var measuredCandidate = candidate
+            measuredCandidate.candidate.distanceMeters = distance(point, candidate.candidate.point)
+            return measuredCandidate.candidate.distanceMeters <= searchRadiusMeters ? measuredCandidate : nil
+        }
+    }
+
+    private func snapPreparation(
+        in document: DesignDocument,
+        includesTopology: Bool,
+        constructionPlane: SketchPlaneCoordinateSystem?,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> SnapPreparation {
         let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
         var snapEntities: [SnapEntity] = []
         var candidates: [PrioritizedSnapCandidate] = []
@@ -668,17 +787,6 @@ public struct SnapResolver: Sendable {
                     placement: placement
                 )
                 snapEntities.append(snapEntity)
-                candidates += snapEntity.discreteCandidates
-                if let closestCandidate = try closestCandidate(near: point, entity: snapEntity) {
-                    candidates.append(closestCandidate)
-                }
-                if let referencePoint {
-                    candidates += relationCandidates(
-                        near: point,
-                        referencePoint: referencePoint,
-                        entity: snapEntity
-                    )
-                }
             }
         }
         for firstIndex in snapEntities.indices {
@@ -689,12 +797,12 @@ public struct SnapResolver: Sendable {
                 )
             }
         }
-        let topology = try snapTopologySummary(
-            in: document,
-            searchRadiusMeters: searchRadiusMeters,
+        let topology = includesTopology ? try topologySnapshotService.snapshot(
+            document: document,
             currentEvaluation: currentEvaluation,
-            currentGeneration: currentGeneration
-        )
+            currentGeneration: currentGeneration,
+            metricPolicy: .omit
+        ) : nil
         candidates += measurementCandidates(
             in: document,
             topology: topology,
@@ -720,11 +828,7 @@ public struct SnapResolver: Sendable {
             hierarchy: hierarchy,
             constructionPlane: constructionPlane
         )
-        return candidates.compactMap { candidate in
-            var measuredCandidate = candidate
-            measuredCandidate.candidate.distanceMeters = distance(point, candidate.candidate.point)
-            return measuredCandidate.candidate.distanceMeters <= searchRadiusMeters ? measuredCandidate : nil
-        }
+        return SnapPreparation(entities: snapEntities, candidates: candidates)
     }
 
     private func regionCandidates(
@@ -956,26 +1060,6 @@ public struct SnapResolver: Sendable {
         }
         return candidates
     }
-
-    private func snapTopologySummary(
-        in document: DesignDocument,
-        searchRadiusMeters: Double,
-        currentEvaluation: DocumentEvaluationContext?,
-        currentGeneration: DocumentGeneration?
-    ) throws -> TopologySnapshot? {
-        guard MeasurementAnnotationResolver.requiresTopology(document)
-            || (searchRadiusMeters > 0.0
-                && document.cadDocument.hasActiveRenderableTopologyFeatures) else {
-            return nil
-        }
-        return try topologySnapshotService.snapshot(
-            document: document,
-            currentEvaluation: currentEvaluation,
-            currentGeneration: currentGeneration,
-            metricPolicy: .omit
-        )
-    }
-
 
     /// Topology snap points in world space.
     ///
@@ -3248,13 +3332,13 @@ public struct SnapResolver: Sendable {
     }
 }
 
-private struct PrioritizedSnapCandidate: Equatable {
+private struct PrioritizedSnapCandidate: Equatable, Sendable {
     var priority: Int
     var sortKey: String
     var candidate: SnapCandidate
 }
 
-private struct SnapEntity: Equatable {
+private struct SnapEntity: Equatable, Sendable {
     var source: SnapSourceReference
     var geometry: SnapGeometry
     var axisDirections: [SnapAxisDirection]
@@ -3262,18 +3346,18 @@ private struct SnapEntity: Equatable {
     var discreteCandidates: [PrioritizedSnapCandidate]
 }
 
-private struct SnapAxisDirection: Equatable {
+private struct SnapAxisDirection: Equatable, Sendable {
     var kind: SnapAxisKind
     var priority: Int
     var direction: Point2D
 }
 
-private struct SnapCoordinatePlaneDirection: Equatable {
+private struct SnapCoordinatePlaneDirection: Equatable, Sendable {
     var kind: SnapCoordinatePlaneKind
     var direction: Point2D
 }
 
-private enum SnapGeometry: Equatable {
+private enum SnapGeometry: Equatable, Sendable {
     case point(Point2D)
     case line(start: Point2D, end: Point2D)
     case circle(center: Point2D, radius: Double)

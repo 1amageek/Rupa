@@ -141,6 +141,16 @@ public struct Viewport: View {
     @State private var automaticMeasurementSummary: String?
     @State private var previewEvaluationCache = ViewportPreviewEvaluationCache()
     @State private var presentationPlanCache = MeshSourcePresentationPlanCache()
+    /// Saved measurements resolved for a published document state and ruler.
+    @State private var savedMeasurementMemo = MemoizedResults<
+        SavedMeasurementKey, [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement], any Error
+    >()
+
+    private struct SavedMeasurementKey: Equatable {
+        var documentID: DocumentID
+        var generation: DocumentGeneration
+        var ruler: RulerConfiguration
+    }
     @State private var overlayRevision = ViewportSpatialOverlayRevision()
     @State private var gridFailure: (rendererID: ObjectIdentifier, error: MeshSourcePresentationRenderError)?
     @State private var nativeGridReadout: (rendererID: ObjectIdentifier, value: ViewportProjectedGrid.ScaleReadout)?
@@ -2872,10 +2882,24 @@ public struct Viewport: View {
     /// An annotation that does not resolve is left out here and reported by
     /// the workspace measurement panel, which reads the same Core resolution;
     /// it is never drawn from a subset of its anchors.
+    /// The saved measurements drawn in the overlay. The overlay is rebuilt on every hover, but the
+    /// measurements depend only on the published document state and the ruler, so for a document
+    /// its current evaluation describes they are resolved once per generation and ruler.
     private func savedMeasurementOverlays() throws -> [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] {
         guard !document.productMetadata.measurements.isEmpty else {
             return []
         }
+        guard let generation = sceneDocumentGeneration,
+              currentEvaluation?.matches(document: document, generation: generation) == true else {
+            return try resolvedSavedMeasurementOverlays()
+        }
+        return try savedMeasurementMemo.value(
+            for: SavedMeasurementKey(documentID: document.id, generation: generation, ruler: workspaceRuler),
+            make: resolvedSavedMeasurementOverlays
+        )
+    }
+
+    private func resolvedSavedMeasurementOverlays() throws -> [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] {
         let occurrences = try SceneNodeHierarchy(metadata: document.productMetadata).resolvedOccurrences()
         let resolutions = MeasurementAnnotationResolver().resolveAll(in: document) {
             try TopologySnapshotService().snapshot(

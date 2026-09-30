@@ -931,7 +931,10 @@ as spheres elsewhere.
    per selected target.
    Which presented items carry an exact CAD context is decided against one
    `MeshSourcePresentationEvaluatedBodies` index of the evaluation's bodies,
-   not a scan of the whole subshape table per item.
+   not a scan of the whole subshape table per item. The overlay is rebuilt
+   on every hover, so saved measurements, which depend only on the
+   published document state and the ruler, are resolved once per
+   generation and ruler for a document its current evaluation describes.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

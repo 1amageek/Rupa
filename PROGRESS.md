@@ -409,3 +409,4 @@
 
 - [ ] HR Second hot-path pass: repeated whole-document work on edits, publications, pointer moves and renders is prepared once per document generation or input. `depends:HPF` `parallel:none`
   - [x] HR1 Per-publication and per-render scans: CAD context per presented item against one body index, pattern-owned nodes found once per validation or move, the Outliner projection kept per input. `depends:none` `parallel:none`
+  - [x] HR2 Pointer path: a snap's document-dependent preparation is made once per published document state instead of up to three times per pointer event, and saved measurements are resolved once per generation instead of per overlay build. `depends:HR1` `parallel:none`
