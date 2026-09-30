@@ -57,6 +57,17 @@ public final class CADDocumentStore {
         self.evaluationScheduler = evaluationScheduler
     }
 
+    /// A store over a document the caller already validated, which then validates nothing again
+    /// before its first evaluation.
+    package convenience init(
+        validatedDocument: ValidatedDesignDocument,
+        diagnostics: [EditorDiagnostic] = [],
+        objectRegistry: ObjectTypeRegistry
+    ) {
+        self.init(document: validatedDocument.document, diagnostics: diagnostics, objectRegistry: objectRegistry)
+        validatedSource = validatedDocument
+    }
+
     public convenience init(
         transactionSnapshot: CADDocumentStoreTransactionSnapshot,
         objectRegistry: ObjectTypeRegistry
@@ -100,6 +111,11 @@ public final class CADDocumentStore {
 
     public var currentEvaluation: DocumentEvaluationContext? {
         currentEvaluationCache.map(DocumentEvaluationContext.init(cache:))
+    }
+
+    /// The store's validation of `document`, when it holds one.
+    package var currentValidation: ValidatedDesignDocument? {
+        validatedSource
     }
 
     public var currentModelingEvaluationMetrics: ModelingEvaluationMetrics? {

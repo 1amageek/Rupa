@@ -183,6 +183,25 @@ the isolated source staging path and returns an immutable result to Core/Project
     package, reconstruction, evaluation, and publication path. They advance one
     generation and transaction revision per successful operation, and retain the
     existing typed history, coordinate, and source-mismatch failures.
+16. `ProjectSourceRoundTrip` is the one owner of staging a document into
+    package sources and reading them back; initial documents, replacements,
+    source edits and history steps call `stage`, and a loaded package calls
+    `read`. `stage` validates the candidate once (the staged store's validation,
+    `PreparedEditorSourceTransaction.stagedValidation`, when it holds one),
+    projects it once, encodes the Product and CAD sources, validates the package,
+    decodes and assembles it, and requires the assembled document to equal the
+    candidate: the Product model, the CAD document member-wise (Swift-CAD's
+    `CADDocument` equality, envelope and revisions included) when a CAD source
+    was written, and the Authored-Mesh assets. Equal to the validated candidate,
+    the assembled document is neither validated nor projected again, and the
+    candidate's validation is what evaluation reads
+    (`ProjectEvaluatorPreparing.makeEvaluator(for: ValidatedDesignDocument, reusing:)`),
+    so the CAD provider hashes nothing the staged store already hashed. The
+    published document is still the assembled one. Without a CAD source the
+    assembled CAD document is rebuilt from the Product identity alone, so that
+    document is validated itself. Before this owner the controller carried three
+    copies of the round trip, each proving it through two source fingerprints,
+    a second projection and a discarded validation of the decoded document.
 
 ## Runtime Flows
 
@@ -315,6 +334,7 @@ T09-C and T09-IV own the project proof:
 | History source commands | Suppression, valid dependency-safe reorder, parameter edit, stale-coordinate refusal, invalid-candidate rollback, and one-entry undo/redo are exercised through `ProjectWorkspace` and `ProjectController`, not only direct Core calls. |
 | Source independence | CAD/Product/selection/provenance invariance and shared-source visibility. |
 | Real path | Mesh-only and CAD-plus-Mesh inspect-to-save/load through `ProjectController`. |
+| Round trip | `ProjectSourceRoundTripTests` refuses a codec that alters the CAD document, accepts an exact one, and counts through `DocumentWorkProbe` that an edit's staging validates nothing the store validated. |
 
 Changes to staging order, publication guards, transaction shape, or view
 projection require rechecking the system, Core, and RupaKit integration designs.

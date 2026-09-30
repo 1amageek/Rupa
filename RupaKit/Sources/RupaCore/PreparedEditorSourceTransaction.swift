@@ -16,6 +16,12 @@ public struct PreparedEditorSourceTransaction<Value> {
         after.store.evaluationCache.map(DocumentEvaluationContext.init(cache:))
     }
 
+    /// The staged store's validation of `stagedDocument`, when it holds one, so staging the
+    /// document into package sources validates nothing the store already validated.
+    public var stagedValidation: ValidatedDesignDocument? {
+        after.store.validatedSource
+    }
+
     /// The complete staged document state retained by the isolated transaction.
     public var stagedDocumentState: DocumentSnapshot {
         after.store.document

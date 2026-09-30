@@ -832,7 +832,11 @@ single history entry remain owned by `withSourceCommandGroup`.
    it through `commitMutation(adopting:)`, which drops it when synchronizing
    boundary occurrences changed the document, so the evaluation that follows
    validates nothing again. `CADDocumentStoreGeometrySourceValidationTests`
-   counts the validations of one command. The retained
+   counts the validations of one command. The staged store's validation leaves
+   a prepared source or history transaction as `stagedValidation`, and a
+   session built from a document a project already validated
+   (`EditorSession(validatedDocument:)`) starts with it, so staging and the
+   first evaluation validate nothing again. The retained
    `AuthoredMeshAsset` invariant guarantees that construction and decoding
    already validated its source and computed or verified its cached content
    identity. After document validation, Core performs one O(1) authority check:

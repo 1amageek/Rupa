@@ -97,6 +97,11 @@ public final class EditorSession {
         store.currentEvaluation
     }
 
+    /// The store's validation of the current document, when it holds one.
+    package var currentValidation: ValidatedDesignDocument? {
+        store.currentValidation
+    }
+
     public var evaluationSnapshot: EvaluationSnapshot {
         store.evaluationSnapshot
     }
@@ -131,7 +136,7 @@ public final class EditorSession {
         return document.productMetadata.sceneNodes[selectedSceneNodeID]
     }
 
-    public init(
+    public convenience init(
         document: DesignDocument = .empty(),
         selectedTool: ModelingTool = .select,
         polygonToolState: PolygonToolState = .standard,
@@ -143,11 +148,49 @@ public final class EditorSession {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         commandContextResolver: any EditorCommandContextResolving = DefaultEditorCommandContextResolver()
     ) {
-        let store = CADDocumentStore(
-            document: document,
-            diagnostics: diagnostics,
-            objectRegistry: objectRegistry
+        self.init(
+            store: CADDocumentStore(document: document, diagnostics: diagnostics, objectRegistry: objectRegistry),
+            selectedTool: selectedTool,
+            polygonToolState: polygonToolState,
+            sketchInputState: sketchInputState,
+            selection: selection,
+            workspaceState: workspaceState,
+            transactionRevision: transactionRevision,
+            commandContextResolver: commandContextResolver
         )
+    }
+
+    /// A session over a document the caller already validated (a project that just staged or
+    /// read it), whose store validates nothing again before its first evaluation.
+    package convenience init(
+        validatedDocument: ValidatedDesignDocument,
+        transactionRevision: DocumentTransactionRevision = DocumentTransactionRevision(),
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        commandContextResolver: any EditorCommandContextResolving = DefaultEditorCommandContextResolver()
+    ) {
+        self.init(
+            store: CADDocumentStore(validatedDocument: validatedDocument, objectRegistry: objectRegistry),
+            selectedTool: .select,
+            polygonToolState: .standard,
+            sketchInputState: .standard,
+            selection: .empty,
+            workspaceState: WorkspaceState(),
+            transactionRevision: transactionRevision,
+            commandContextResolver: commandContextResolver
+        )
+    }
+
+    private init(
+        store: CADDocumentStore,
+        selectedTool: ModelingTool,
+        polygonToolState: PolygonToolState,
+        sketchInputState: SketchInputState,
+        selection: SelectionModel,
+        workspaceState: WorkspaceState,
+        transactionRevision: DocumentTransactionRevision,
+        commandContextResolver: any EditorCommandContextResolving
+    ) {
+        let document = store.document
         var initialSelection = selection
         initialSelection.pruneMissingReferences(in: document)
         var initialWorkspaceState = workspaceState

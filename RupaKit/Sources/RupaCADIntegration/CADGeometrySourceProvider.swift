@@ -35,6 +35,23 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         )
     }
 
+    /// A provider for a document the caller already validated at `configuration`'s tolerance.
+    public init(
+        validatedDocument: ValidatedCADDocument,
+        configuration: CADGeometryEvaluationConfiguration,
+        cache: CADDocumentEvaluationCache = CADDocumentEvaluationCache()
+    ) {
+        self.init(
+            resolver: CADGeometrySourceRegistry(
+                source: CADGeometryEvaluationSource(
+                    validatedDocument: validatedDocument,
+                    evaluator: DefaultCADDocumentEvaluator(configuration: configuration)
+                )
+            ),
+            cache: cache
+        )
+    }
+
     public init(
         document: CADDocument,
         evaluator: any CADDocumentEvaluating,
@@ -191,10 +208,15 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         let validatedDocument: ValidatedCADDocument
         let sourceFingerprint: CADDocumentSourceFingerprint
         do {
-            validatedDocument = try ValidatedCADDocument(
-                source.document,
-                tolerance: configuration.tolerance
-            )
+            // A validation made at another tolerance does not validate at this one.
+            if let validated = source.validatedDocument, validated.tolerance == configuration.tolerance {
+                validatedDocument = validated
+            } else {
+                validatedDocument = try ValidatedCADDocument(
+                    source.document,
+                    tolerance: configuration.tolerance
+                )
+            }
             sourceFingerprint = try validatedDocument.sourceFingerprint()
         } catch {
             throw CADIntegrationError(

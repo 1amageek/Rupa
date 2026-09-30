@@ -31,6 +31,7 @@ public actor ProjectController: ProjectOperating {
     private let packageWriter: any ProjectPackageWriting
     private let packageValidator: any ProjectPackageValidating
     private let geometrySourceCommandApplier: any GeometrySourceCommandApplying
+    private let roundTrip: ProjectSourceRoundTrip
 
     public init(
         document: DesignDocument,
@@ -51,17 +52,19 @@ public actor ProjectController: ProjectOperating {
         preparedProgramExecutor: any PreparedAutomationProgramExecuting =
             DefaultPreparedAutomationProgramExecutor()
     ) throws {
-        let initial = try Self.makeInitialState(
-            document: document,
+        let roundTrip = ProjectSourceRoundTrip(
             projector: projector,
             productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec,
             packageValidator: packageValidator,
             objectRegistry: objectRegistry
         )
+        let initial = try roundTrip.stage(
+            document, validated: nil, into: nil, collectingGarbage: false, context: .initial
+        )
         documentLifetimeID = ProjectDocumentLifetimeID()
         session = EditorSession(
-            document: document,
+            validatedDocument: initial.validatedDocument,
             objectRegistry: objectRegistry,
             commandContextResolver: commandContextResolver
         )
@@ -69,8 +72,8 @@ public actor ProjectController: ProjectOperating {
         evaluationSource = initial.evaluationSource
         evaluation = nil
         publicationSequence = 0
-        // The document was supplied, not decoded, and `makeInitialState` already
-        // refused a round trip that retired a value.
+        // The document was supplied, not decoded, and the round trip already
+        // refused sources that retired a value.
         retiredObjectProperties = []
         self.objectRegistry = objectRegistry
         self.commandContextResolver = commandContextResolver
@@ -84,6 +87,7 @@ public actor ProjectController: ProjectOperating {
         self.packageWriter = packageWriter
         self.packageValidator = packageValidator
         self.geometrySourceCommandApplier = geometrySourceCommandApplier
+        self.roundTrip = roundTrip
     }
 
     public init(
@@ -113,16 +117,17 @@ public actor ProjectController: ProjectOperating {
                 message: "Initial project package validation failed: \(error)."
             )
         }
-        let initial = try Self.decodeAndValidate(
-            package: package,
+        let roundTrip = ProjectSourceRoundTrip(
             projector: projector,
             productSourceCodec: productSourceCodec,
             cadSourceCodec: cadSourceCodec,
+            packageValidator: packageValidator,
             objectRegistry: objectRegistry
         )
+        let initial = try roundTrip.read(package)
         documentLifetimeID = ProjectDocumentLifetimeID()
         session = EditorSession(
-            document: initial.document,
+            validatedDocument: initial.validatedDocument,
             objectRegistry: objectRegistry,
             commandContextResolver: commandContextResolver
         )
@@ -143,6 +148,7 @@ public actor ProjectController: ProjectOperating {
         self.packageWriter = packageWriter
         self.packageValidator = packageValidator
         self.geometrySourceCommandApplier = geometrySourceCommandApplier
+        self.roundTrip = roundTrip
     }
 
     public func currentDocument() -> DesignDocument {
@@ -354,9 +360,12 @@ public actor ProjectController: ProjectOperating {
             )
         }
 
+        let validated = try Self.validation(
+            of: document, carried: session.currentValidation, objectRegistry: objectRegistry
+        )
         let sourceIdentity: ContentIdentity
         do {
-            sourceIdentity = try CADSourceContentIdentityService().identity(for: document)
+            sourceIdentity = try CADSourceContentIdentityService().identity(for: validated)
         } catch {
             throw ProjectControllerError(
                 code: .sourceInvalid,
@@ -364,7 +373,7 @@ public actor ProjectController: ProjectOperating {
             )
         }
         let modelingSnapshot = try await evaluate(
-            document: document,
+            validatedDocument: validated,
             source: source,
             purpose: .modeling,
             revision: baseRevision,
@@ -639,67 +648,22 @@ public actor ProjectController: ProjectOperating {
             try validatePreparedProgramResult(receipt, limit: mutation.resultLimit)
         }
 
-        let stagedAuthority = try await sourceAuthoritySnapshot(
-            for: prepared.stagedDocument,
-            includesCADSource: prepared.stagedDocument.hasAuthoritativeCADSource
-        )
-        try Task.checkCancellation()
-        let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
-        try Task.checkCancellation()
-        let stagedCADSource = try await encodeCADSourceIfAuthoritative(
-            prepared.stagedDocument
-        )
-        try Task.checkCancellation()
-        let stagedEvaluationSource = try await projectSource(prepared.stagedDocument)
-        guard stagedEvaluationSource.id == packageDocument.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "A source transaction cannot change the project identity."
+        let roundTrip = self.roundTrip
+        let base = packageDocument
+        let collectsGarbage = prepared.value.didMutateAuthoredMesh
+        let staged = try await Self.performDetached {
+            try roundTrip.stage(
+                prepared.stagedDocument,
+                validated: prepared.stagedValidation,
+                into: base,
+                collectingGarbage: collectsGarbage,
+                context: .edit
             )
         }
-        let stagedPackage: ProjectPackageDocument
-        do {
-            let replacedPackage = try packageDocument.replacingSources(
-                documentID: stagedEvaluationSource.id,
-                product: stagedProductSource,
-                cad: stagedCADSource,
-                authoredMeshAssets: prepared.stagedDocument.authoredMeshAssets
-            )
-            stagedPackage = prepared.value.didMutateAuthoredMesh
-                ? replacedPackage.garbageCollectingUnreferencedSourceBlobs()
-                : replacedPackage
-        } catch {
-            throw ProjectControllerError(
-                code: .packageFailed,
-                message: "Staged project package validation failed: \(error)."
-            )
-        }
-        try await validatePackageForSave(stagedPackage)
         try Task.checkCancellation()
-        let reconstructed = try await reconstructState(from: stagedPackage)
-        try Self.requireNothingRetired(
-            reconstructed.retiredObjectProperties,
-            context: "Staged project sources"
-        )
-        try Task.checkCancellation()
-        let reconstructedAuthority = try await sourceAuthoritySnapshot(
-            for: reconstructed.document,
-            includesCADSource: stagedPackage.cadSource != nil
-        )
-        try Self.requireMatchingAuthority(
-            expected: stagedAuthority,
-            actual: reconstructedAuthority,
-            context: "Staged project sources"
-        )
-        guard reconstructed.evaluationSource == stagedEvaluationSource else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Staged Product, CAD, and Mesh sources do not reproduce the edited document."
-            )
-        }
         let stagedEvaluation = try await evaluate(
-            document: reconstructed.document,
-            source: reconstructed.evaluationSource,
+            validatedDocument: staged.validatedDocument,
+            source: staged.evaluationSource,
             purpose: .presentation,
             revision: prepared.proposedTransactionRevision,
             reusing: prepared.stagedEvaluation
@@ -708,9 +672,9 @@ public actor ProjectController: ProjectOperating {
         return PreparedProjectSourceMutation(
             basePublicationSequence: basePublicationSequence,
             source: prepared,
-            package: stagedPackage,
-            document: reconstructed.document,
-            evaluationSource: reconstructed.evaluationSource,
+            package: staged.package,
+            document: staged.document,
+            evaluationSource: staged.evaluationSource,
             evaluation: stagedEvaluation
         )
     }
@@ -879,7 +843,10 @@ public actor ProjectController: ProjectOperating {
             )
         }
 
-        let reconstructed = try await reconstructState(from: loadedPackage)
+        let roundTrip = self.roundTrip
+        let reconstructed = try await Self.performDetached {
+            try roundTrip.read(loadedPackage)
+        }
         let loadedRevision: DocumentTransactionRevision
         do {
             loadedRevision = try expectedTransactionRevision.advanced()
@@ -887,7 +854,7 @@ public actor ProjectController: ProjectOperating {
             throw projectError(for: error)
         }
         let loadedSession = EditorSession(
-            document: reconstructed.document,
+            validatedDocument: reconstructed.validatedDocument,
             transactionRevision: loadedRevision,
             objectRegistry: objectRegistry,
             commandContextResolver: commandContextResolver
@@ -945,13 +912,8 @@ public actor ProjectController: ProjectOperating {
         try requireTransactionRevision(expectedTransactionRevision)
         try requirePublicationSequence(expectedPublicationSequence)
 
-        let initial = try Self.makeInitialState(
-            document: document,
-            projector: projector,
-            productSourceCodec: productSourceCodec,
-            cadSourceCodec: cadSourceCodec,
-            packageValidator: packageValidator,
-            objectRegistry: objectRegistry
+        let initial = try roundTrip.stage(
+            document, validated: nil, into: nil, collectingGarbage: false, context: .initial
         )
         let replacementRevision: DocumentTransactionRevision
         do {
@@ -960,7 +922,7 @@ public actor ProjectController: ProjectOperating {
             throw projectError(for: error)
         }
         let replacementSession = EditorSession(
-            document: document,
+            validatedDocument: initial.validatedDocument,
             transactionRevision: replacementRevision,
             objectRegistry: objectRegistry,
             commandContextResolver: commandContextResolver
@@ -1091,58 +1053,20 @@ public actor ProjectController: ProjectOperating {
             throw projectError(for: error)
         }
 
-        let stagedAuthority = try await sourceAuthoritySnapshot(
-            for: prepared.stagedDocument,
-            includesCADSource: prepared.stagedDocument.hasAuthoritativeCADSource
-        )
-        let stagedProductSource = try await encodeProductSource(prepared.stagedDocument)
-        let stagedCADSource = try await encodeCADSourceIfAuthoritative(prepared.stagedDocument)
-        let stagedEvaluationSource = try await projectSource(prepared.stagedDocument)
-        guard stagedEvaluationSource.id == packageDocument.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Project history cannot change the project identity."
-            )
-        }
-
-        let stagedPackage: ProjectPackageDocument
-        do {
-            stagedPackage = try packageDocument.replacingSources(
-                documentID: stagedEvaluationSource.id,
-                product: stagedProductSource,
-                cad: stagedCADSource,
-                authoredMeshAssets: prepared.stagedDocument.authoredMeshAssets
-            ).garbageCollectingUnreferencedSourceBlobs()
-        } catch {
-            throw ProjectControllerError(
-                code: .packageFailed,
-                message: "Staged project history package validation failed: \(error)."
-            )
-        }
-        try await validatePackageForSave(stagedPackage)
-        let reconstructed = try await reconstructState(from: stagedPackage)
-        try Self.requireNothingRetired(
-            reconstructed.retiredObjectProperties,
-            context: "Staged project history sources"
-        )
-        let reconstructedAuthority = try await sourceAuthoritySnapshot(
-            for: reconstructed.document,
-            includesCADSource: stagedPackage.cadSource != nil
-        )
-        try Self.requireMatchingAuthority(
-            expected: stagedAuthority,
-            actual: reconstructedAuthority,
-            context: "Staged project history sources"
-        )
-        guard reconstructed.evaluationSource == stagedEvaluationSource else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Staged project history sources do not reproduce the restored document."
+        let roundTrip = self.roundTrip
+        let base = packageDocument
+        let staged = try await Self.performDetached {
+            try roundTrip.stage(
+                prepared.stagedDocument,
+                validated: prepared.stagedValidation,
+                into: base,
+                collectingGarbage: true,
+                context: .history
             )
         }
         let stagedEvaluation = try await evaluate(
-            document: reconstructed.document,
-            source: reconstructed.evaluationSource,
+            validatedDocument: staged.validatedDocument,
+            source: staged.evaluationSource,
             purpose: .presentation,
             revision: prepared.proposedTransactionRevision,
             reusing: prepared.stagedEvaluation
@@ -1158,8 +1082,8 @@ public actor ProjectController: ProjectOperating {
             try requirePublicationSequence(expectedPublicationSequence)
             let nextPublicationSequence = try advancedPublicationSequence()
             try session.commitPreparedHistoryTransaction(prepared)
-            packageDocument = stagedPackage
-            evaluationSource = reconstructed.evaluationSource
+            packageDocument = staged.package
+            evaluationSource = staged.evaluationSource
             evaluation = stagedEvaluation
             publicationSequence = nextPublicationSequence
         } catch let error as EditorError {
@@ -1547,190 +1471,13 @@ public actor ProjectController: ProjectOperating {
             || base.surfaceFrameDisplays != staged.surfaceFrameDisplays
     }
 
-    private func encodeProductSource(
-        _ document: DesignDocument
-    ) async throws -> ProjectPackageProductSource {
-        let codec = productSourceCodec
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let source = try codec.encode(document)
-                try Task.checkCancellation()
-                return source
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .productSourceFailed,
-                message: "Product source encoding failed: \(error)."
-            )
-        }
-    }
 
-    private func decodeProductSource(
-        _ source: ProjectPackageProductSource
-    ) async throws -> ProjectProductSourceModel {
-        let codec = productSourceCodec
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let product = try codec.decode(source)
-                try Task.checkCancellation()
-                return product
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as ProjectControllerError {
-            throw error
-        } catch {
-            throw ProjectControllerError(
-                code: .productSourceFailed,
-                message: "Product source decoding failed: \(error)."
-            )
-        }
-    }
 
-    private func encodeCADSourceIfAuthoritative(
-        _ document: DesignDocument
-    ) async throws -> ProjectPackageCADSource? {
-        guard document.hasAuthoritativeCADSource else {
-            return nil
-        }
-        let codec = cadSourceCodec
-        let cadDocument = document.cadDocument
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let source = try codec.encode(cadDocument)
-                try Task.checkCancellation()
-                return source
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .cadSourceFailed,
-                message: "CAD source encoding failed: \(error)."
-            )
-        }
-    }
 
-    private func decodeOptionalCADSource(
-        _ source: ProjectPackageCADSource?
-    ) async throws -> CADDocument? {
-        guard let source else {
-            return nil
-        }
-        let codec = cadSourceCodec
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let document = try codec.decode(source)
-                try Task.checkCancellation()
-                return document
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .cadSourceFailed,
-                message: "CAD source decoding failed: \(error)."
-            )
-        }
-    }
 
-    private func projectSource(
-        _ document: DesignDocument
-    ) async throws -> ProjectSourceModel {
-        let projector = self.projector
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let source = try projector.project(document)
-                try source.validate()
-                try Task.checkCancellation()
-                return source
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .projectionFailed,
-                message: "Project evaluation-source projection failed: \(error)."
-            )
-        }
-    }
 
-    private func sourceAuthoritySnapshot(
-        for document: DesignDocument,
-        includesCADSource: Bool
-    ) async throws -> ProjectSourceAuthoritySnapshot {
-        do {
-            return try await Self.performDetached {
-                try Task.checkCancellation()
-                let snapshot = try ProjectSourceAuthoritySnapshot(
-                    document: document,
-                    includesCADSource: includesCADSource
-                )
-                try Task.checkCancellation()
-                return snapshot
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .sourceInvalid,
-                message: "Project source authority identity generation failed: \(error)."
-            )
-        }
-    }
 
-    private func reconstructState(
-        from package: ProjectPackageDocument
-    ) async throws -> (
-        document: DesignDocument,
-        evaluationSource: ProjectSourceModel,
-        retiredObjectProperties: [RetiredObjectProperty]
-    ) {
-        let product = try await decodeProductSource(package.productSource)
-        let cadDocument = try await decodeOptionalCADSource(package.cadSource)
-        let assembled = try Self.assembleDocument(
-            package: package,
-            product: product,
-            cadDocument: cadDocument,
-            objectRegistry: objectRegistry
-        )
-        let document = assembled.document
-        let source = try await projectSource(document)
-        guard source.id == package.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Product identity and evaluation projection differ."
-            )
-        }
-        return (document, source, assembled.retiredObjectProperties)
-    }
 
-    private func validatePackageForSave(
-        _ package: ProjectPackageDocument
-    ) async throws {
-        let validator = packageValidator
-        do {
-            try await Self.performDetached {
-                try Task.checkCancellation()
-                try validator.validateForSave(package)
-                try Task.checkCancellation()
-            }
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch {
-            throw ProjectControllerError(
-                code: .packageFailed,
-                message: "Staged project package encoding validation failed: \(error)."
-            )
-        }
-    }
 
     /// Stage exact interaction topology and its presentation as one publication.
     /// The worker owns the mutable store; only immutable snapshots cross isolation.
@@ -1752,10 +1499,13 @@ public actor ProjectController: ProjectOperating {
             }
             var staged = snapshot
             staged.store = store.transactionSnapshot()
-            return (snapshot: staged, context: store.currentEvaluation)
+            let validated = try Self.validation(
+                of: store.document, carried: store.currentValidation, objectRegistry: registry
+            )
+            return (snapshot: staged, context: store.currentEvaluation, validated: validated)
         }
         let presentation = try await evaluate(
-            document: staged.snapshot.store.document.document,
+            validatedDocument: staged.validated,
             source: source,
             purpose: .presentation,
             revision: staged.snapshot.transactionRevision,
@@ -1764,8 +1514,27 @@ public actor ProjectController: ProjectOperating {
         return (staged.snapshot, presentation)
     }
 
+    /// The validation a store carries for `document`, or one made now when it carries none.
+    private static func validation(
+        of document: DesignDocument,
+        carried: ValidatedDesignDocument?,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> ValidatedDesignDocument {
+        if let carried {
+            return carried
+        }
+        do {
+            return try document.validate(objectRegistry: objectRegistry)
+        } catch {
+            throw ProjectControllerError(
+                code: .sourceInvalid,
+                message: "Project document validation failed: \(error)."
+            )
+        }
+    }
+
     private func evaluate(
-        document: DesignDocument,
+        validatedDocument: ValidatedDesignDocument,
         source: ProjectSourceModel,
         purpose: GeometryRepresentationPurpose,
         revision: DocumentTransactionRevision,
@@ -1776,7 +1545,7 @@ public actor ProjectController: ProjectOperating {
             return try await Self.performDetached {
                 try Task.checkCancellation()
                 let evaluator = try evaluatorPreparer.makeEvaluator(
-                    for: document,
+                    for: validatedDocument,
                     reusing: currentEvaluation
                 )
                 try Task.checkCancellation()
@@ -1837,7 +1606,9 @@ public actor ProjectController: ProjectOperating {
         let document = session.document
         let source = evaluationSource
         let snapshot = try await evaluate(
-            document: document,
+            validatedDocument: try Self.validation(
+                of: document, carried: session.currentValidation, objectRegistry: objectRegistry
+            ),
             source: source,
             purpose: .modeling,
             revision: baseRevision,
@@ -1904,276 +1675,11 @@ public actor ProjectController: ProjectOperating {
         }
     }
 
-    private static func makeInitialState(
-        document: DesignDocument,
-        projector: any ProjectSourceProjecting,
-        productSourceCodec: any ProjectProductSourceCoding,
-        cadSourceCodec: any ProjectCADSourceCoding,
-        packageValidator: any ProjectPackageValidating,
-        objectRegistry: ObjectTypeRegistry
-    ) throws -> (package: ProjectPackageDocument, evaluationSource: ProjectSourceModel) {
-        do {
-            _ = try document.validate(objectRegistry: objectRegistry)
-        } catch {
-            throw ProjectControllerError(
-                code: .sourceInvalid,
-                message: "Initial DesignDocument validation failed: \(error)."
-            )
-        }
-        let expectedAuthority: ProjectSourceAuthoritySnapshot
-        do {
-            expectedAuthority = try ProjectSourceAuthoritySnapshot(
-                document: document,
-                includesCADSource: document.hasAuthoritativeCADSource
-            )
-        } catch {
-            throw ProjectControllerError(
-                code: .sourceInvalid,
-                message: "Initial project source authority identity generation failed: \(error)."
-            )
-        }
-        let source: ProjectSourceModel
-        do {
-            source = try projector.project(document)
-            try source.validate()
-        } catch {
-            throw ProjectControllerError(
-                code: .projectionFailed,
-                message: "Initial project evaluation-source projection failed: \(error)."
-            )
-        }
-        let productSource: ProjectPackageProductSource
-        do {
-            productSource = try productSourceCodec.encode(document)
-        } catch {
-            throw ProjectControllerError(
-                code: .productSourceFailed,
-                message: "Initial Product source encoding failed: \(error)."
-            )
-        }
-        let cadSource: ProjectPackageCADSource?
-        do {
-            cadSource = document.hasAuthoritativeCADSource
-                ? try cadSourceCodec.encode(document.cadDocument)
-                : nil
-        } catch {
-            throw ProjectControllerError(
-                code: .cadSourceFailed,
-                message: "Initial CAD source encoding failed: \(error)."
-            )
-        }
-        let package: ProjectPackageDocument
-        do {
-            package = try ProjectPackageDocument(
-                documentID: source.id,
-                productSource: productSource,
-                cadSource: cadSource,
-                authoredMeshAssets: document.authoredMeshAssets
-            )
-        } catch {
-            throw ProjectControllerError(
-                code: .packageFailed,
-                message: "Initial project package creation failed: \(error)."
-            )
-        }
-        do {
-            try packageValidator.validateForSave(package)
-        } catch {
-            throw ProjectControllerError(
-                code: .packageFailed,
-                message: "Initial project package encoding validation failed: \(error)."
-            )
-        }
-        let reconstructed = try decodeAndValidate(
-            package: package,
-            projector: projector,
-            productSourceCodec: productSourceCodec,
-            cadSourceCodec: cadSourceCodec,
-            objectRegistry: objectRegistry
-        )
-        try requireNothingRetired(
-            reconstructed.retiredObjectProperties,
-            context: "Initial project sources"
-        )
-        let reconstructedAuthority: ProjectSourceAuthoritySnapshot
-        do {
-            reconstructedAuthority = try ProjectSourceAuthoritySnapshot(
-                document: reconstructed.document,
-                includesCADSource: package.cadSource != nil
-            )
-        } catch {
-            throw ProjectControllerError(
-                code: .sourceInvalid,
-                message: "Initial reconstructed source authority identity generation failed: \(error)."
-            )
-        }
-        try requireMatchingAuthority(
-            expected: expectedAuthority,
-            actual: reconstructedAuthority,
-            context: "Initial project sources"
-        )
-        guard reconstructed.evaluationSource == source else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Initial codecs do not reproduce the supplied DesignDocument."
-            )
-        }
-        return (package, source)
-    }
 
-    private static func requireMatchingAuthority(
-        expected: ProjectSourceAuthoritySnapshot,
-        actual: ProjectSourceAuthoritySnapshot,
-        context: String
-    ) throws {
-        guard expected.product == actual.product else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "\(context) do not reproduce the Product authority."
-            )
-        }
-        guard expected.cad == actual.cad else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "\(context) do not reproduce the CAD authority."
-            )
-        }
-        guard expected.authoredMeshAssets == actual.authoredMeshAssets else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "\(context) do not reproduce the Authored-Mesh authority."
-            )
-        }
-    }
 
-    private static func decodeAndValidate(
-        package: ProjectPackageDocument,
-        projector: any ProjectSourceProjecting,
-        productSourceCodec: any ProjectProductSourceCoding,
-        cadSourceCodec: any ProjectCADSourceCoding,
-        objectRegistry: ObjectTypeRegistry
-    ) throws -> (
-        document: DesignDocument,
-        evaluationSource: ProjectSourceModel,
-        retiredObjectProperties: [RetiredObjectProperty]
-    ) {
-        let product: ProjectProductSourceModel
-        do {
-            product = try productSourceCodec.decode(package.productSource)
-        } catch {
-            throw ProjectControllerError(
-                code: .productSourceFailed,
-                message: "Initial Product source decoding failed: \(error)."
-            )
-        }
-        let cadDocument: CADDocument?
-        do {
-            cadDocument = try package.cadSource.map(cadSourceCodec.decode)
-        } catch {
-            throw ProjectControllerError(
-                code: .cadSourceFailed,
-                message: "Initial CAD source decoding failed: \(error)."
-            )
-        }
-        let assembled = try assembleDocument(
-            package: package,
-            product: product,
-            cadDocument: cadDocument,
-            objectRegistry: objectRegistry
-        )
-        let document = assembled.document
-        let source: ProjectSourceModel
-        do {
-            source = try projector.project(document)
-            try source.validate()
-        } catch {
-            throw ProjectControllerError(
-                code: .projectionFailed,
-                message: "Initial project evaluation-source projection failed: \(error)."
-            )
-        }
-        guard source.id == package.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Initial Product identity and evaluation projection differ."
-            )
-        }
-        return (document, source, assembled.retiredObjectProperties)
-    }
 
-    private static func assembleDocument(
-        package: ProjectPackageDocument,
-        product: ProjectProductSourceModel,
-        cadDocument: CADDocument?,
-        objectRegistry: ObjectTypeRegistry
-    ) throws -> (document: DesignDocument, retiredObjectProperties: [RetiredObjectProperty]) {
-        guard product.projectID == package.documentID else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "Package and Product document identities differ."
-            )
-        }
-        let runtimeCADDocument: CADDocument
-        if let cadDocument {
-            guard cadDocument.id == product.documentID,
-                cadDocument.units == product.units,
-                cadDocument.metadata.name == product.name
-            else {
-                throw ProjectControllerError(
-                    code: .sourceMismatch,
-                    message: "Product and CAD document identity, units, or name differ."
-                )
-            }
-            runtimeCADDocument = cadDocument
-        } else {
-            runtimeCADDocument = CADDocument(
-                id: product.documentID,
-                units: product.units,
-                metadata: DocumentMetadata(name: product.name)
-            )
-        }
-        // A project saved by an earlier object schema can carry a property value the
-        // registry no longer declares. That value is stale metadata, not an invalid
-        // source, so it is dropped here rather than refused by validation below. The
-        // next save writes the document without it, so what was dropped is returned
-        // for the caller that opened the project to report.
-        var productMetadata = product.productMetadata
-        let retired = productMetadata.pruneUndeclaredObjectProperties(
-            objectRegistry: objectRegistry
-        )
-        let document = DesignDocument(
-            cadDocument: runtimeCADDocument,
-            modelingSettings: product.modelingSettings,
-            productMetadata: productMetadata,
-            authoredMeshAssets: package.authoredMeshAssets
-        )
-        do {
-            _ = try document.validate(objectRegistry: objectRegistry)
-        } catch {
-            throw ProjectControllerError(
-                code: .sourceInvalid,
-                message: "Decoded project sources are semantically invalid: \(error)."
-            )
-        }
-        return (document, retired)
-    }
 
-    /// Refuses a retired property value produced by decoding a package this controller
-    /// itself encoded.
-    ///
-    /// Such a round trip carries no document older than the schema, so a retired value
-    /// means the encoder and the registry disagree. See `RupaProject/DESIGN.md`.
-    private static func requireNothingRetired(
-        _ retired: [RetiredObjectProperty],
-        context: String
-    ) throws {
-        guard retired.isEmpty else {
-            throw ProjectControllerError(
-                code: .sourceMismatch,
-                message: "\(context) retired \(retired.count) stored object property value(s) the object schema no longer declares."
-            )
-        }
-    }
+
 }
 
 private enum HistoryDirection {

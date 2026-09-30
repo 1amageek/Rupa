@@ -82,7 +82,13 @@ flowchart LR
    remaining allowance.
 3. Exact evaluation reuse is keyed by source identity/fingerprint, schema,
    evaluator identity, revisions, units, and modeling tolerance. It is not
-   invalidated only because presentation tessellation fidelity differs.
+   invalidated only because presentation tessellation fidelity differs. A
+   source built from the caller's `ValidatedCADDocument`
+   (`CADGeometrySourceProvider(validatedDocument:configuration:cache:)`) is
+   neither validated again nor hashed again when that validation was made at
+   the configured tolerance: the fingerprint is the one the validated document
+   carries (Swift-CAD computes it once per validated document). A validation at
+   another tolerance is not reused.
 4. Mesh artifact reuse is separate and requires the exact source fingerprint
    and the complete tessellation fidelity configuration. A reused artifact is
    charged against the requesting allowance like a freshly produced one,

@@ -96,11 +96,9 @@ enum ProjectMakeEditableSupport {
         guard snapshot.document.document.modelingSettings == state.document.modelingSettings,
               snapshot.document.document.productMetadata == state.document.productMetadata,
               snapshot.document.document.authoredMeshAssets == state.document.authoredMeshAssets,
-              try cadDocumentsMatch(
-                snapshot.document.document.cadDocument,
-                state.document.cadDocument,
-                tolerance: state.document.modelingSettings.tolerance
-              ) else {
+              // Member-wise, envelope and revisions included: the view's CAD document is the
+              // state's, not only one with the same source fingerprint.
+              snapshot.document.document.cadDocument == state.document.cadDocument else {
             throw ProjectMakeEditableError(
                 code: .resultMismatch,
                 message: "The supplied project view contains forged or stale source authority."
@@ -343,23 +341,6 @@ enum ProjectMakeEditableSupport {
         )
     }
 
-    private static func cadDocumentsMatch(
-        _ lhs: SwiftCAD.CADDocument,
-        _ rhs: SwiftCAD.CADDocument,
-        tolerance: ModelingTolerance
-    ) throws -> Bool {
-        guard lhs.id == rhs.id,
-              lhs.metadata.name == rhs.metadata.name,
-              lhs.metadata.createdAt == rhs.metadata.createdAt,
-              lhs.metadata.updatedAt == rhs.metadata.updatedAt,
-              lhs.designGraph.revision == rhs.designGraph.revision,
-              lhs.parameters.revision == rhs.parameters.revision,
-              lhs.selectionDimensions.map(\.id) == rhs.selectionDimensions.map(\.id) else {
-            return false
-        }
-        return try lhs.sourceFingerprint(tolerance: tolerance)
-            == rhs.sourceFingerprint(tolerance: tolerance)
-    }
 
     private static func makeEditableCode(
         for code: ProjectMeshReadError.Code

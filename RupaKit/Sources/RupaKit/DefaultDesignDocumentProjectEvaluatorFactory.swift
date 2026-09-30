@@ -1,6 +1,7 @@
 import RupaCADIntegration
 import RupaCore
 import RupaEvaluation
+import SwiftCAD
 
 /// The product composition that connects built-in mesh and Swift-CAD providers.
 public struct DefaultDesignDocumentProjectEvaluatorFactory:
@@ -23,6 +24,27 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
         for document: DesignDocument,
         reusing currentEvaluation: DocumentEvaluationContext?
     ) throws -> any ProjectEvaluating {
+        try makeEvaluator(for: document, validatedCADDocument: nil, reusing: currentEvaluation)
+    }
+
+    /// The CAD provider reads the caller's validated CAD document, so a candidate the project
+    /// already validated is neither validated nor hashed again.
+    public func makeEvaluator(
+        for validatedDocument: ValidatedDesignDocument,
+        reusing currentEvaluation: DocumentEvaluationContext?
+    ) throws -> any ProjectEvaluating {
+        try makeEvaluator(
+            for: validatedDocument.document,
+            validatedCADDocument: validatedDocument.validatedCADDocument,
+            reusing: currentEvaluation
+        )
+    }
+
+    private func makeEvaluator(
+        for document: DesignDocument,
+        validatedCADDocument: ValidatedCADDocument?,
+        reusing currentEvaluation: DocumentEvaluationContext?
+    ) throws -> any ProjectEvaluating {
         if let currentEvaluation,
            !currentEvaluation.matches(
                document: document,
@@ -38,11 +60,19 @@ public struct DefaultDesignDocumentProjectEvaluatorFactory:
             tessellationOptions: try document.displayTessellationOptions()
         )
         let cadEvaluationCache = CADDocumentEvaluationCache()
-        var cadProvider = CADGeometrySourceProvider(
-            document: document.cadDocument,
-            configuration: configuration,
-            cache: cadEvaluationCache
-        )
+        var cadProvider = if let validatedCADDocument {
+            CADGeometrySourceProvider(
+                validatedDocument: validatedCADDocument,
+                configuration: configuration,
+                cache: cadEvaluationCache
+            )
+        } else {
+            CADGeometrySourceProvider(
+                document: document.cadDocument,
+                configuration: configuration,
+                cache: cadEvaluationCache
+            )
+        }
         cadProvider.conversionCache = conversionCache
         let registry = try GeometrySourceEvaluationProviderRegistry(
             providers: [
