@@ -901,7 +901,9 @@ leaving the dialog open, and Escape ends it without a change. The inspector's Fa
 and a face drag push through the same `pushFaces`. The palette's Remove Fillets From Shell
 opens the same dialog on one selected solid, with its Max Radius and the Convexity Tab steps.
 Delete or Backspace on faces of solids, and the inspector's Delete Face, delete them healing
-(`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before.
+(`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before. Delete Redundant
+Topology dispatches by selection: selected solids and sheets merge their redundant faces and
+edges (`removeRedundantTopology`), a selected spline drops its redundant joints.
 
 ### What the workspace says, and where the canvas stops
 

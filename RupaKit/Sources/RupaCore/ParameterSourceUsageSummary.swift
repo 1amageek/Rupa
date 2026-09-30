@@ -145,6 +145,7 @@ public struct ParameterSourceUsageService: Sendable {
              .isoparam,
              .imprintBody,
              .faceMatch,
+             .removeRedundantTopology,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -393,6 +394,8 @@ public struct ParameterSourceUsageService: Sendable {
             "faceMatch"
         case .removeFillets:
             "removeFillets"
+        case .removeRedundantTopology:
+            "removeRedundantTopology"
         case .imprintCurves:
             "imprintCurves"
         case .untrimFace:

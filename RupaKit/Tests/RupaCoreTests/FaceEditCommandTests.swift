@@ -113,4 +113,17 @@ import Testing
         #expect(abs(try volume(session) - 0.001) < 1e-12)
         #expect(session.evaluationStatus == .valid)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func deleteRedundantTopologyMakesASplitTopWholeAgain() throws {
+        let session = EditorSession()
+        let target = try box(session, "Box")
+        let top = try face(of: target, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try session.execute(.isoparam(name: "Isoparam", face: top, direction: .u, fractions: [0.5], subdividesControlNet: false))
+        #expect(try faces(of: target, in: session).count == 7)
+        _ = try session.execute(.removeRedundantTopology(targets: [target]))
+        #expect(try faces(of: target, in: session).count == 6)
+        #expect(abs(try volume(session) - 0.001) < 1e-12)
+        #expect(session.evaluationStatus == .valid)
+    }
 }

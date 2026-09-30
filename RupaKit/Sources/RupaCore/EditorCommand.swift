@@ -264,6 +264,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case pushFaces(targets: [SelectionTarget], distance: CADExpression, adjacentAngle: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case deleteBodyFaces(targets: [SelectionTarget], heals: Bool = false)
     case removeFillets(target: SceneNodeID, maximumRadius: CADExpression? = nil, convexity: FilletConvexity = .any)
+    case removeRedundantTopology(targets: [SceneNodeID])
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
@@ -803,6 +804,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "deleteBodyFaces"
         case .removeFillets:
             "removeFillets"
+        case .removeRedundantTopology:
+            "removeRedundantTopology"
         case .draftBodyFaces:
             "draftBodyFaces"
         case .matchFaces:
@@ -1123,6 +1126,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .pushFaces,
              .deleteBodyFaces,
              .removeFillets,
+             .removeRedundantTopology,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

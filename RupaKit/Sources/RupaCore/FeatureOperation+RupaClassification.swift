@@ -57,6 +57,7 @@ extension FeatureOperation {
              .imprintBody,
              .faceMatch,
              .removeFillets,
+             .removeRedundantTopology,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -143,6 +144,7 @@ extension FeatureOperation {
              .imprintBody,
              .faceMatch,
              .removeFillets,
+             .removeRedundantTopology,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -257,6 +259,8 @@ extension FeatureOperation {
             return [feature.target.featureID]
         // Remove Fillets reshapes its solid in its place.
         case .removeFillets(let feature):
+            return [feature.target.featureID]
+        case .removeRedundantTopology(let feature):
             return [feature.target.featureID]
         case .imprintCurves(let feature):
             return [feature.target.featureID]

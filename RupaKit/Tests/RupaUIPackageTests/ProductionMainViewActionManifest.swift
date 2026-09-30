@@ -143,6 +143,7 @@ enum ProductionMainViewActionManifest {
         "draftBodyFaces",
         "matchFaces",
         "removeFillets",
+        "removeRedundantTopology",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

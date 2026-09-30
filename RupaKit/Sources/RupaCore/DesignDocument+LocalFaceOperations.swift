@@ -75,3 +75,26 @@ extension DesignDocument {
         )
     }
 }
+
+extension DesignDocument {
+    /// Delete Redundant Topology on solid and sheet objects: each merges faces on one surface
+    /// across the edges between them and edges on one curve across the vertices between them
+    /// (Swift-CAD `removeRedundantTopology`), shown in its place, as one step.
+    public mutating func removeRedundantTopology(targets: [SceneNodeID], objectRegistry: ObjectTypeRegistry = .builtIn) throws {
+        let operationName = "Delete Redundant Topology"
+        guard targets.isEmpty == false else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) requires solids or sheets.")
+        }
+        let previous = self
+        var didCommit = false
+        defer { if !didCommit { self = previous } }
+        for target in targets {
+            let object = try offsetObject(for: [SelectionTarget(sceneNodeID: target)], operationName: operationName)
+            _ = try appendFeatureShownByObject(
+                .removeRedundantTopology(RemoveRedundantTopologyFeature(target: PatternTargetReference(featureID: object.featureID))),
+                name: operationName, object: object.nodeID, objectRegistry: objectRegistry
+            )
+        }
+        didCommit = true
+    }
+}

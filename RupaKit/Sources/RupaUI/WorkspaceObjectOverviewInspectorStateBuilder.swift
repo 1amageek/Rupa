@@ -627,6 +627,11 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Direction", value: isoparam.direction == .u ? "U" : "V"),
                 WorkspaceInspectorTextRow(title: "Lines", value: "\(isoparam.fractions.count)"),
             ]
+        case .removeRedundantTopology(let removal):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Delete Redundant Topology"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(removal.target.featureID)),
+            ]
         case .removeFillets(let removal):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Remove Fillets"),

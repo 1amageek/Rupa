@@ -2086,6 +2086,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .removeRedundantTopology:
+            func run() throws {
+                guard case .removeRedundantTopology(let targets) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected removeRedundantTopology.")
+                }
+                var updatedDocument = document
+                try updatedDocument.removeRedundantTopology(targets: targets, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .removeFillets:
             func run() throws {
                 guard case .removeFillets(let target, let maximumRadius, let convexity) = command else {

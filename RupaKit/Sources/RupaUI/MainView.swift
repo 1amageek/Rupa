@@ -9674,8 +9674,17 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// Delete Redundant Topology on the selected spline (Edit menu, palette).
+    /// Delete Redundant Topology (Edit menu, palette) by selection: the selected solids and sheets
+    /// merge their redundant faces and edges; a selected spline drops its redundant joints.
     private var deleteRedundantTopologyAction: (@MainActor () -> Void)? {
+        let objects = selectedBodyObjectIDs
+        if objects.isEmpty == false {
+            return {
+                submitSource(.removeRedundantTopology(targets: objects)) { result in
+                    if result?.didMutate == true { reportToolStatus("Delete Redundant Topology: redundant faces and edges merged.") }
+                }
+            }
+        }
         guard let entity = sketchCommandTargetResolver.entity(from: selectedSketchEntityResult),
               entity.entityKind == "spline",
               let target = sketchCommandTargetResolver.slotSourceCurveTarget(for: entity) else { return nil }

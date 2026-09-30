@@ -1068,6 +1068,8 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Isoparam")
             case .imprintBody(let imprint):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .removeRedundantTopology(let removal):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Delete Redundant Topology")
             case .removeFillets(let removal):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Remove Fillets")
             case .faceMatch(let match):

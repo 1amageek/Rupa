@@ -111,6 +111,7 @@ enum PreparedAutomationSourceCommandValidation {
              .pushFaces,
              .deleteBodyFaces,
              .removeFillets,
+             .removeRedundantTopology,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,
