@@ -51,6 +51,7 @@ extension FeatureOperation {
              .mirror,
              .joinBodies,
              .unjoinBody,
+             .unjoinFaces,
              .extract,
              .wrap,
              .bridgeSurface,
@@ -129,6 +130,7 @@ extension FeatureOperation {
              .mirror,
              .joinBodies,
              .unjoinBody,
+             .unjoinFaces,
              .extract,
              .wrap:
             return true
@@ -224,6 +226,9 @@ extension FeatureOperation {
         case .joinBodies(let feature):
             return Set(feature.targets.map(\.featureID))
         case .unjoinBody(let feature):
+            return [feature.target.featureID]
+        // Unjoin faces consumes its target, holding its faces as the shells of one sheet.
+        case .unjoinFaces(let feature):
             return [feature.target.featureID]
         // An extraction copies part of a body that stays: one extraction never replaces its
         // source. A source every component of which is extracted is replaced by its pieces, which

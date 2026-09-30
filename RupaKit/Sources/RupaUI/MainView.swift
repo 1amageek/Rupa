@@ -6192,6 +6192,8 @@ private struct ProjectMainViewContent: View {
             isBooleanSessionActive: booleanSession != nil,
             isBodyCutSessionActive: bodyCutSession != nil,
             hasBodyObjectSelection: !selectedBodyObjectIDs.isEmpty,
+            selectedSheetObjectCount: selectedSheetObjectTargets.count,
+            hasBodyFaceSelection: !selectedBodyFaceTargets.isEmpty,
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
@@ -6519,9 +6521,14 @@ private struct ProjectMainViewContent: View {
             filletSession = nil
             reportToolStatus("Fillet ended.")
             return .handled
-        case .joinSketchCurves:
+        case .join:
             let targets = selectedSketchTargets
-            guard targets.count >= 2 else { return .ignored }
+            guard targets.count >= 2 else {
+                let sheets = selectedSheetObjectTargets
+                guard sheets.count >= 2 else { return .ignored }
+                submitSource(.joinSheets(name: "Join", targets: sheets))
+                return .handled
+            }
             if targets.count == 2 {
                 submitSource(
                     .joinSketchCurves(
@@ -6534,9 +6541,19 @@ private struct ProjectMainViewContent: View {
                 submitSource(.joinSketchCurveChain(targets: targets, continuity: sketchCurveJoinContinuity))
             }
             return .handled
-        case .unjoinSketchCurve:
-            guard let target = selectedSketchTargets.first else { return .ignored }
-            submitSource(.unjoinSketchCurve(target: target))
+        case .unjoin:
+            if selectedSketchTargets.count == 1, let target = selectedSketchTargets.first {
+                submitSource(.unjoinSketchCurve(target: target))
+                return .handled
+            }
+            let faces = selectedBodyFaceTargets
+            if faces.isEmpty == false, faces.count == snapshot.selection.selectedTargets.count {
+                submitSource(.unjoinFaces(name: "Unjoin", targets: faces))
+                return .handled
+            }
+            let bodies = selectedBodyObjectIDs
+            guard bodies.isEmpty == false else { return .ignored }
+            submitSource(.unjoinShells(name: "Unjoin", targets: bodies.map { SelectionTarget(sceneNodeID: $0) }))
             return .handled
         case .raiseCurveDegree:
             guard let action = raiseCurveDegreeAction else { return .ignored }
@@ -8886,6 +8903,23 @@ private struct ProjectMainViewContent: View {
     private func endBodyOperationDialogs() {
         booleanSession = nil
         bodyCutSession = nil
+    }
+
+    /// The selected sheet objects, which Join sews together.
+    private var selectedSheetObjectTargets: [SelectionTarget] {
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        return selectedBodyObjectIDs.compactMap { nodeID in
+            nodes[nodeID]?.object?.geometryRole == .surface ? SelectionTarget(sceneNodeID: nodeID) : nil
+        }
+    }
+
+    /// The selected faces of body objects, which Unjoin separates.
+    private var selectedBodyFaceTargets: [SelectionTarget] {
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        return snapshot.selection.selectedTargets.filter { target in
+            guard case .face = target.component else { return false }
+            return nodes[target.sceneNodeID]?.reference?.kind == .body
+        }
     }
 
     /// The selected whole body objects, in selection order, which Boolean and Cut act on.

@@ -145,6 +145,27 @@ the output is declared) are copied as a solid (`.solidFaces`), others as a sheet
 (`.faces`). Faces of an instance are refused (realize it first).
 `AlternativeDuplicateTests` own the solid, the sheet and the refusal.
 
+Join on sheets (`joinSheets(name:targets:)`) sews the chosen sheet objects into one
+through Swift-CAD's `joinBodies`: each sheet joins where it is displayed, carrying
+its rigid placement relative to the first sheet's object (`relativeRigidPlacement`),
+and the mode is `.sewnSolid` when Swift-CAD's `JoinSheetClosure` says the sheets
+close and `.sewnSheet` otherwise, so the output port is declared before evaluation.
+Sheets that do not all meet along exactly matching edges, three faces on one edge,
+a solid among the targets and fewer than two sheets are refused as
+`commandInvalid` with nothing changed. The first sheet's object shows the result
+(solid or surface role) under its own name; the others are taken away.
+
+Unjoin on faces (`unjoinFaces(name:targets:)`) and on solids or sheets
+(`unjoinShells(name:targets:)`) append one Swift-CAD `unjoinFaces` feature per
+body, which consumes the body and holds its pieces as the shells of one sheet:
+each chosen face (every face, for Unjoin Shells) a shell of its own and the faces
+that remain one shell per piece that still hangs together. Each piece is a
+`.component` extract of that feature, inserted where the body's object was and
+placed like it, and the body's object is taken away; a body left in one piece
+keeps its object, retargeted to the feature. Because the body is consumed in the
+graph, measurement no longer counts it. Instances are refused (realize them
+first). `JoinUnjoinCommandTests` own these contracts.
+
 Cut (`cut(name:targets:cutters:options:)`) cuts bodies, solids or sheets, with
 face and curve cutters and shows every piece as an object of its own. Each
 cutter becomes a sheet kept by a hidden object placed where the cutter is: a face

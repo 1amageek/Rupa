@@ -840,9 +840,14 @@ and OK, Return or right-click submits `.deformCurves` or `.deformBodies` while E
 ends it unchanged (`WorkspaceDeformSessionTests`). A running command that takes clicks owns the viewport's pointer, as
 [Viewport pointer ownership](#viewport-pointer-ownership) states. Create Outline in the palette, with bodies selected,
 submits `.createBodyOutlines` on the active construction plane and selects the outlines
-with a Move running (`moveCreatedObjects`). J joins two or more selected curves with the inspector's continuity
-(two through `joinSketchCurves`, more through `joinSketchCurveChain`) and
-Option-J unjoins the selected curve. Align Vertex's inspector sets one CV
+with a Move running (`moveCreatedObjects`). J dispatches Join by the selection:
+two or more selected curves join with the inspector's continuity (two through
+`joinSketchCurves`, more through `joinSketchCurveChain`), and two or more
+selected sheet objects are sewn through `joinSheets`. Option-J dispatches
+Unjoin: one selected curve is unjoined, selected faces leave their bodies through
+`unjoinFaces`, and selected solid or sheet objects fall apart into one sheet per
+face through `unjoinShells`. The palette lists them as Join and Unjoin, with the
+Plasticity command names as aliases. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
 points where they are. With one open sketch curve or a circle selected, O
 starts Offset Planar Curve: S makes it symmetric, V steps the gap fill at a

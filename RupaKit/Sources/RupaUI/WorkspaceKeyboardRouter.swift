@@ -240,10 +240,11 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case confirmProject
     /// Escape while Project Curve Body's dialog runs: end it without a change.
     case cancelProject
-    /// J: Join Curves on the two selected sketch curves.
-    case joinSketchCurves
-    /// Option-J: Unjoin Curve on the selected sketch curve.
-    case unjoinSketchCurve
+    /// J: Join by selection — sketch curves to Join Curves, sheets to Join Sheets.
+    case join
+    /// Option-J: Unjoin by selection — a sketch curve to Unjoin Curve, faces to Unjoin Faces,
+    /// solids or sheets to Unjoin Shells.
+    case unjoin
     /// Option-D: Alternative Duplicate of selected curves or edges onto the construction plane, or
     /// Project Outline of selected bodies.
     case projectToConstructionPlane
@@ -330,6 +331,10 @@ struct WorkspaceKeyboardContext: Sendable {
     var isBodyCutSessionActive: Bool = false
     /// Whether the selection holds whole body objects, which Q combines and C cuts.
     var hasBodyObjectSelection: Bool = false
+    /// How many sheet objects the selection holds, which J joins.
+    var selectedSheetObjectCount: Int = 0
+    /// Whether the selection holds faces of bodies, which Option-J separates.
+    var hasBodyFaceSelection: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletSessionActive: Bool = false
     /// Whether Rebuild Curve's dialog runs.
@@ -900,7 +905,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         guard context.isSelectToolActive, !context.isPlaceSessionActive else { return nil }
         let key = input.characters.lowercased()
         if input.modifiers == [.option], key == "j" || key == "∆" {
-            return context.selectedSketchTargetCount == 1 ? .unjoinSketchCurve : nil
+            let separates = context.selectedSketchTargetCount == 1
+                || context.hasBodyFaceSelection || context.hasBodyObjectSelection
+            return separates ? .unjoin : nil
         }
         if input.modifiers == [.option], key == "d" || key == "∂" {
             return context.hasProjectableSelection ? .projectToConstructionPlane : nil
@@ -929,7 +936,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "t": return .activateTrimCommand
         case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
         case "b": return context.selectedSketchTargetCount > 0 ? .beginFillet : nil
-        case "j": return context.selectedSketchTargetCount >= 2 ? .joinSketchCurves : nil
+        case "j": return context.selectedSketchTargetCount >= 2 || context.selectedSheetObjectCount >= 2 ? .join : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil
         default: return nil
         }

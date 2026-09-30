@@ -140,6 +140,7 @@ public struct ParameterSourceUsageService: Sendable {
              .mirror,
              .joinBodies,
              .unjoinBody,
+             .unjoinFaces,
              .extract,
              .projectCurve:
             break
@@ -370,6 +371,8 @@ public struct ParameterSourceUsageService: Sendable {
             "joinBodies"
         case .unjoinBody:
             "unjoinBody"
+        case .unjoinFaces:
+            "unjoinFaces"
         case .extract:
             "extract"
         case .wrap:

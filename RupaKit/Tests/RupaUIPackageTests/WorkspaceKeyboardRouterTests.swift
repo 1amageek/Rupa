@@ -493,14 +493,33 @@ private func keyboardContext(
     context.selectedSketchTargetCount = 1
     #expect(action("b") == .beginFillet)
     #expect(action("j") == nil)
-    #expect(action("∆", [.option]) == .unjoinSketchCurve)
+    #expect(action("∆", [.option]) == .unjoin)
     context.selectedSketchTargetCount = 2
-    #expect(action("j") == .joinSketchCurves)
+    #expect(action("j") == .join)
     #expect(action("∆", [.option]) == nil)
     context.selectedSketchTargetCount = 3
-    #expect(action("j") == .joinSketchCurves)
+    #expect(action("j") == .join)
     context.isPlaceSessionActive = true
-    #expect(action("j") != .joinSketchCurves)
+    #expect(action("j") != .join)
+}
+
+@Test func workspaceKeyboardRouterJoinsSheetsAndUnjoinsFacesAndBodies() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    context.selectedSheetObjectCount = 1
+    #expect(action("j") == nil)
+    context.selectedSheetObjectCount = 2
+    #expect(action("j") == .join)
+    context.selectedSheetObjectCount = 0
+    #expect(action("∆", [.option]) == nil)
+    context.hasBodyFaceSelection = true
+    #expect(action("∆", [.option]) == .unjoin)
+    context.hasBodyFaceSelection = false
+    context.hasBodyObjectSelection = true
+    #expect(action("∆", [.option]) == .unjoin)
 }
 
 @Test func workspaceKeyboardRouterRaisesTheSelectedCurvesDegreeOnShiftS() {

@@ -2928,6 +2928,36 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .joinSheets(name, targets):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.joinSheets(
+                name: name, targets: targets, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .unjoinFaces(name, targets):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.unjoinFaces(
+                name: name, targets: targets, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
+            ).last
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case let .unjoinShells(name, targets):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.unjoinShells(
+                name: name, targets: targets, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
+            ).last
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .createConstrainedSurface(name, source):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createConstrainedSurface(

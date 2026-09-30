@@ -425,6 +425,13 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     )
     case cut(name: String, targets: [SceneNodeID], cutters: [CutCutter], options: CutOptions)
     case duplicateBodyFaces(name: String, targets: [SelectionTarget])
+    /// Join on sheets: sewn along their exactly matching edges into one sheet, or a solid when
+    /// they close.
+    case joinSheets(name: String, targets: [SelectionTarget])
+    /// Unjoin on faces: each face leaves its body as a sheet of its own.
+    case unjoinFaces(name: String, targets: [SelectionTarget])
+    /// Unjoin on solids or sheets: every face becomes a sheet of its own.
+    case unjoinShells(name: String, targets: [SelectionTarget])
     case createConstrainedSurface(name: String, source: ConstrainedSurfaceFeature)
     case setConstrainedSurface(featureID: FeatureID, source: ConstrainedSurfaceFeature)
     case createBSplineSurface(
@@ -900,6 +907,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "cut"
         case .duplicateBodyFaces:
             "duplicateBodyFaces"
+        case .joinSheets:
+            "joinSheets"
+        case .unjoinFaces:
+            "unjoinFaces"
+        case .unjoinShells:
+            "unjoinShells"
         case .createConstrainedSurface:
             "createConstrainedSurface"
         case .setConstrainedSurface:
@@ -1127,6 +1140,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createBoolean,
              .cut,
              .duplicateBodyFaces,
+             .joinSheets,
+             .unjoinFaces,
+             .unjoinShells,
              .createConstrainedSurface,
              .setConstrainedSurface,
              .createBSplineSurface,

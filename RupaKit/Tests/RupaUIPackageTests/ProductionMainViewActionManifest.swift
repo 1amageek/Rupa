@@ -254,6 +254,9 @@ enum ProductionMainViewActionManifest {
         "projectCurveIntersection",
         "projectCurvesAlongDirection",
         "duplicateBodyFaces",
+        "joinSheets",
+        "unjoinFaces",
+        "unjoinShells",
     ]
 
     static let canvasEditorCommandNames = [

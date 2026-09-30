@@ -1061,6 +1061,13 @@ public struct MeasurementService {
                     sourceFeatureID: unjoin.target.featureID,
                     operationName: "Unjoin Body"
                 )
+            case .unjoinFaces(let unjoin):
+                try measureEvaluatedBodyOperationCase(
+                    node: node,
+                    featureID: featureID,
+                    sourceFeatureID: unjoin.target.featureID,
+                    operationName: "Unjoin"
+                )
             case .extract(let extract):
                 try measureEvaluatedBodyOperationCase(
                     node: node,

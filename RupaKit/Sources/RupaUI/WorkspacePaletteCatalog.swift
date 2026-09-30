@@ -42,8 +42,11 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Split Segment", aliases: ["Split Curve At Point"], invocation: .edit(.splitSegment)),
         Command(title: "Slide", aliases: ["Slide Curve CV", "Slide Surface CV"], shortcut: "⇧G", invocation: .keyboard(.activateSlideCommand)),
         Command(title: "Fillet", aliases: ["Fillet Curve", "Fillet Vertex", "Chamfer"], shortcut: "B", invocation: .keyboard(.beginFillet)),
-        Command(title: "Join Curves", aliases: ["Join"], shortcut: "J", invocation: .keyboard(.joinSketchCurves)),
-        Command(title: "Unjoin Curve", aliases: ["Unjoin"], shortcut: "⌥J", invocation: .keyboard(.unjoinSketchCurve)),
+        Command(title: "Join", aliases: ["Join Curves", "Join Sheets"], shortcut: "J", invocation: .keyboard(.join)),
+        Command(
+            title: "Unjoin", aliases: ["Unjoin Curve", "Unjoin Faces", "Unjoin Shells"], shortcut: "⌥J",
+            invocation: .keyboard(.unjoin)
+        ),
         Command(
             title: "Offset Curve",
             aliases: ["Offset Planar Curve", "Offset Vertex", "Offset Region", "Offset Edge", "Slot"],
