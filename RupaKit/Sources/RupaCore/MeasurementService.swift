@@ -1030,6 +1030,9 @@ public struct MeasurementService {
                 try measureFaceKnifeCase(faceKnife, node: node, featureID: featureID)
             case .faceDraft(let faceDraft):
                 try measureFaceDraftCase(faceDraft, node: node, featureID: featureID)
+            case .faceDelete(let faceDelete) where faceDelete.heals:
+                // A healing delete keeps the solid, measured as the solid it evaluates to.
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: faceDelete.target.featureID, operationName: "Delete Face")
             case .faceDelete(let faceDelete):
                 try measureFaceDeleteCase(faceDelete, node: node, featureID: featureID)
             case .surfaceFill(let surfaceFill):
@@ -1065,6 +1068,8 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Isoparam")
             case .imprintBody(let imprint):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .removeFillets(let removal):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Remove Fillets")
             case .faceMatch(let match):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: match.target.featureID, operationName: "Match Face")
             case .imprintCurves(let imprint):

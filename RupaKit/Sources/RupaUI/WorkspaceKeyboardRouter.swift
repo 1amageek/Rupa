@@ -262,6 +262,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginPushFace
     case beginDraftFace
     case beginMatchFace
+    /// Remove Fillets From Shell on the selected solid (palette).
+    case beginRemoveFillets
     /// Applies the running face operation.
     case confirmFaceEdit
     case cancelFaceEdit

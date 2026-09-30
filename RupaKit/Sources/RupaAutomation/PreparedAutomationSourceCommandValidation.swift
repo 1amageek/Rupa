@@ -110,6 +110,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createSlotSketch,
              .pushFaces,
              .deleteBodyFaces,
+             .removeFillets,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

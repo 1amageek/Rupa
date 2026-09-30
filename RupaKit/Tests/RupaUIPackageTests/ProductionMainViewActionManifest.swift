@@ -142,6 +142,7 @@ enum ProductionMainViewActionManifest {
         "convertSketchSplineVertex",
         "draftBodyFaces",
         "matchFaces",
+        "removeFillets",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

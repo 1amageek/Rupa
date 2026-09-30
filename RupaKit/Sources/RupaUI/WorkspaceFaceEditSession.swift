@@ -5,8 +5,9 @@ import SwiftCAD
 /// Push Face (the faces pushed a Distance along their outward side, with an Angle Adjacent tilting
 /// the planar faces beside them), Draft Face (the faces turned by Degrees about their crossing
 /// with the last-selected face's plane, moved by an Offset), and Match Face (the faces put onto the
-/// last-selected face's surface, facing its Front when chosen). Tab steps the Grow mode; OK, Return
-/// or right-click applies; Escape ends it without a change.
+/// last-selected face's surface, facing its Front when chosen), and Remove Fillets From Shell (the
+/// selected solid's fillets within a Max Radius and a Convexity). Tab steps the Grow mode, or
+/// Remove Fillets' Convexity; OK, Return or right-click applies; Escape ends it without a change.
 struct WorkspaceFaceEditSession: Equatable {
     /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
     let instance = WorkspaceDialogInstance()
@@ -15,6 +16,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case push(faces: [SelectionTarget])
         case draft(faces: [SelectionTarget], neutral: SelectionTarget)
         case match(faces: [SelectionTarget], reference: SelectionTarget)
+        case removeFillets(object: SceneNodeID)
     }
 
     let kind: Kind
@@ -27,6 +29,9 @@ struct WorkspaceFaceEditSession: Equatable {
     var neutralOffsetMeters = 0.0
     var front = false
     var grow: FaceEditGrow = .moving
+    /// Remove Fillets' largest radius, in meters; zero takes fillets of any radius.
+    var maximumRadiusMeters = 0.0
+    var convexity: FilletConvexity = .any
 
     init(kind: Kind) {
         self.kind = kind
@@ -37,11 +42,17 @@ struct WorkspaceFaceEditSession: Equatable {
         case .push: "Push Face"
         case .draft: "Draft Face"
         case .match: "Match Face"
+        case .removeFillets: "Remove Fillets"
         }
     }
 
-    /// Tab's step through the Grow modes.
+    /// Tab's step through the Grow modes, or Remove Fillets' convexities.
     mutating func stepGrow() {
+        if case .removeFillets = kind {
+            let all = FilletConvexity.allCases
+            convexity = all[((all.firstIndex(of: convexity) ?? 0) + 1) % all.count]
+            return
+        }
         let all = FaceEditGrow.allCases
         grow = all[((all.firstIndex(of: grow) ?? 0) + 1) % all.count]
     }
@@ -61,6 +72,10 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .match(faces, reference):
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
+        case let .removeFillets(object):
+            return .removeFillets(
+                target: object, maximumRadius: maximumRadiusMeters > 0 ? .length(maximumRadiusMeters, .meter) : nil, convexity: convexity
+            )
         }
     }
 }

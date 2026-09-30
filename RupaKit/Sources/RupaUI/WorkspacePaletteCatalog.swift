@@ -75,6 +75,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Push Face", aliases: ["Offset Face"], invocation: .keyboard(.beginPushFace)),
         Command(title: "Draft Face", invocation: .keyboard(.beginDraftFace)),
         Command(title: "Match Face", invocation: .keyboard(.beginMatchFace)),
+        Command(title: "Remove Fillets From Shell", aliases: ["Remove Fillets"], invocation: .keyboard(.beginRemoveFillets)),
         Command(title: "Toggle Curvature", aliases: ["Toggle Surface Curvature", "Curvature Comb"], invocation: .edit(.toggleCurvature)),
         Command(title: "Convert Vertex", invocation: .edit(.convertVertex)),
         Command(title: "Rebuild", aliases: ["Rebuild Curve"], invocation: .edit(.rebuild)),

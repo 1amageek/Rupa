@@ -81,4 +81,36 @@ import Testing
         #expect(abs(try volume(session) - (0.1 * 0.1 * 0.12 + 0.1 * 0.1 * 0.1)) < 1e-12)
         #expect(session.evaluationStatus == .valid)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func deletingAChamferWithHealingRestoresTheEdgeAndKeepsASolid() throws {
+        let session = EditorSession()
+        let target = try box(session, "Box")
+        let edge = try #require(try TopologySnapshotService().snapshot(document: session.document).entries.first {
+            // A vertical edge of the box, which Chamfer cuts through the whole height.
+            $0.kind == .edge && $0.sceneNodeID == target.description
+                && ($0.start?.x ?? 0) > 0.04 && ($0.end?.x ?? 0) > 0.04 && ($0.start?.y ?? 0) > 0.04 && ($0.end?.y ?? 0) > 0.04
+        }?.selectionTarget())
+        _ = try session.execute(.chamferBodyEdges(targets: [edge], distance: .length(0.01, .meter)))
+        let chamfer = try #require(try faces(of: target, in: session).first {
+            guard let n = $0.surfaceNormal else { return false }
+            return abs(n.x) > 0.1 && abs(n.y) > 0.1
+        }?.selectionTarget())
+        _ = try session.execute(.deleteBodyFaces(targets: [chamfer], heals: true))
+        #expect(abs(try volume(session) - 0.001) < 1e-12)
+        #expect(session.document.productMetadata.sceneNodes[target]?.object?.geometryRole == .solid)
+        #expect(session.evaluationStatus == .valid)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func removeFilletsSharpensARoundedBox() throws {
+        let session = EditorSession()
+        let target = try box(session, "Box")
+        let sketch = try #require(session.document.productMetadata.sceneNodes[target]?.childIDs.first)
+        _ = try session.execute(.setSceneNodeObjectProperty(id: sketch, propertyID: PropertyID(rawValue: "corner.radius"), value: .length(0.01)))
+        #expect(abs(try volume(session) - (0.01 - (4 - Double.pi) * 0.0001) * 0.1) < 1e-12)
+        _ = try session.execute(.removeFillets(target: target, maximumRadius: .length(0.02, .meter), convexity: .convex))
+        #expect(abs(try volume(session) - 0.001) < 1e-12)
+        #expect(session.evaluationStatus == .valid)
+    }
 }

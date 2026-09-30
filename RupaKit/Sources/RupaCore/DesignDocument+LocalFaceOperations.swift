@@ -43,3 +43,35 @@ extension DesignDocument {
         )
     }
 }
+
+extension DesignDocument {
+    /// Remove Fillets From Shell: the fillets of a solid object no wider than `maximumRadius`
+    /// (any, when nil) and of `convexity` are taken out, and the faces they joined grow to meet
+    /// (Swift-CAD `removeFillets`). The object shows the result in its place.
+    @discardableResult
+    public mutating func removeFillets(
+        name: String = "Remove Fillets",
+        target: SceneNodeID,
+        maximumRadius: CADExpression?,
+        convexity: FilletConvexity,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let operationName = "Remove Fillets"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        if let maximumRadius {
+            guard try resolvedLengthValue(maximumRadius, owner: "\(operationName) maximum radius") > 0 else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) maximum radius must be positive.")
+            }
+        }
+        let object = try offsetObject(for: [SelectionTarget(sceneNodeID: target)], operationName: operationName)
+        guard productMetadata.sceneNodes[target]?.object?.geometryRole == .solid else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) works on solid objects.")
+        }
+        return try appendFeatureShownByObject(
+            .removeFillets(RemoveFilletsFeature(
+                target: PatternTargetReference(featureID: object.featureID), maximumRadius: maximumRadius, convexity: convexity
+            )),
+            name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
+        )
+    }
+}

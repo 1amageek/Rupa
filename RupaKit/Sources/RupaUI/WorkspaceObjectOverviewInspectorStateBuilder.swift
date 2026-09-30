@@ -627,6 +627,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Direction", value: isoparam.direction == .u ? "U" : "V"),
                 WorkspaceInspectorTextRow(title: "Lines", value: "\(isoparam.fractions.count)"),
             ]
+        case .removeFillets(let removal):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Remove Fillets"),
+                WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(removal.target.featureID)),
+                WorkspaceInspectorTextRow(title: "Convexity", value: removal.convexity.rawValue.capitalized),
+            ]
         case .faceMatch(let match):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Match Face"),

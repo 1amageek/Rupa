@@ -262,7 +262,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case applySketchCornerTreatments(vertices: [SelectionTarget], distance: CADExpression, treatment: SketchCornerTreatment)
     case createSlotSketch(target: SelectionTarget, width: CADExpression)
     case pushFaces(targets: [SelectionTarget], distance: CADExpression, adjacentAngle: CADExpression? = nil, grow: FaceEditGrow = .moving)
-    case deleteBodyFaces(targets: [SelectionTarget])
+    case deleteBodyFaces(targets: [SelectionTarget], heals: Bool = false)
+    case removeFillets(target: SceneNodeID, maximumRadius: CADExpression? = nil, convexity: FilletConvexity = .any)
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
@@ -800,6 +801,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "pushFaces"
         case .deleteBodyFaces:
             "deleteBodyFaces"
+        case .removeFillets:
+            "removeFillets"
         case .draftBodyFaces:
             "draftBodyFaces"
         case .matchFaces:
@@ -1119,6 +1122,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createSlotSketch,
              .pushFaces,
              .deleteBodyFaces,
+             .removeFillets,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

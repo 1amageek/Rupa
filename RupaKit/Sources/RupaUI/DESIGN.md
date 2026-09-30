@@ -898,7 +898,10 @@ Face's Distance, in the display unit, and Angle Adjacent; Draft Face's Degrees a
 Offset about the last-selected face; Match Face's Front, onto the last-selected face; and the
 Grow mode Tab steps. Return, right-click or OK applies as one source command, a refused one
 leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
-and a face drag push through the same `pushFaces`.
+and a face drag push through the same `pushFaces`. The palette's Remove Fillets From Shell
+opens the same dialog on one selected solid, with its Max Radius and the Convexity Tab steps.
+Delete or Backspace on faces of solids, and the inspector's Delete Face, delete them healing
+(`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before.
 
 ### What the workspace says, and where the canvas stops
 

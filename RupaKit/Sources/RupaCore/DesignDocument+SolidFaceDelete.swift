@@ -3,9 +3,13 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    /// Delete Face: faces of one object taken out. Healing, the faces around grow over them until
+    /// they meet and the solid stays a solid (Swift-CAD's healing face delete); otherwise the solid
+    /// opens into a sheet.
     @discardableResult
     public mutating func deleteBodyFaces(
         targets: [SelectionTarget],
+        heals: Bool = false,
         name: String = "Delete Face",
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
@@ -112,7 +116,8 @@ extension DesignDocument {
 
         let faceDelete = FaceDeleteFeature(
             target: FaceDeleteTargetReference(featureID: targetFeatureID),
-            faces: faceReferences
+            faces: faceReferences,
+            heals: heals
         )
         try faceDelete.validate()
 
@@ -122,7 +127,7 @@ extension DesignDocument {
             name: trimmedName,
             operation: .faceDelete(faceDelete),
             inputs: [FeatureInput(featureID: targetFeatureID, role: .target)],
-            outputs: [FeatureOutput(role: .sheet)]
+            outputs: [FeatureOutput(role: faceDelete.outputRole)]
         )
 
         let previousCADDocument = cadDocument

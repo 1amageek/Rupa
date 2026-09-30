@@ -56,6 +56,7 @@ extension FeatureOperation {
              .isoparam,
              .imprintBody,
              .faceMatch,
+             .removeFillets,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -141,6 +142,7 @@ extension FeatureOperation {
              .isoparam,
              .imprintBody,
              .faceMatch,
+             .removeFillets,
              .imprintCurves,
              .untrimFace,
              .extract,
@@ -252,6 +254,9 @@ extension FeatureOperation {
             return [feature.target.featureID]
         // Match Face reshapes its target in its place; the reference face's body stays.
         case .faceMatch(let feature):
+            return [feature.target.featureID]
+        // Remove Fillets reshapes its solid in its place.
+        case .removeFillets(let feature):
             return [feature.target.featureID]
         case .imprintCurves(let feature):
             return [feature.target.featureID]

@@ -2043,7 +2043,7 @@ public final class CADDocumentStore {
             try run()
         case .deleteBodyFaces:
             func run() throws {
-                guard case .deleteBodyFaces(let targets) = command else {
+                guard case .deleteBodyFaces(let targets, let heals) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected deleteBodyFaces."
@@ -2052,6 +2052,7 @@ public final class CADDocumentStore {
                 var updatedDocument = document
                 try updatedDocument.deleteBodyFaces(
                     targets: targets,
+                    heals: heals,
                     objectRegistry: objectRegistry,
                     currentEvaluation: currentEvaluation,
                     currentGeneration: generation
@@ -2079,6 +2080,20 @@ public final class CADDocumentStore {
                     objectRegistry: objectRegistry,
                     currentEvaluation: currentEvaluation,
                     currentGeneration: generation
+                )
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
+        case .removeFillets:
+            func run() throws {
+                guard case .removeFillets(let target, let maximumRadius, let convexity) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected removeFillets.")
+                }
+                var updatedDocument = document
+                try updatedDocument.removeFillets(
+                    target: target, maximumRadius: maximumRadius, convexity: convexity, objectRegistry: objectRegistry
                 )
                 document = updatedDocument
                 try commitMutation()

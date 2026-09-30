@@ -250,7 +250,11 @@ outward side. Match Face (`matchFaces(name:targets:reference:front:grow:)`) appe
 `faceMatch`: the faces take the reference face's surface, of the same object or of another
 where it is shown (its relative placement), facing out as they did or, with `front`, as the
 reference does. Every Grow mode refuses a face running into another wall (Swift-CAD's
-`FIXME(INCOMPLETE_IMPLEMENTATION)`). `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
+`FIXME(INCOMPLETE_IMPLEMENTATION)`). Delete Face (`deleteBodyFaces(targets:heals:)`) appends
+Swift-CAD `faceDelete`: healing, the faces around grow over the deleted faces and the object
+stays a solid, measured as one; otherwise it opens into a sheet (Surface Fill's openings).
+Remove Fillets From Shell (`removeFillets(name:target:maximumRadius:convexity:)`) appends
+`removeFillets` on a solid object. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
 `BodyFaceDraftCommandTests` own these contracts.
 
 Face offset operates in the source profile frame. Moving the start cap compensates

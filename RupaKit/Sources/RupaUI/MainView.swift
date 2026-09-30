@@ -6248,6 +6248,12 @@ private struct ProjectMainViewContent: View {
                 guard snapshot.selection.selectedTargets.isEmpty == false else {
                     return .ignored
                 }
+                // Delete on faces of solids deletes them, the faces around growing over them.
+                let faces = selectedBodyFaceTargets
+                if faces.isEmpty == false, faces.count == snapshot.selection.selectedTargets.count {
+                    deleteSelectedFaces(faces)
+                    return .handled
+                }
                 reportToolStatus(
                     "Delete removes whole objects. The selection holds only sub-object targets.",
                     severity: .warning
@@ -6651,6 +6657,14 @@ private struct ProjectMainViewContent: View {
                 kind: action == .beginDraftFace ? .draft(faces: targets, neutral: reference) : .match(faces: targets, reference: reference)
             )
             reportToolStatus("\(faceEditSession?.title ?? ""): the last-selected face is the reference; OK, Return or right-click applies.")
+            return .handled
+        case .beginRemoveFillets:
+            guard selectedBodyObjectIDs.count == 1, let object = selectedBodyObjectIDs.first else {
+                reportToolStatus("Remove Fillets: select one solid.", severity: .warning)
+                return .handled
+            }
+            faceEditSession = WorkspaceFaceEditSession(kind: .removeFillets(object: object))
+            reportToolStatus("Remove Fillets: set the largest radius, Tab steps Convexity; OK, Return or right-click removes them.")
             return .handled
         case .confirmFaceEdit:
             confirmFaceEdit()
@@ -12587,7 +12601,7 @@ private struct ProjectMainViewContent: View {
     }
 
     private func deleteSelectedFaces(_ targets: [SelectionTarget]) {
-        submitSource(.deleteBodyFaces(targets: targets))
+        submitSource(.deleteBodyFaces(targets: targets, heals: true))
     }
 
     private func draftSelectedFaces(

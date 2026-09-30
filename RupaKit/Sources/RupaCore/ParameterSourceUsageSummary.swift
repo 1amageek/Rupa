@@ -156,6 +156,8 @@ public struct ParameterSourceUsageService: Sendable {
             record(feature.distance, path: "faceLoopOffset.distance")
         case .edgeOffset(let feature):
             record(feature.distance, path: "edgeOffset.distance")
+        case .removeFillets(let feature):
+            if let maximumRadius = feature.maximumRadius { record(maximumRadius, path: "removeFillets.maximumRadius") }
         case .faceDraft(let feature):
             record(feature.angle, path: "faceDraft.angle")
             if let neutralOffset = feature.neutralOffset { record(neutralOffset, path: "faceDraft.neutralOffset") }
@@ -389,6 +391,8 @@ public struct ParameterSourceUsageService: Sendable {
             "imprintBody"
         case .faceMatch:
             "faceMatch"
+        case .removeFillets:
+            "removeFillets"
         case .imprintCurves:
             "imprintCurves"
         case .untrimFace:
