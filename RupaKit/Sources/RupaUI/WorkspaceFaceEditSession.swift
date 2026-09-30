@@ -19,6 +19,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case removeFillets(object: SceneNodeID)
         case hollow(targets: [SelectionTarget])
         case thicken(targets: [SelectionTarget])
+        case extendSheet(edges: [SelectionTarget])
     }
 
     let kind: Kind
@@ -41,6 +42,9 @@ struct WorkspaceFaceEditSession: Equatable {
     var frontMeters = 0.001
     var backMeters = 0.0
     var locksThicknesses = false
+    /// Extend Sheet's shape, which Tab steps, and whether the extensions join the sheet.
+    var extensionShape: SheetExtensionShape = .natural
+    var modifies = true
 
     init(kind: Kind) {
         self.kind = kind
@@ -54,6 +58,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case .removeFillets: "Remove Fillets"
         case .hollow: "Hollow"
         case .thicken: "Thicken"
+        case .extendSheet: "Extend Sheet"
         }
     }
 
@@ -61,12 +66,17 @@ struct WorkspaceFaceEditSession: Equatable {
     var hasGrow: Bool {
         switch kind {
         case .push, .draft, .match: true
-        case .removeFillets, .hollow, .thicken: false
+        case .removeFillets, .hollow, .thicken, .extendSheet: false
         }
     }
 
     /// Tab's step through the Grow modes, or Remove Fillets' convexities.
     mutating func stepGrow() {
+        if case .extendSheet = kind {
+            let all = SheetExtensionShape.allCases
+            extensionShape = all[((all.firstIndex(of: extensionShape) ?? 0) + 1) % all.count]
+            return
+        }
         if case .removeFillets = kind {
             let all = FilletConvexity.allCases
             convexity = all[((all.firstIndex(of: convexity) ?? 0) + 1) % all.count]
@@ -92,6 +102,8 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .match(faces, reference):
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
+        case let .extendSheet(edges):
+            return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies)
         case let .hollow(targets):
             return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))
         case let .thicken(targets):

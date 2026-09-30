@@ -24,6 +24,15 @@ struct WorkspaceFaceEditDialogView: View {
         case .match:
             Toggle("Front", isOn: $dialog.front)
                 .accessibilityIdentifier("WorkspaceFaceEdit.front")
+        case .extendSheet:
+            lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.extendDistance")
+            Picker("Shape", selection: $dialog.extensionShape) {
+                ForEach(SheetExtensionShape.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.extensionShape")
+            Toggle("Modify", isOn: $dialog.modifies)
+                .accessibilityIdentifier("WorkspaceFaceEdit.modifies")
         case .hollow:
             lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
         case .thicken:

@@ -114,6 +114,7 @@ enum PreparedAutomationSourceCommandValidation {
              .removeRedundantTopology,
              .hollow,
              .thicken,
+             .extendSheet,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

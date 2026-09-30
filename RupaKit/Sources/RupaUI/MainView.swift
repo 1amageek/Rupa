@@ -6692,6 +6692,23 @@ private struct ProjectMainViewContent: View {
             }
             reportToolStatus("Thicken: set Front and Back, S locks them together; OK, Return or right-click thickens.")
             return .handled
+        case .beginExtend:
+            let nodes = snapshot.document.document.productMetadata.sceneNodes
+            let sheetEdges = snapshot.selection.selectedTargets.filter { target in
+                guard case .edge = target.component, let node = nodes[target.sceneNodeID] else { return false }
+                return node.reference?.kind == .body && node.object?.geometryRole == .surface
+            }
+            if sheetEdges.isEmpty == false, sheetEdges.count == snapshot.selection.selectedTargets.count {
+                faceEditSession = WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges))
+                reportToolStatus("Extend Sheet: set the distance, Tab steps the shape; OK, Return or right-click extends the edges.")
+                return .handled
+            }
+            if selectedSketchCurveTargets.count == 1, let curve = selectedSketchCurveTargets.first {
+                extendSelectedSketchCurve(curve, shape: .natural)
+                return .handled
+            }
+            reportToolStatus("Extend: select open edges of a sheet, or one sketch curve.", severity: .warning)
+            return .handled
         case .toggleThickenLock:
             guard case .thicken = faceEditSession?.kind else { return .ignored }
             faceEditSession?.locksThicknesses.toggle()

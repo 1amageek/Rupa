@@ -261,7 +261,9 @@ object, opening through the chosen faces or closed inside the object chosen whol
 (`thicken(name:targets:front:back:)`) grows a sheet object into a solid in its place, or, for
 faces of a body (Thicken Face), appends an `extract` of them and a `thicken` of that sheet shown
 as a new solid object beside the body. Hollow and Thicken are measured as the solids they
-evaluate to. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
+evaluate to. Extend Sheet (`extendSheet(name:targets:distance:shape:modifies:)`) appends
+`sheetExtend` on open edges of one sheet object: modifying, the sheet shows the extended sheet in
+its place; otherwise the extensions are a new sheet object beside it, measured as a sheet. `FaceEditCommandTests`, `BodyFaceOffsetCommandTests` and
 `BodyFaceDraftCommandTests` own these contracts.
 
 Face offset operates in the source profile frame. Moving the start cap compensates

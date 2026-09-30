@@ -204,3 +204,60 @@ extension DesignDocument {
         return solidID
     }
 }
+
+extension DesignDocument {
+    /// Extend Sheet: open edges of one sheet object carried on by `distance` in `shape` (Swift-CAD
+    /// `sheetExtend`). Modifying, the sheet shows the extended sheet in its place; otherwise the
+    /// extensions are a new sheet object beside it.
+    @discardableResult
+    public mutating func extendSheet(
+        name: String = "Extend Sheet",
+        targets: [SelectionTarget],
+        distance: CADExpression,
+        shape: SheetExtensionShape,
+        modifies: Bool,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> FeatureID {
+        let operationName = "Extend Sheet"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        guard try resolvedLengthValue(distance, owner: "\(operationName) distance") > 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) distance must be positive.")
+        }
+        let object = try offsetObject(for: targets, operationName: operationName)
+        guard productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .surface else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) extends edges of a sheet.")
+        }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        let edges = try targets.map { try stableReference(of: $0, kind: .edge, in: topology, operationName: operationName) }
+        let operation = FeatureOperation.sheetExtend(SheetExtendFeature(
+            target: PatternTargetReference(featureID: object.featureID), edges: edges, distance: distance, shape: shape, modifies: modifies
+        ))
+        if modifies {
+            return try appendFeatureShownByObject(operation, name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry)
+        }
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        let featureID = FeatureID()
+        try appendFeature(try FeatureNodeFactory.make(operation: operation, id: featureID, name: trimmedName, in: cadDocument, tolerance: modelingSettings.tolerance))
+        let sourceName = productMetadata.sceneNodes[object.nodeID]?.name ?? trimmedName
+        try insertBooleanResultNode(
+            name: "\(sourceName) \(trimmedName)", featureID: featureID, geometryRole: .surface,
+            besideTargetNode: object.nodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata), objectRegistry: objectRegistry
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+}

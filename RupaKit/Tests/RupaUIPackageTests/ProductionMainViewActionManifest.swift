@@ -146,6 +146,7 @@ enum ProductionMainViewActionManifest {
         "removeRedundantTopology",
         "hollow",
         "thicken",
+        "extendSheet",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

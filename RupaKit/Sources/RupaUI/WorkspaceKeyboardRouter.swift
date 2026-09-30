@@ -268,6 +268,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     /// (palette).
     case beginHollow
     case beginThicken
+    /// Extend by selection: a sheet's open edges to Extend Sheet, a sketch curve to Extend Curve
+    /// (palette).
+    case beginExtend
     /// S while Thicken runs: lock the back thickness to the front.
     case toggleThickenLock
     /// Applies the running face operation.

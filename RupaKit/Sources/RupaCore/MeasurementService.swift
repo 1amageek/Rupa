@@ -884,6 +884,33 @@ public struct MeasurementService {
             bounds.include(solid.bounds)
         }
 
+        /// A feature publishing a sheet, measured as the sheet it evaluates to.
+        func measureEvaluatedSheetCase(node: FeatureNode, featureID: FeatureID, sourceFeatureID: FeatureID, operationName: String) throws {
+            guard !isSupersededInDocumentScope(featureID) else {
+                return
+            }
+            guard shouldMeasure(featureID) else {
+                return
+            }
+            includedSourceFeatureIDs.insert(featureID)
+            var evaluatedSkipReason: String?
+            let sheet = try measureEvaluatedSheet(
+                featureID: featureID,
+                featureName: node.name,
+                sourceFeatureID: sourceFeatureID,
+                sourceFeatureName: document.cadDocument.designGraph.nodes[sourceFeatureID]?.name,
+                evaluatedDocument: evaluatedDocument(),
+                unsupportedReason: &evaluatedSkipReason
+            )
+            guard let sheet else {
+                let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                diagnostics.append(EditorDiagnostic(severity: .info, message: "Measurement skipped \(operationName) sheet.\(detail)"))
+                return
+            }
+            sheets.append(sheet)
+            bounds.include(sheet.bounds)
+        }
+
         func measureFaceDeleteCase(_ faceDelete: FaceDeleteFeature, node: FeatureNode, featureID: FeatureID) throws {
             guard !isSupersededInDocumentScope(featureID) else {
                 return
@@ -1068,6 +1095,8 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Isoparam")
             case .imprintBody(let imprint):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: imprint.target.featureID, operationName: "Imprint")
+            case .sheetExtend(let extend):
+                try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: extend.target.featureID, operationName: "Extend Sheet")
             case .removeRedundantTopology(let removal):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: removal.target.featureID, operationName: "Delete Redundant Topology")
             case .removeFillets(let removal):

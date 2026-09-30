@@ -902,7 +902,9 @@ and a face drag push through the same `pushFaces`. The palette's Remove Fillets 
 opens the same dialog on one selected solid, with its Max Radius and the Convexity Tab steps;
 Hollow on the selected faces or one solid, with its Thickness; and Thicken (alias Thicken Face)
 on one sheet or the selected faces, with its Front and Back, which S locks together. The tool
-palette's Thicken takes Front and Back as well.
+palette's Thicken takes Front and Back as well. The palette's Extend dispatches by selection:
+open edges of a sheet open Extend Sheet's dialog (Distance, the Shape Tab steps, Modify); one
+sketch curve extends through Extend Curve's natural shape.
 Delete or Backspace on faces of solids, and the inspector's Delete Face, delete them healing
 (`deleteBodyFaces(targets:heals: true)`); whole objects are deleted as before. Delete Redundant
 Topology dispatches by selection: selected solids and sheets merge their redundant faces and

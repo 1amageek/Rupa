@@ -267,6 +267,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case removeRedundantTopology(targets: [SceneNodeID])
     case hollow(targets: [SelectionTarget], thickness: CADExpression)
     case thicken(targets: [SelectionTarget], front: CADExpression, back: CADExpression)
+    case extendSheet(targets: [SelectionTarget], distance: CADExpression, shape: SheetExtensionShape = .natural, modifies: Bool = true)
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
@@ -812,6 +813,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "hollow"
         case .thicken:
             "thicken"
+        case .extendSheet:
+            "extendSheet"
         case .draftBodyFaces:
             "draftBodyFaces"
         case .matchFaces:
@@ -1135,6 +1138,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .removeRedundantTopology,
              .hollow,
              .thicken,
+             .extendSheet,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,
