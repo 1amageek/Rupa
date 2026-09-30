@@ -51,4 +51,21 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var transformGizmo: ViewportTransformGizmoConfiguration?
     // The producer has a fixed set of callback routes; only availability matters.
     var availableRoutes: UInt32 = 0
+
+    /// This key without what the pointer's hover decides: the hovered target and reference, the
+    /// hovered handle and hit, the edge-treatment hover target, snap feedback and the placement
+    /// highlight. Two keys whose hover-free keys are equal differ in hover alone.
+    var withoutHover: Self {
+        var key = self
+        key.selection = SelectionModel(
+            selectedTargets: selection.selectedTargets,
+            selectedReferences: selection.selectedReferences
+        )
+        key.hoveredHandle = nil
+        key.hoveredHit = nil
+        key.edgeTreatmentHoverTarget = nil
+        key.snap = nil
+        key.placement = nil
+        return key
+    }
 }

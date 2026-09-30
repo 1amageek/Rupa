@@ -69,3 +69,27 @@ import Testing
     #expect(try first.makeSpatialOverlayChangeKey() == changedChrome.makeSpatialOverlayChangeKey())
     #expect(try first.makeSpatialOverlayChangeKey() != enabledRoute.makeSpatialOverlayChangeKey())
 }
+
+@MainActor
+@Test func spatialOverlayBaseRevisionAdvancesOnlyBeyondHover() throws {
+    let owner = ViewportSpatialOverlayRevision()
+    let selected = SelectionTarget(sceneNodeID: SceneNodeID())
+    var key = ViewportSpatialOverlayChangeKey()
+    key.selection = SelectionModel(selectedTargets: [selected])
+    #expect(try owner.revisions(for: key) == .init(overlay: 1, base: 1))
+    var hovered = key
+    hovered.selection = SelectionModel(selectedTargets: [selected],
+                                       hoveredTarget: .init(sceneNodeID: SceneNodeID()))
+    hovered.edgeTreatmentHoverTarget = selected
+    #expect(try owner.revisions(for: hovered) == .init(overlay: 2, base: 1))
+    // Leaving hover is a hover change too.
+    #expect(try owner.revisions(for: key) == .init(overlay: 3, base: 1))
+    var reselected = hovered
+    reselected.selection = SelectionModel(selectedTargets: [selected, .init(sceneNodeID: SceneNodeID())],
+                                          hoveredTarget: hovered.selection.hoveredTarget)
+    #expect(try owner.revisions(for: reselected) == .init(overlay: 4, base: 2))
+    var measuring = reselected
+    measuring.measurementToolActive = true
+    #expect(try owner.revisions(for: measuring) == .init(overlay: 5, base: 3))
+    #expect(try owner.revisions(for: measuring) == .init(overlay: 5, base: 3))
+}

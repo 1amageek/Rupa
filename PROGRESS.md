@@ -424,6 +424,6 @@
   - [ ] DF7 Hover, snap and placement form their own overlay layer: a pointer move rebuilds that layer only, and selection and document overlays are kept. `depends:DF5` `parallel:none`
     - [x] DF7.1 Overlay item identity and delta: overlay descriptors compare by value, and a hover change is expressed against the prepared overlay as the items it adds, the prepared items it suppresses and the handle records it keeps. `depends:none` `parallel:none`
     - [x] DF7.2 Native delta: a mounted frame suppresses retained items (entities, grouped parts, colliders) and mounts a delta layer with camera updates and handle hits, without rebuilding its retained resources. `depends:DF7.1` `parallel:none`
-    - [ ] DF7.3 Hover-only preparation: the viewport keys retained overlay content apart from hover, snap and placement, and the plan cache applies a hover-only change to the mounted frame as a delta instead of preparing a new frame. `depends:DF7.2` `parallel:none`
+    - [x] DF7.3 Hover-only preparation: the viewport keys retained overlay content apart from hover, snap and placement, and the plan cache applies a hover-only change to the mounted frame as a delta instead of preparing a new frame. `depends:DF7.2` `parallel:none`
     - [ ] DF7.4 Measured hover cost and live verification in the app. `depends:DF7.3` `parallel:none`
   - [ ] DF8 Integration: whole package suites in both repositories, measured edit and hover costs, app rebuild and restart, push. `depends:DF1,DF2,DF3,DF4,DF5,DF6,DF7` `parallel:none`

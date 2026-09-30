@@ -8,6 +8,12 @@ struct RealityViewportPreparationRequest: Sendable {
         let scene: ViewportSceneSnapshotKey
         let snapshotID: EvaluationSnapshotID?
         let overlayRevision: UInt64
+        /// Advances whenever the overlay changes in anything but hover (the pointer's hovered
+        /// handle, hit and targets, snap and placement feedback). Two identities of one scene and
+        /// snapshot with the same base revision differ in hover alone, so the newer overlay is
+        /// drawn as a delta over the mounted one. Nil claims nothing, and every change prepares a
+        /// complete frame.
+        var baseOverlayRevision: UInt64? = nil
 
         /// Scheduling/display compatibility only; never grants query authority.
         func sharesDisplayContext(with other: Self) -> Bool {

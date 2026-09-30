@@ -1699,11 +1699,12 @@ public struct Viewport: View {
     private var presentationPreparation: Result<RealityViewportPreparationRequest.Identity, MeshSourcePresentationRenderError> {
         do {
             try sourceIdentity.validate(document: document, presentationScene: presentationScene)
-            let revision = try overlayRevision.revision(for: makeSpatialOverlayChangeKey())
+            let revisions = try overlayRevision.revisions(for: makeSpatialOverlayChangeKey())
             return .success(.init(
                 scene: sceneSnapshotKey(usesDragPreviewDocument: true),
                 snapshotID: presentationScene?.snapshotID,
-                overlayRevision: revision
+                overlayRevision: revisions.overlay,
+                baseOverlayRevision: revisions.base
             ))
         } catch {
             return .failure((error as? MeshSourcePresentationRenderError)

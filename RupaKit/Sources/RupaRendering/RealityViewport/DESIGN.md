@@ -851,10 +851,10 @@ resources; a layer that does not fit throws `.resourceExhausted`.
 
 | Step | Behavior |
 |---|---|
-| Validate | The layer was prepared over this frame's overlay, its retained handles lie within both record tables, and its suppressed ordinals are prepared items. A refused layer changes nothing. |
+| Validate | The layer was prepared over this frame's overlay, its retained handles lie within both record tables, and its suppressed ordinals are prepared items. `applySpatialDelta` throws only here, so a refused layer changes nothing. |
 | Withhold | A grouped world mesh drops the withheld parts from its native part list; every other withheld entity is disabled, and so is every collider of a withheld item. No resource is rebuilt. |
 | Attach | The layer's roots become children of the prepared roots, sharing origin, enablement and section clipping; its sectioned bounds join the fixed section bounds. |
-| Place | Camera-relative items are placed at once for the camera already applied; camera updates skip withheld items and update the layer. |
+| Place | Camera-relative items are placed at once for the camera already applied, so no rendered frame shows a withheld item gone and an added one unplaced. When that placement cannot run, no applied camera state remains, and the camera update the publication triggers places every item and reports its failure, as for a newly mounted frame. Camera updates skip withheld items and update the layer. |
 | Resolve | A hit consults the layer first. A prepared handle is remapped through `retainedHandles`; an enabled collider without a retained handle is a query failure. |
 
 Applying nil withdraws the layer and restores the prepared overlay with its own

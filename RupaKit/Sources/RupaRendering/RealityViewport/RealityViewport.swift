@@ -249,13 +249,15 @@ final class RealityViewport {
 
     /// Draws `layer` in place of the delta drawn so far, or the prepared overlay alone for nil.
     ///
-    /// Everything is validated before anything changes, so a refused layer leaves the drawn
-    /// overlay as it was. Once applied, the frame draws exactly the prepared overlay minus the
-    /// withheld items plus the added ones, and every hit names the complete overlay's records.
-    /// Camera-relative items are placed at once for the camera already applied. While the native
-    /// camera has no projection yet, the next camera update places them, as it does for a newly
-    /// mounted frame; any other placement failure is thrown with the layer applied and no camera
-    /// state recorded, so the next camera update places everything again.
+    /// It throws only before anything changes: a refused layer leaves the drawn overlay as it
+    /// was. Once applied, the frame draws exactly the prepared overlay minus the withheld items
+    /// plus the added ones, and every hit names the complete overlay's records.
+    ///
+    /// Camera-relative items are placed at once for the camera already applied, so no rendered
+    /// frame shows the withheld items gone and the added ones unplaced. When that placement
+    /// cannot run, no applied camera state remains recorded, and the frame's next camera update
+    /// (`updateSpatialCamera`, which the view runs for the publication that applied the layer)
+    /// places every item and reports its failure, as it does for a newly mounted frame.
     func applySpatialDelta(_ layer: RealityViewportSpatialDeltaLayer?) throws {
         guard let base = spatialResources else {
             if layer == nil { return }
@@ -293,11 +295,9 @@ final class RealityViewport {
             try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
             _ = try layer?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
             try updateSectionedBounds()
-        } catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable {
-            spatialCameraState = nil
         } catch {
+            // Deferred to the camera update, which places and reports; see above.
             spatialCameraState = nil
-            throw error
         }
     }
 

@@ -561,12 +561,40 @@ final class MeshSourcePresentationPlanCache {
                     throw RealityViewportSpatialBatch.invalid("Spatial geometry does not use the selected native render origin.")
                 }
                 try Task.checkCancellation()
-                let surface = try await RealityViewport.prepare(plan: plan, spatialBatch: spatial, reusing: reusable?.surface)
-                try Task.checkCancellation()
-                result = .success(Prepared(
-                    identity: request.identity, plan: plan, surface: surface,
-                    interactionRecords: overlay.interactionRecords, overlayFailure: overlayFailure
-                ))
+                // A hover-only change is drawn over the frame already prepared for this scene and
+                // snapshot: only the items the complete overlay adds are prepared, and the frame's
+                // own resources are kept. A delta the frame cannot express (another grid, axes,
+                // origin or rulers) or cannot admit beside its resources prepares a new frame.
+                var hoverFrame: Prepared?
+                if overlayFailure == nil, let base = reusable, base.acceptsHoverDelta(for: request.identity),
+                   let delta = try RealityViewportSpatialDelta.make(
+                       mounted: base.spatialBatch, mountedRecords: base.preparedRecords,
+                       complete: spatial, completeRecords: overlay.interactionRecords) {
+                    do {
+                        let layer = try await base.surface.prepareSpatialDelta(delta)
+                        hoverFrame = Prepared(
+                            identity: request.identity, plan: plan, surface: base.surface,
+                            interactionRecords: overlay.interactionRecords,
+                            spatialBatch: base.spatialBatch, preparedRecords: base.preparedRecords,
+                            spatialDelta: layer
+                        )
+                    } catch let error as MeshSourcePresentationRenderError where error.code == .resourceExhausted {
+                        hoverFrame = nil
+                    }
+                }
+                if let hoverFrame {
+                    try Task.checkCancellation()
+                    result = .success(hoverFrame)
+                } else {
+                    let surface = try await RealityViewport.prepare(plan: plan, spatialBatch: spatial, reusing: reusable?.surface)
+                    try Task.checkCancellation()
+                    result = .success(Prepared(
+                        identity: request.identity, plan: plan, surface: surface,
+                        interactionRecords: overlay.interactionRecords,
+                        spatialBatch: spatial, preparedRecords: overlay.interactionRecords,
+                        overlayFailure: overlayFailure
+                    ))
+                }
             } catch is CancellationError {
                 // A cancelled build publishes nothing at all. Identity would
                 // discard it anyway, but a cancellation is not a failure and is
@@ -618,9 +646,25 @@ final class MeshSourcePresentationPlanCache {
         let identity: RealityViewportPreparationRequest.Identity
         let plan: MeshSourcePresentationRenderPlan?
         let surface: RealityViewport
+        /// The records the drawn overlay's handle indexes name: the complete overlay's.
         let interactionRecords: [ViewportSpatialInteractionRecord]
+        /// The overlay `surface` prepared natively, and the records its indexes name. A hover
+        /// delta is computed against these, never against another delta.
+        let spatialBatch: RealityViewportSpatialBatch
+        let preparedRecords: [ViewportSpatialInteractionRecord]
+        /// The hover delta `surface` draws over its prepared overlay once published.
+        var spatialDelta: RealityViewportSpatialDeltaLayer? = nil
         /// Why the frame was published without its spatial overlay, if it was.
         var overlayFailure: MeshSourcePresentationRenderError? = nil
+
+        /// Whether `identity` differs from this frame's in hover alone, so its overlay can be drawn
+        /// as a delta over this frame's prepared one.
+        func acceptsHoverDelta(for identity: RealityViewportPreparationRequest.Identity) -> Bool {
+            overlayFailure == nil
+                && self.identity.scene == identity.scene && self.identity.snapshotID == identity.snapshotID
+                && self.identity.baseOverlayRevision != nil
+                && self.identity.baseOverlayRevision == identity.baseOverlayRevision
+        }
     }
 
     private func finish(
@@ -652,7 +696,22 @@ final class MeshSourcePresentationPlanCache {
                 if requested.scene == identity.scene,
                    requested.snapshotID == identity.snapshotID,
                    requested.overlayRevision != identity.overlayRevision { return }
-                if let current, current.surface.root.scene != nil {
+                if let layer = prepared.spatialDelta {
+                    // The frame draws the complete overlay from here on, and its records name it.
+                    // A refused layer changed nothing the frame draws.
+                    do {
+                        try prepared.surface.applySpatialDelta(layer)
+                    } catch {
+                        guard requested == identity else { return }
+                        if current?.identity.sharesDisplayContext(with: identity) != true { self.current = nil }
+                        state = .failed(identity: identity, error: (error as? MeshSourcePresentationRenderError)
+                            ?? MeshSourcePresentationRenderError(code: .failed, message: String(describing: error)))
+                        return
+                    }
+                }
+                // A hover delta redraws the frame already current; the records it replaces
+                // belong to that same frame and never answer for it again.
+                if let current, current.surface.root.scene != nil, current.surface !== prepared.surface {
                     precedingMountedFrame = current
                 }
                 self.current = prepared
