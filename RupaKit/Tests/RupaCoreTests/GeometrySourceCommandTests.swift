@@ -1059,6 +1059,79 @@ private struct FailingMeshEditPlanExecutor: MeshEditPlanExecuting {
     }
 }
 
+/// A Geometry source command validates its document once: the store hands the applier its
+/// validated source, adopts the applier's validation of the staged document, and evaluates
+/// without validating again. A mesh-only document, which has no evaluation cache, keeps that
+/// validation across its evaluation, and a staged session reads it from its snapshot.
+@Suite struct CADDocumentStoreGeometrySourceValidationTests {
+    private func movePlan(_ source: MeshSource, to x: Double, id: String) throws -> MeshEditPlan {
+        try vertexPositionPlan(
+            id: id,
+            edits: [MeshVertexPositionEdit(vertexID: source.vertexIDs[0], position: GeometryPoint3D(x: x, y: 0, z: 0))]
+        )
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aCommandThroughTheStoreValidatesItsDocumentOnce() throws {
+        let source = try editableQuadSource(identity: "mesh.validate-once")
+        let fixture = try meshOnlyDocument(source: source)
+        let store = CADDocumentStore(document: fixture.document)
+        store.evaluateCurrentDocument()
+        #expect(store.evaluationStatus == .valid)
+        var target = authoredMeshTarget(for: fixture)
+        for round in 0..<2 {
+            let command = try authoredMeshCommand(
+                target: target, plan: movePlan(source, to: Double(round) + 5, id: "move-\(round)")
+            )
+            let probe = DocumentValidationProbe()
+            let result = try DocumentValidationProbe.$current.withValue(probe) {
+                try store.apply(command, using: DefaultGeometrySourceCommandApplier())
+            }
+            #expect(result.didMutate)
+            #expect(probe.validationCount == 1, "round \(round)")
+            #expect(store.evaluationStatus == .valid)
+            let edited = try #require(store.document.authoredMeshAssets[source.identity])
+            target = AuthoredMeshEditTarget(sourceID: edited.id, expectedSourceIdentity: edited.contentIdentity)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aCommandThatChangesNothingValidatesNothing() throws {
+        let source = try editableQuadSource(identity: "mesh.validate-none")
+        let fixture = try meshOnlyDocument(source: source)
+        let store = CADDocumentStore(document: fixture.document)
+        store.evaluateCurrentDocument()
+        let command = try authoredMeshCommand(
+            target: authoredMeshTarget(for: fixture),
+            plan: movePlan(source, to: try source.position(of: source.vertexIDs[0]).x, id: "stay")
+        )
+        let probe = DocumentValidationProbe()
+        let result = try DocumentValidationProbe.$current.withValue(probe) {
+            try store.apply(command, using: DefaultGeometrySourceCommandApplier())
+        }
+        #expect(!result.didMutate)
+        #expect(probe.validationCount == 0)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func aStagedSessionReadsTheValidationOfItsSnapshot() throws {
+        let source = try editableQuadSource(identity: "mesh.validate-staged")
+        let fixture = try meshOnlyDocument(source: source)
+        let session = EditorSession(document: fixture.document)
+        session.store.evaluateCurrentDocument()
+        let command = try authoredMeshCommand(
+            target: authoredMeshTarget(for: fixture), plan: movePlan(source, to: 9, id: "staged")
+        )
+        let probe = DocumentValidationProbe()
+        let result = try DocumentValidationProbe.$current.withValue(probe) {
+            try session.execute(command)
+        }
+        #expect(result.didMutate)
+        #expect(probe.validationCount == 1)
+        #expect(session.store.evaluationStatus == .valid)
+    }
+}
+
 private func authoredMeshTarget(
     for fixture: MeshSourceCommandFixture
 ) -> AuthoredMeshEditTarget {

@@ -823,7 +823,16 @@ single history entry remain owned by `withSourceCommandGroup`.
 1. The Mesh edit target contains only `GeometrySourceID` and expected
    `ContentIdentity`. Scene-node and representation IDs are not part of source
    authority.
-2. Public application validates the document once before dispatch. The retained
+2. The applier receives a validated document
+   (`GeometrySourceCommandApplying.apply(_:to: ValidatedDesignDocument, objectRegistry:)`):
+   the store hands it its validated source, and the `DesignDocument` entry
+   validates once before dispatch. The applier validates the staged document
+   once and returns that validation in `GeometrySourceCommandApplication`; a
+   command that changes nothing returns the input's validation. The store adopts
+   it through `commitMutation(adopting:)`, which drops it when synchronizing
+   boundary occurrences changed the document, so the evaluation that follows
+   validates nothing again. `CADDocumentStoreGeometrySourceValidationTests`
+   counts the validations of one command. The retained
    `AuthoredMeshAsset` invariant guarantees that construction and decoding
    already validated its source and computed or verified its cached content
    identity. After document validation, Core performs one O(1) authority check:
@@ -2388,13 +2397,13 @@ sequenceDiagram
     participant E as Mesh executor
     participant D as DesignDocument
 
-    P->>A: source-authority plan command
-    A->>D: validate document once and locate sourceID
+    P->>A: source-authority plan command + validated source
+    A->>D: locate sourceID in the validated document
     A->>A: O(1) key/source/cached identity check
     A->>E: execute plan against retained MeshSource
     E-->>A: validated execution
-    A->>D: replace asset and validate complete staged document
-    D-->>P: staged document + Core result
+    A->>D: replace asset and validate complete staged document once
+    D-->>P: validated staged document + Core result
 ```
 
 If execution or validation fails, the original document value remains unchanged.

@@ -15,12 +15,13 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         self.meshEditPlanExecutor = meshEditPlanExecutor
     }
 
+    /// `document` arrives validated, so only the staged result is validated, once, by the case
+    /// that produced it.
     public func apply(
         _ command: GeometrySourceCommand,
-        to document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        to document: ValidatedDesignDocument,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
-        _ = try document.validate(objectRegistry: objectRegistry)
         switch command {
         case .editAuthoredMesh(let edit):
             return try apply(
@@ -51,9 +52,10 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
 
     private func apply(
         _ command: ImportAuthoredMeshCommand,
-        to document: DesignDocument,
+        to validated: ValidatedDesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
+        let document = validated.document
         try command.validate()
         guard let rootSceneNodeID = document.productMetadata.rootSceneNodeIDs.first,
               var rootSceneNode = document.productMetadata.sceneNodes[rootSceneNodeID] else {
@@ -98,7 +100,7 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         staged.authoredMeshAssets[sourceID] = asset
         staged.productMetadata.sceneNodes[sceneNodeID] = sceneNode
         staged.productMetadata.sceneNodes[rootSceneNodeID] = rootSceneNode
-        _ = try staged.validate(objectRegistry: objectRegistry)
+        let validatedStaged = try staged.validate(objectRegistry: objectRegistry)
 
         guard case let .imported(importIdentity) = command.provenance else {
             throw EditorError(
@@ -107,7 +109,7 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
             )
         }
         return GeometrySourceCommandApplication(
-            document: staged,
+            validatedDocument: validatedStaged,
             result: .importedAuthoredMesh(
                 GeometrySourceCommandResult.ImportedAuthoredMesh(
                     sourceID: sourceID,
@@ -153,9 +155,10 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
 
     private func apply(
         _ command: MakeCADRepresentationEditableCommand,
-        to document: DesignDocument,
+        to validated: ValidatedDesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
+        let document = validated.document
         try command.validate()
         guard command.evaluationSnapshotID.projectID == document.projectID else {
             throw EditorError(
@@ -199,7 +202,7 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         }
         let currentSourceIdentity: ContentIdentity
         do {
-            currentSourceIdentity = try CADSourceContentIdentityService().identity(for: document)
+            currentSourceIdentity = try CADSourceContentIdentityService().identity(for: validated)
         } catch let error as EditorError {
             throw error
         } catch {
@@ -254,9 +257,8 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         var staged = document
         staged.authoredMeshAssets[asset.id] = asset
         staged.productMetadata.sceneNodes[command.sceneNodeID] = sceneNode
-        _ = try staged.validate(objectRegistry: objectRegistry)
         return GeometrySourceCommandApplication(
-            document: staged,
+            validatedDocument: try staged.validate(objectRegistry: objectRegistry),
             result: .makeEditable(
                 GeometrySourceCommandResult.MakeEditable(
                     sceneNodeID: command.sceneNodeID,
@@ -275,9 +277,10 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
 
     private func apply(
         _ command: AuthoredMeshEditCommand,
-        to document: DesignDocument,
+        to validated: ValidatedDesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
+        let document = validated.document
         let asset = try requireAsset(for: command.target, in: document)
         let execution: MeshEditPlanExecution
         do {
@@ -297,7 +300,7 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         let receipt = execution.receipt
         guard receipt.didChange else {
             return GeometrySourceCommandApplication(
-                document: document,
+                validatedDocument: validated,
                 result: .authoredMeshEdit(
                     GeometrySourceCommandResult.AuthoredMeshEdit(
                         sourceID: asset.id,
@@ -313,9 +316,8 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         let editedAsset = try asset.replacingSource(execution.source)
         var staged = document
         staged.authoredMeshAssets[asset.id] = editedAsset
-        _ = try staged.validate(objectRegistry: objectRegistry)
         return GeometrySourceCommandApplication(
-            document: staged,
+            validatedDocument: try staged.validate(objectRegistry: objectRegistry),
             result: .authoredMeshEdit(
                 GeometrySourceCommandResult.AuthoredMeshEdit(
                     sourceID: editedAsset.id,
@@ -330,9 +332,10 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
 
     private func apply(
         _ command: GeometryRepresentationSelectionCommand,
-        to document: DesignDocument,
+        to validated: ValidatedDesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
+        let document = validated.document
         try command.validate()
         guard var sceneNode = document.productMetadata.sceneNodes[command.sceneNodeID],
               var object = sceneNode.object else {
@@ -352,7 +355,7 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         let previousRepresentationID = selection.representationID(for: command.purpose)
         guard previousRepresentationID != command.representationID else {
             return GeometrySourceCommandApplication(
-                document: document,
+                validatedDocument: validated,
                 result: .representationSelection(
                     GeometrySourceCommandResult.RepresentationSelection(
                         sceneNodeID: command.sceneNodeID,
@@ -379,9 +382,8 @@ public struct DefaultGeometrySourceCommandApplier: GeometrySourceCommandApplying
         sceneNode.object = object
         var staged = document
         staged.productMetadata.sceneNodes[command.sceneNodeID] = sceneNode
-        _ = try staged.validate(objectRegistry: objectRegistry)
         return GeometrySourceCommandApplication(
-            document: staged,
+            validatedDocument: try staged.validate(objectRegistry: objectRegistry),
             result: .representationSelection(
                 GeometrySourceCommandResult.RepresentationSelection(
                     sceneNodeID: command.sceneNodeID,

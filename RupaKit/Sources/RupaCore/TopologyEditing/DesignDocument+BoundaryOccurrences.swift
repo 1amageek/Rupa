@@ -1,14 +1,19 @@
 import SwiftCAD
 
 extension DesignDocument {
-    /// Refreshes all dependent coordinate maps as one source mutation.
-    mutating func synchronizeBoundaryOccurrences() throws {
+    /// Refreshes all dependent coordinate maps as one source mutation; true when a map changed,
+    /// so a validation of the document before the refresh no longer describes it.
+    @discardableResult
+    mutating func synchronizeBoundaryOccurrences() throws -> Bool {
         let replacements = try resolvedBoundaryOccurrenceFeatures()
         var candidate = cadDocument
+        var changed = false
         for feature in replacements where candidate.designGraph.nodes[feature.id] != feature {
             try candidate.replaceFeature(feature, tolerance: modelingSettings.tolerance)
+            changed = true
         }
         cadDocument = candidate
+        return changed
     }
 
     func validateBoundaryOccurrences() throws {

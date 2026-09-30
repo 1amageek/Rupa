@@ -1955,10 +1955,10 @@ private struct NameRequiringGeometrySourceCommandApplier: GeometrySourceCommandA
 
     func apply(
         _ command: GeometrySourceCommand,
-        to document: DesignDocument,
+        to document: ValidatedDesignDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws -> GeometrySourceCommandApplication {
-        guard document.cadDocument.metadata.name == requiredName else {
+        guard document.document.cadDocument.metadata.name == requiredName else {
             throw GeometryCommandOrderFixtureError()
         }
         return try DefaultGeometrySourceCommandApplier().apply(

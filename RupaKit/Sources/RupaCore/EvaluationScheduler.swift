@@ -59,7 +59,8 @@ public struct EvaluationScheduler: Sendable {
 
         guard document.cadDocument.hasActiveEvaluationFeatures else {
             return DocumentEvaluationResult(
-                snapshot: evaluatedEmptyDocument(generation: generation)
+                snapshot: evaluatedEmptyDocument(generation: generation),
+                validatedDocument: validatedDocument
             )
         }
 

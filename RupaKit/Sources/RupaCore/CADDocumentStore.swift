@@ -82,7 +82,7 @@ public final class CADDocumentStore {
             evaluationStatus: snapshot.evaluationStatus,
             evaluatedGeneration: snapshot.evaluatedGeneration
         )
-        validatedSource = evaluationCache?.validatedDocument
+        validatedSource = evaluationCache?.validatedDocument ?? transactionSnapshot.validatedSource
     }
 
     public var currentEvaluationCache: EvaluatedDocumentCache? {
@@ -155,6 +155,7 @@ public final class CADDocumentStore {
         CADDocumentStoreTransactionSnapshot(
             document: snapshot(),
             evaluationCache: currentEvaluationCache,
+            validatedSource: validatedSource,
             completedEvaluationPassCount: completedEvaluationPassCount
         )
     }
@@ -176,7 +177,7 @@ public final class CADDocumentStore {
             evaluationStatus: documentSnapshot.evaluationStatus,
             evaluatedGeneration: documentSnapshot.evaluatedGeneration
         )
-        validatedSource = evaluationCache?.validatedDocument
+        validatedSource = evaluationCache?.validatedDocument ?? snapshot.validatedSource
     }
 
     public func restoreAsMutation(_ snapshot: DocumentSnapshot) throws {
@@ -234,15 +235,14 @@ public final class CADDocumentStore {
             let result = try withDeferredEvaluation {
                 let application = try applier.apply(
                     command,
-                    to: document,
+                    to: validatedSource ?? document.validate(objectRegistry: objectRegistry),
                     objectRegistry: objectRegistry
                 )
                 guard application.result.didMutate else {
                     return application.result
                 }
-                _ = try application.document.validate(objectRegistry: objectRegistry)
                 document = application.document
-                try commitMutation()
+                try commitMutation(adopting: application.validatedDocument)
                 evaluateCurrentDocument()
                 return application.result
             }
@@ -660,8 +660,7 @@ public final class CADDocumentStore {
                 )
                 document = updatedDocument
                 primaryFeatureID = transaction.primaryFeatureID ?? transaction.features.last?.id
-                try commitMutation()
-                validatedSource = updatedValidation
+                try commitMutation(adopting: updatedValidation)
                 evaluateCurrentDocument()
             }
             try run()
@@ -694,8 +693,7 @@ public final class CADDocumentStore {
                 )
                 document = updatedDocument
                 primaryFeatureID = transaction.primaryFeatureID
-                try commitMutation()
-                validatedSource = updatedValidation
+                try commitMutation(adopting: updatedValidation)
                 evaluateCurrentDocument()
             }
             try run()
@@ -1386,8 +1384,7 @@ public final class CADDocumentStore {
             let updatedValidation = try updated.setInvoluteGear(featureID: featureID,
                 gear: gear, validatedDocument: sourceValidation)
             document = updated
-            try commitMutation()
-            validatedSource = updatedValidation
+            try commitMutation(adopting: updatedValidation)
             evaluateCurrentDocument()
         case let .createSpatialPath(name, path):
             var updatedDocument = document
@@ -1674,8 +1671,7 @@ public final class CADDocumentStore {
                 let updatedValidation = try updated.setFeatureLength(featureID: featureID,
                     expression: expression, validatedDocument: sourceValidation)
                 document = updated
-                try commitMutation()
-                validatedSource = updatedValidation
+                try commitMutation(adopting: updatedValidation)
                 evaluateCurrentDocument()
             }
             try run()
@@ -1685,8 +1681,7 @@ public final class CADDocumentStore {
             let updatedValidation = try updated.setExtrudeDistance(featureID: featureID,
                 distance: end, startDistance: start, validatedDocument: validation)
             document = updated
-            try commitMutation()
-            validatedSource = updatedValidation
+            try commitMutation(adopting: updatedValidation)
             evaluateCurrentDocument()
         case .setExtrudeDistance:
             func run() throws {
@@ -1705,8 +1700,7 @@ public final class CADDocumentStore {
                     validatedDocument: sourceValidation
                 )
                 document = updatedDocument
-                try commitMutation()
-                validatedSource = updatedValidation
+                try commitMutation(adopting: updatedValidation)
                 evaluateCurrentDocument()
             }
             try run()
@@ -3468,11 +3462,15 @@ public final class CADDocumentStore {
         }
     }
 
-    private func commitMutation() throws {
-        try document.synchronizeBoundaryOccurrences()
+    /// Commits the staged `document` as the next generation. `validation`, when given, is the
+    /// validation of the staged document and becomes the store's validated source, so the
+    /// evaluation that follows validates nothing again, unless synchronizing boundary occurrences
+    /// changed the document, which it then no longer describes.
+    private func commitMutation(adopting validation: ValidatedDesignDocument? = nil) throws {
+        let synchronized = try document.synchronizeBoundaryOccurrences()
         generation = try generation.advanced()
         isDirty = true
-        validatedSource = nil
+        validatedSource = synchronized ? nil : validation
     }
 
     private func applyEvaluation(_ result: DocumentEvaluationResult) {
@@ -3485,7 +3483,7 @@ public final class CADDocumentStore {
         if case .valid = snapshot.status,
            snapshot.evaluatedGeneration == generation {
             evaluationCache = result.evaluationCache
-            validatedSource = result.evaluationCache?.validatedDocument
+            validatedSource = result.validatedDocument
         } else {
             evaluationCache = nil
             validatedSource = nil
