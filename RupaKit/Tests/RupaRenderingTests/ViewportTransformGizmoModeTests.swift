@@ -116,6 +116,19 @@ import Testing
         let moved = try #require(try ViewportBodyTransformInput(record: arrow)).mutation(
             from: measure.projected(pivot), to: measure.projected(pivot + frame.axis(.z) * 0.3), measure: measure)
         #expect(try close(moved.applied(to: .origin), .origin + frame.axis(.z) * 0.3))
+
+        // While a drag moves the edge, the handles stand where it has moved them.
+        raw.topologyPreviewTransform = moved
+        var following: [ViewportSpatialInteractionRecord] = []
+        _ = try ViewportSpatialOverlayProducer.makeSurfaceTransformAffordanceSource(
+            from: raw, interactionRecords: &following, checkpoint: { _, _, _ in }
+        )
+        let origins = following.compactMap { record -> Point3D? in
+            guard case .objectTransform(_, _, let bounds) = record.target else { return nil }
+            return bounds.transformGizmo?.frame.origin
+        }
+        #expect(origins.count == 7)
+        #expect(origins.allSatisfy { close($0, pivot + frame.axis(.z) * 0.3) })
     }
 
     private func input(

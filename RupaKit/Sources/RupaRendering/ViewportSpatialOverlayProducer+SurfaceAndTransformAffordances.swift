@@ -145,6 +145,9 @@ extension ViewportSpatialOverlayProducer {
             var edgeTreatmentHoverTarget: SelectionTarget?
             let editedBodies: [FeatureID: ViewportObjectEditState]
             var bodyPreviewTransforms: [String: Transform3D] = [:]
+            /// The motion a drag has given the edges, faces or vertices a gizmo stands on, which
+            /// its handles follow while the preview moves them.
+            var topologyPreviewTransform: Transform3D?
             var allowsBodyResize = false
             /// The Move, Rotate or Scale mode and frame the object gizmo is drawn in, `nil` for the combined gizmo.
             var transformGizmo: ViewportTransformGizmoConfiguration?
@@ -2567,16 +2570,32 @@ private extension ViewportSpatialOverlayProducer {
         meshes: inout [SurfaceTransformAffordanceSource.Mesh]
     ) throws {
         guard input.enabledRoutes.contains(.bodyTransform) else { return }
-        if let topology = input.transformGizmo?.topology {
+        if var gizmo = input.transformGizmo, let topology = gizmo.topology {
             // Moving edges, faces or vertices: the mode's handles stand about the box around them
             // and carry no object members, so a drag previews and commits their direct edit.
+            var corners = [topology.lower, topology.upper]
+            if let mutation = input.topologyPreviewTransform {
+                // The handles follow the dragged targets: the box's corners and the pivot move with
+                // them (a turn or scale about the pivot leaves it where it is).
+                let (l, u) = (topology.lower, topology.upper)
+                corners = try [l.x, u.x].flatMap { x in try [l.y, u.y].flatMap { y in try [l.z, u.z].map { z in
+                    try ViewportWorldTransformAlgebra.transformedPoint(Point3D(x: x, y: y, z: z), by: mutation)
+                } } }
+                let frame = gizmo.frame
+                gizmo.frame = try SceneTransformFrame(
+                    origin: try ViewportWorldTransformAlgebra.transformedPoint(frame.origin, by: mutation),
+                    xAxis: frame.xAxis, yAxis: frame.yAxis, zAxis: frame.zAxis
+                )
+            }
             let bounds = ViewportObjectEditState(
-                xMin: CGFloat(topology.lower.x), xMax: CGFloat(topology.upper.x),
-                yMin: CGFloat(topology.lower.y), yMax: CGFloat(topology.upper.y),
-                zMin: CGFloat(topology.lower.z), zMax: CGFloat(topology.upper.z), preservesZeroExtents: true)
+                xMin: CGFloat(corners.map(\.x).min()!), xMax: CGFloat(corners.map(\.x).max()!),
+                yMin: CGFloat(corners.map(\.y).min()!), yMax: CGFloat(corners.map(\.y).max()!),
+                zMin: CGFloat(corners.map(\.z).min()!), zMax: CGFloat(corners.map(\.z).max()!), preservesZeroExtents: true)
+            var placed = input
+            placed.transformGizmo = gizmo
             try emitBodyTransform(featureID: nil, selectionTarget: nil, occurrenceID: nil,
                 modelTransform: .identity, edit: bounds, bodyMembers: [], groupEdit: nil,
-                placement: nil, objectMembers: [], input: input,
+                placement: nil, objectMembers: [], input: placed,
                 interactionRecords: &interactionRecords, checkpoint: checkpoint,
                 worldLines: &worldLines, cameraLines: &cameraLines, cameraPaths: &cameraPaths, markers: &markers)
             return

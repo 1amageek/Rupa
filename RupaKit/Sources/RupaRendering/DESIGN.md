@@ -1075,7 +1075,9 @@ as spheres elsewhere.
    pivot and increments are the objects' own, and the route is enabled by
    `onTopologyTransformCommit` rather than by object affordances. Each update
    previews the body through `BodyTopologyWorldMotion.apply` on a copy of the
-   document (`setDragPreviewDocument`, a refused motion showing its refusal), and
+   document (`setDragPreviewDocument`, a refused motion showing its refusal), its
+   handles following the drag (`topologyPreviewTransform` moves the box and the
+   pivot; the press keeps measuring from its own record), and
    the release hands the world motion to `onTopologyTransformCommit` rather than
    to the placement batch.
    A body scene item carrying no scene-node address matches no selected target

@@ -6100,6 +6100,9 @@ extension Viewport {
             modifierControl: comparison, objectRegistry: objectRegistry, constructionFaceTarget: constructionFace
         )
         result.bodyPreviewTransforms = presentationScene == nil ? bodyPreviewTransforms : [:]
+        if case .bodyTransform(let press) = nativeInputGesture, press.input.bounds.transformGizmo?.topology != nil {
+            result.topologyPreviewTransform = press.mutation
+        }
         // A drag that previews an edit draws the preview, whose topology no longer carries the
         // selected subshape; the selection is resolved against the published document's scene.
         if rendersDragPreviewDocument {
