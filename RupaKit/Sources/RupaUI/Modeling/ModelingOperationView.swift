@@ -244,9 +244,15 @@ struct ModelingOperationView: View {
                     }
                 }
                 .contentShape(Rectangle())
+                if draft.extrudesFaces {
+                    Toggle("Individual", isOn: $draft.extrudesIndividually)
+                        .accessibilityIdentifier("Modeling.extrudeFacesIndividually")
+                }
                 if draft.extrusionBoolean != .newBody {
                     Toggle("Keep Tools", isOn: $draft.keepsTools)
-                    Text("Select the section first, then the bodies to combine with.")
+                    Text(draft.extrudesFaces
+                        ? "Faces combine with the body they lie on."
+                        : "Select the section first, then the bodies to combine with.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }

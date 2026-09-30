@@ -275,9 +275,9 @@ public struct MeasurementService {
                 try appendEvaluatedSheet(sourceFeatureID: extrude.section.featureID, node: node, featureID: featureID)
                 return
             }
-            // A Boolean, drafted or thin extrusion is measured as the body it evaluates to, not as
-            // its profile's area times its depth.
-            if extrude.operation != .newBody || extrude.draftAngle != nil || extrude.thickness != nil {
+            // A Boolean, drafted or thin extrusion, or one of a face, is measured as the body it
+            // evaluates to, not as its profile's area times its depth.
+            if extrude.operation != .newBody || extrude.draftAngle != nil || extrude.thickness != nil || extrude.section.isFace {
                 var reason: String?
                 guard let values = try measureEvaluatedBodySolids(featureID: featureID,
                     featureName: node.name, sourceFeatureID: extrude.section.featureID,
@@ -464,6 +464,10 @@ public struct MeasurementService {
             )
             let measuredProfile: MeasuredProfile?
             switch sectionReference {
+            case .face:
+                // A sweep refuses face sections before it evaluates.
+                diagnostics.append(EditorDiagnostic(severity: .warning, message: "Measurement skipped a sweep of a face section."))
+                return
             case .profile(let profileReference):
                 guard case .sketch(let sourceSketch) = sourceNode.operation else {
                     diagnostics.append(

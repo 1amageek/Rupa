@@ -322,6 +322,34 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func facesExtrudeIndividuallyOrDirectlyWithTheirBody() throws {
+        let node = SceneNodeID()
+        let faces = [0, 1].map { SelectionTarget(sceneNodeID: node, component: .face(SelectionComponentID(rawValue: "generatedTopology:face/\($0)"))) }
+        var draft = makeDraft(.extrude, targets: faces)
+        draft.distance = "5 mm"
+        draft.startDistance = "0"
+        draft.extrudesIndividually = true
+        draft.extrusionBoolean = .union
+        #expect(draft.extrudesFaces)
+        guard case .extrudeFaces(let targets, let distance, _, let individual, let operation, _, _, _) = try draft.command(in: .empty()) else {
+            Issue.record("Faces extrude through extrudeFaces.")
+            return
+        }
+        #expect(targets == faces && individual && operation == .union)
+        #expect(distance == .length(0.005, .meter))
+        draft.sheet = true
+        #expect(throws: EditorError.self) { try draft.command(in: .empty()) }
+
+        // An edge, or a face beside a whole object, is not read as its whole object.
+        let edge = SelectionTarget(sceneNodeID: node, component: .edge(SelectionComponentID(rawValue: "generatedTopology:edge/0")))
+        for targets in [[edge], [faces[0], SelectionTarget(sceneNodeID: SceneNodeID(), component: .object)]] {
+            var mixed = makeDraft(.extrude, targets: targets)
+            mixed.distance = "5 mm"
+            #expect(mixed.extrudesFaces == false)
+            #expect(throws: EditorError.self) { try mixed.command(in: .empty()) }
+        }
+    }
+
     @Test func aThinExtrusionCarriesItsWallThickness() throws {
         var document = DesignDocument.empty()
         let profile = try addProfile(to: &document, z: 0)

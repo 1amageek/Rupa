@@ -118,6 +118,7 @@ enum PreparedAutomationSourceCommandValidation {
              .alignSurface,
              .rebuildFaces,
              .unwrapFace,
+             .extrudeFaces,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

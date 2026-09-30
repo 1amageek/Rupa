@@ -85,6 +85,11 @@ extension DesignDocument {
         // A Boolean extrusion combines its targets where they are displayed, in the frame the
         // extrusion is shown in, and replaces them; Keep Tools keeps only the extruded tool.
         var placedTargets = targets
+        // A face section extrudes in its body's frame, where the face's object shows it; a
+        // profile or a curve in the world's.
+        let sectionHierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        let frameNode = section.isFace ? sectionHierarchy.presentingSceneNodeID(for: section.featureID) : nil
+        let frameWorld = try frameNode.map { try sectionHierarchy.worldTransform(of: $0) }
         if operation != .newBody {
             guard targets.allSatisfy({ $0.placement == nil }) else {
                 throw EditorError(
@@ -95,7 +100,7 @@ extension DesignDocument {
             let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
             placedTargets = try targets.map { target in
                 BooleanTargetReference(featureID: target.featureID, placement: try relativeRigidPlacement(
-                    of: hierarchy.presentingSceneNodeID(for: target.featureID), inFrameOf: nil,
+                    of: hierarchy.presentingSceneNodeID(for: target.featureID), inFrameOf: frameNode,
                     owner: "An extrusion's Boolean target", relation: "the extrusion"
                 ))
             }
@@ -139,22 +144,33 @@ extension DesignDocument {
         }
 
         try appendFeature(feature)
-        _ = try productMetadata.appendSceneNodeToFirstRoot(
-            name: name,
-            reference: .body(featureID),
-            object: .body(
-                featureID: featureID,
-                documentID: cadDocument.id,
-                sourceSection: BodySourceSectionReference(section: section),
-                typeID: typeID,
-                geometryRole: resultKind.objectGeometryRole,
-                objectRegistry: objectRegistry
+        if let frameNode, operation != .newBody, placedTargets.contains(where: { $0.featureID == section.featureID }) {
+            // A face combined with the body it lies on grows that body: its object takes over
+            // showing the extrusion, where it is, as a direct edit takes over the object it edits.
+            try retargetBodyNode(frameNode, to: featureID, name: name, geometryRole: resultKind.objectGeometryRole)
+            try removeSceneNodes(presenting: placedTargets.map(\.featureID).filter { $0 != section.featureID })
+        } else {
+            let nodeID = try productMetadata.appendSceneNodeToFirstRoot(
+                name: name,
+                reference: .body(featureID),
+                object: .body(
+                    featureID: featureID,
+                    documentID: cadDocument.id,
+                    sourceSection: BodySourceSectionReference(section: section),
+                    typeID: typeID,
+                    geometryRole: resultKind.objectGeometryRole,
+                    objectRegistry: objectRegistry
+                )
             )
-        )
-        if operation != .newBody {
-            // The extrusion's object shows the combined body; the targets' objects go, their
-            // nested sketches (the section drawn on a target's face) taking their place.
-            try removeSceneNodes(presenting: placedTargets.map(\.featureID))
+            if let frameWorld {
+                // Shown where the face's object is, at the root.
+                productMetadata.sceneNodes[nodeID]?.localTransform = frameWorld
+            }
+            if operation != .newBody {
+                // The extrusion's object shows the combined body; the targets' objects go, their
+                // nested sketches (the section drawn on a target's face) taking their place.
+                try removeSceneNodes(presenting: placedTargets.map(\.featureID))
+            }
         }
         if section.isProfile {
             try synchronizeObjectPropertiesFromSource(
@@ -314,6 +330,8 @@ extension DesignDocument {
                 try requireSweepSourceProfileFeature(profile.featureID, owner: "Sweep profile")
             case .curve(let curve):
                 try requireSweepSourceCurveFeature(curve.featureID, owner: "Sweep curve section")
+            case .face:
+                throw EditorError(code: .commandInvalid, message: "Sweep takes a profile or a curve section.")
             }
         }
         try requireSweepSourceCurveFeature(path.featureID, owner: "Sweep path")
@@ -359,7 +377,7 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: sections.first.map(BodySourceSectionReference.init(section:)),
+                sourceSection: sections.first.flatMap(BodySourceSectionReference.init(section:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry
@@ -395,6 +413,8 @@ extension DesignDocument {
                 try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
             case .curve:
                 try requireSweepSourceCurveFeature(section.featureID, owner: "Loft curve")
+            case .face:
+                throw EditorError(code: .commandInvalid, message: "Loft takes profile or curve sections.")
             }
         }
         for guide in guides {
@@ -431,7 +451,7 @@ extension DesignDocument {
             object: .body(
                 featureID: featureID,
                 documentID: cadDocument.id,
-                sourceSection: sections.first.map { BodySourceSectionReference(section: $0.section) },
+                sourceSection: sections.first.flatMap { BodySourceSectionReference(section: $0.section) },
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry
@@ -461,7 +481,7 @@ extension DesignDocument {
         var candidate = self
         try candidate.cadDocument.replaceFeature(replacement, tolerance: modelingSettings.tolerance)
         for (id, var node) in candidate.productMetadata.sceneNodes where node.object?.sourceFeatureID == featureID {
-            node.object?.sourceSection = loft.sections.first.map { BodySourceSectionReference(section: $0.section) }
+            node.object?.sourceSection = loft.sections.first.flatMap { BodySourceSectionReference(section: $0.section) }
             candidate.productMetadata.sceneNodes[id] = node
         }
         _ = try candidate.validate(objectRegistry: objectRegistry)

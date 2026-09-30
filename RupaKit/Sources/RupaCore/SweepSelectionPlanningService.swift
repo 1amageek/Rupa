@@ -181,6 +181,8 @@ public struct SweepSelectionPlanningService: Sendable {
                     throw EditorError(code: .commandInvalid, message: "Selected source does not produce a curve.")
                 }
                 return Candidate(isTarget: candidateSceneNode.isTarget, profileReference: nil, curveFeatureID: reference.featureID)
+            case .face:
+                throw EditorError(code: .commandInvalid, message: "Sweep takes a profile or a curve section.")
             }
         }
         let sketchFeatureID = sceneNode.reference?.kind == .sketch ? referencedFeatureID : nil

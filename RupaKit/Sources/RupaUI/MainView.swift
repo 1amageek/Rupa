@@ -2558,9 +2558,9 @@ private struct ProjectMainViewContent: View {
     private var viewportTopologyTransformCommitHandler: ((Transform3D) -> Void)? {
         guard let transformSession, !transformSession.topologyTargets.isEmpty else { return nil }
         return { worldDelta in
-            guard let session = self.transformSession, !session.topologyTargets.isEmpty else { return }
+            guard let moving = self.transformSession, !moving.topologyTargets.isEmpty else { return }
             do {
-                submitTransformCommand(try session.command(worldDelta: worldDelta))
+                submitTransformCommand(try moving.command(worldDelta: worldDelta))
             } catch {
                 reportToolStatus(error.localizedDescription, severity: .warning)
             }
@@ -14164,6 +14164,8 @@ private struct ProjectMainViewContent: View {
             return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"
         case .curve(let curve):
             return "Curve \(WorkspaceInspectorNumberText.shortID(curve.featureID))"
+        case .face(let face):
+            return "Face of \(WorkspaceInspectorNumberText.shortID(face.featureID))"
         }
     }
 

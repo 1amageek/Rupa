@@ -2086,7 +2086,7 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFaces, .unwrapFace:
+        case .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFaces, .unwrapFace, .extrudeFaces:
             func run() throws {
                 var updatedDocument = document
                 switch command {
@@ -2110,6 +2110,12 @@ public final class CADDocumentStore {
                         targets: targets, method: method, extendU: extendU, extendV: extendV, shrinks: shrinks,
                         objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
+                case .extrudeFaces(let targets, let distance, let startDistance, let individual, let operation, let keepTools, let draftAngle, let thickness):
+                    try updatedDocument.extrudeFaces(
+                        targets: targets, distance: distance, startDistance: startDistance, individual: individual,
+                        operation: operation, keepTools: keepTools, draftAngle: draftAngle, thickness: thickness,
+                        objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
+                    )
                 case .unwrapFace(let target):
                     try updatedDocument.unwrapFace(
                         target: target, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
@@ -2122,7 +2128,7 @@ public final class CADDocumentStore {
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
                 default:
-                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken, extendSheet, alignSurface, rebuildFaces or unwrapFace.")
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected hollow, thicken, extendSheet, alignSurface, rebuildFaces, unwrapFace or extrudeFaces.")
                 }
                 document = updatedDocument
                 try commitMutation()

@@ -860,6 +860,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return "Profile \(WorkspaceInspectorNumberText.shortID(profile.featureID))"
         case .curve(let curve):
             return "Curve \(WorkspaceInspectorNumberText.shortID(curve.featureID))"
+        case .face(let face):
+            return "Face of \(WorkspaceInspectorNumberText.shortID(face.featureID))"
         }
     }
 

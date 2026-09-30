@@ -426,3 +426,79 @@ extension DesignDocument {
         return featureID
     }
 }
+
+extension DesignDocument {
+    /// Extrude on planar faces of one object: each face its own extrusion of the face (Swift-CAD
+    /// `extrude` of a face section), along its outward normal when `individual` and otherwise
+    /// along the first face's (Direct). A new-body extrusion shows as an object of its own; with a
+    /// Boolean, the extrusions are the tools of one Boolean with the object the faces lie on, which
+    /// takes over showing the result (Keep Tools keeps them).
+    @discardableResult
+    public mutating func extrudeFaces(
+        name: String = "Extrude",
+        targets: [SelectionTarget],
+        distance: CADExpression,
+        startDistance: CADExpression? = nil,
+        individual: Bool,
+        operation: SolidOperation = .newBody,
+        keepTools: Bool = false,
+        draftAngle: CADExpression? = nil,
+        thickness: CADExpression? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [FeatureID] {
+        let operationName = "Extrude"
+        let trimmedName = try normalizedMetadataName(name, owner: operationName)
+        let object = try offsetObject(for: targets, operationName: operationName)
+        let role = productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole
+        let bodyRole: FeaturePort = role == .surface ? .sheet : .body
+        let previous = self
+        var didCommit = false
+        defer { if !didCommit { self = previous } }
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        // Direct runs every face along the first face's outward normal, in the object's frame.
+        var direction = ExtrudeDirection.normal
+        if individual == false, targets.count > 1 {
+            guard let first = targets.first,
+                  let entry = topology.entries.first(where: { $0.selectionTarget() == first }), let normal = entry.surfaceNormal else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) needs the first face's normal.")
+            }
+            let world = Vector3D(x: normal.x, y: normal.y, z: normal.z)
+            let local = try SceneNodeHierarchy(metadata: productMetadata).worldTransform(of: object.nodeID).inverseApplyingLinearPart(to: world)
+            direction = .vector(try local.normalized(tolerance: modelingSettings.tolerance.distance))
+        }
+        // Every face read from the object as it is now, so each extrudes the face selected.
+        let references = try targets.map { try stableReference(of: $0, kind: .face, in: topology, operationName: operationName) }
+        var created: [FeatureID] = []
+        for reference in references {
+            created.append(try extrudeSection(
+                name: trimmedName,
+                section: .face(FaceSectionReference(featureID: object.featureID, face: reference, bodyRole: bodyRole)),
+                distance: distance, startDistance: startDistance, direction: direction,
+                resultKind: .solid, draftAngle: draftAngle, thickness: thickness, objectRegistry: objectRegistry
+            ))
+        }
+        if operation != .newBody {
+            let boolean: BooleanOperation = switch operation {
+            case .union: .union
+            case .difference: .difference
+            case .intersect: .intersect
+            case .slice: .slice
+            case .newBody: .union
+            }
+            created.append(try createBoolean(
+                name: trimmedName,
+                targets: [BooleanTargetReference(featureID: object.featureID)],
+                tools: created.map { BooleanToolReference(featureID: $0) },
+                operation: boolean,
+                keepTools: keepTools,
+                objectRegistry: objectRegistry
+            ))
+        }
+        didCommit = true
+        return created
+    }
+}

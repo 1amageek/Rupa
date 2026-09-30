@@ -47,12 +47,15 @@ public enum BodySourceSectionReference: Codable, Hashable, Sendable {
         }
     }
 
-    public init(section: SectionReference) {
+    /// The source a section's object keeps; a face section has none, its face belonging to a body.
+    public init?(section: SectionReference) {
         switch section {
         case .profile(let profile):
             self = .profile(profile)
         case .curve(let curve):
             self = .curve(curve.featureID)
+        case .face:
+            return nil
         }
     }
 

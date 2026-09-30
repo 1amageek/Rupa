@@ -131,6 +131,16 @@ struct ModelingOperationDraft: Equatable {
     var draftDegrees = "0"
     /// A thin extrusion's wall thickness, empty for a whole section.
     var wallThickness = ""
+    /// Faces extrude each along its own normal (Individual) or all along the first's (Direct).
+    var extrudesIndividually = false
+
+    /// Whether the operands are faces of a body, which Extrude takes instead of a section.
+    var extrudesFaces: Bool {
+        kind == .extrude && targets.isEmpty == false && targets.allSatisfy { target in
+            if case .face = target.component { return true }
+            return false
+        }
+    }
     var keepsTools = false
     var sheet = false
     var isSurfaceCreation = false
@@ -252,6 +262,27 @@ struct ModelingOperationDraft: Equatable {
             )
         }
 
+        if extrudesFaces {
+            // Faces of one body: each its own extrusion of the face, combining with that body when
+            // a Boolean is chosen.
+            guard createsSheet == false else {
+                throw invalid("Extruding faces makes a solid; turn Sheet output off.")
+            }
+            let draft = try number(draftDegrees, label: "Degrees")
+            guard draft.isFinite, abs(draft) < 90 else { throw invalid("Degrees must be under 90.") }
+            let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
+                ? nil : try length(wallThickness, label: "Thickness")
+            return .extrudeFaces(
+                targets: targets,
+                distance: .length(try length(distance, label: "End position"), .meter),
+                startDistance: .length(try length(startDistance, label: "Start position"), .meter),
+                individual: extrudesIndividually,
+                operation: extrusionBoolean.operation,
+                keepTools: keepsTools,
+                draftAngle: draft == 0 ? nil : .angle(draft, .degree),
+                thickness: thickness.map { .length($0, .meter) }
+            )
+        }
         let nodes = try operandNodes(in: document)
         let features = try nodes.map { node -> FeatureID in
             guard let featureID = node.object?.sourceFeatureID,
@@ -265,6 +296,21 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .surfacePatch, .constrainedSurface:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
+            // FIXME(INCOMPLETE_IMPLEMENTATION): edges of a sheet, a face beside whole objects, and
+            // any face, edge or vertex for Revolve are refused rather than read as their whole
+            // object. Production path: ModelingOperationDraft.command(in:) for Extrude and Revolve.
+            // Complete only when surface edges extrude and faces revolve as their own sections,
+            // verified by the generated sheets' and bodies' measurements.
+            guard targets.allSatisfy({ target in
+                switch target.component {
+                case .face, .edge, .vertex: false
+                default: true
+                }
+            }) else {
+                throw invalid(kind == .extrude
+                    ? "Extrude takes faces alone, or whole sections; edges and vertices are not sections."
+                    : "Revolve takes whole sections, not faces, edges or vertices.")
+            }
             // A Boolean extrusion takes the section first and the bodies it combines with after it.
             let combines = kind == .extrude && extrusionBoolean != .newBody
             guard let node = nodes.first, combines ? features.count >= 2 : features.count == 1 else {

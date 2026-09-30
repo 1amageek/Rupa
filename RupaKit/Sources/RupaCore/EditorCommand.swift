@@ -270,6 +270,12 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case extendSheet(targets: [SelectionTarget], distance: CADExpression, shape: SheetExtensionShape = .natural, modifies: Bool = true)
     case rebuildFaces(targets: [SelectionTarget], method: FaceRebuildMethod, extendU: Double = 0, extendV: Double = 0, shrinks: Bool = false)
     case unwrapFace(target: SelectionTarget)
+    /// Extrude on planar faces of one object: each face its own extrusion, along its own normal
+    /// when `individual` and along the first face's otherwise.
+    case extrudeFaces(
+        targets: [SelectionTarget], distance: CADExpression, startDistance: CADExpression? = nil, individual: Bool = false,
+        operation: SolidOperation = .newBody, keepTools: Bool = false, draftAngle: CADExpression? = nil, thickness: CADExpression? = nil
+    )
     case alignSurface(
         targets: [SelectionTarget], continuity: SurfaceContinuityLevel = .tangentPlane, tension: Double = 1, blendRows: Int = 0,
         inputShapeInfluence: Double = 1, partialStart: Double = 0, partialEnd: Double = 0, layout: SurfaceControlLayout? = nil
@@ -827,6 +833,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "rebuildFaces"
         case .unwrapFace:
             "unwrapFace"
+        case .extrudeFaces:
+            "extrudeFaces"
         case .draftBodyFaces:
             "draftBodyFaces"
         case .matchFaces:
@@ -1154,6 +1162,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .alignSurface,
              .rebuildFaces,
              .unwrapFace,
+             .extrudeFaces,
              .draftBodyFaces,
              .matchFaces,
              .chamferBodyEdges,

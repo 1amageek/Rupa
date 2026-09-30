@@ -573,6 +573,14 @@ dimension/corner adapters or closed-profile display shortcuts. Sheet measurement
 come from evaluated BRep, before any sketch profile recognition. Source and
 product publication remain atomic on failure.
 
+`extrudeFaces` extrudes planar faces of one body as their own sections
+(`SectionReference.face`), each a New Body extrusion placed in its object's frame:
+Individual along each face's outward normal, Direct all along the first face's.
+Every face is read from the body as selected, so one face's growth never changes
+another's section. A Boolean then combines all the extrusions with the faces' body
+in one `createBoolean` (Union, Difference, Intersect, Slice) with Keep Tools; New
+Body keeps them beside it. Draft and thickness pass to every extrusion.
+
 Surface Creation uses the existing EditorCommand and document transaction
 boundary. `extrudeProfile.resultKind` is retained in the native Extrude feature:
 solid outputs declare `.body`/`.solid`, sheet outputs declare `.sheet`/`.surface`.

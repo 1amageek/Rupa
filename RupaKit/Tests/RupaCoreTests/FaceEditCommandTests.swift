@@ -278,4 +278,26 @@ import Testing
         // The box stays as it was, where it was.
         #expect(try faces(of: object, in: session).count == 6)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func extrudingFacesGrowsBlocksOrTheBodyItself() throws {
+        let apart = EditorSession()
+        let block = try box(apart, "Box")
+        let top = try face(of: block, in: apart, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try apart.execute(.extrudeFaces(targets: [top], distance: .length(0.05, .meter)))
+        #expect(apart.evaluationStatus == .valid)
+        #expect(apart.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 2)
+        #expect(abs(try volume(apart) - 0.0015) < 1e-12)
+
+        // Individual, united: the top grows up and the +X side out, each along its own normal.
+        let grown = EditorSession()
+        let body = try box(grown, "Box")
+        let roof = try face(of: body, in: grown, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        let side = try face(of: body, in: grown, normal: Vector3D(x: 1, y: 0, z: 0)) { $0.x }
+        _ = try grown.execute(.extrudeFaces(targets: [roof, side], distance: .length(0.05, .meter), individual: true, operation: .union))
+        #expect(grown.evaluationStatus == .valid)
+        #expect(grown.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 1)
+        // Each face grows as it was selected, not as the other's growth left it.
+        #expect(abs(try volume(grown) - 0.002) < 1e-12)
+    }
 }
