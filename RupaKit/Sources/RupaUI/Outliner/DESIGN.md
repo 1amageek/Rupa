@@ -103,6 +103,14 @@ inactive dot or announcing a nonexistent disclosure action. The existing small
 disclosure and generated badge remain auxiliary to the main kind icon.
 Outliner projection tests verify this mapping and unchanged row identity/state.
 
+The projection walks every scene node, and the Outliner's body runs on every
+row hover and every parent render, so the Outliner keeps the projection for the
+inputs it was made from (document generation, expanded rows, search text and
+filter) and makes it again only when one of them changes. The document
+generation stands for the metadata, which changes only with it; metadata-driven
+cleanup (expanded rows, a rename whose node is gone) runs on a generation change
+rather than on a whole-metadata comparison every render.
+
 ### Interaction
 
 1. Rows retain the Product root/child order and stable `SceneNodeID`. A new

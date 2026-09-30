@@ -406,3 +406,6 @@
 - [x] UIO1 Verified numeric move/Undo/Redo, Move/Rotate/nonuniform Scale, selection switching and perspective; reproduced lost G/R/S after inspector submission and sidebar selection, and ignored Escape after palette activation. `depends:none` `parallel:none`
 - [x] UIO2 Assign numeric submission focus to one host owner and restore workspace focus at shared selection/tool entry points; 11 native input tests passed, including the production MainView regression (`dd81edde`). `depends:UIO1` `parallel:none`
 - [x] UIO3 Signed app rebuilt and restarted (PID 89011, installed/build dylib SHA-256 matched); preserved document 5C035F85 reopened. Sidebar selection to Move, inspector Return to Rotate, and incomplete numeric input to Sketch/Escape all passed without a canvas click. Position restored with Undo and document saved; coverage is limited to the recorded workflows. `depends:UIO1,UIO2` `parallel:none`
+
+- [ ] HR Second hot-path pass: repeated whole-document work on edits, publications, pointer moves and renders is prepared once per document generation or input. `depends:HPF` `parallel:none`
+  - [x] HR1 Per-publication and per-render scans: CAD context per presented item against one body index, pattern-owned nodes found once per validation or move, the Outliner projection kept per input. `depends:none` `parallel:none`

@@ -21,6 +21,9 @@ struct Outliner: View {
     @State private var dragSession: OutlinerMoveDragSession?
     @State private var dropDestination: OutlinerDropDestination?
     @State private var hoveredRowID: SceneNodeID?
+    /// The projection for the inputs it was made from: the body runs on every row hover and every
+    /// parent render, and the projection walks every scene node.
+    @State private var projectionCache = MemoizedResults<ProjectionKey, OutlinerProjection, Never>()
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @FocusState private var focusedRenameID: SceneNodeID?
 
@@ -29,7 +32,7 @@ struct Outliner: View {
     init(
         metadata: ProductMetadata,
         selectedIDs: Set<SceneNodeID>,
-        generation: DocumentGeneration = DocumentGeneration(0),
+        generation: DocumentGeneration,
         canFrameSelection: Bool = false,
         pendingStateIDs: Set<SceneNodeID> = [],
         searchText: Binding<String>,
@@ -45,13 +48,25 @@ struct Outliner: View {
         self._expandedIDs = State(initialValue: Set(metadata.rootSceneNodeIDs))
     }
 
+    /// The inputs a projection is made from; `generation` stands for `metadata`, which changes
+    /// only with it.
+    private struct ProjectionKey: Equatable {
+        var generation: DocumentGeneration
+        var expandedIDs: Set<SceneNodeID>
+        var searchText: String
+        var filter: OutlinerVisibilityFilter
+    }
+
     private func makeProjection() -> OutlinerProjection {
-        OutlinerProjection.make(
-            metadata: metadata,
-            expandedIDs: expandedIDs,
-            searchText: searchText,
-            filter: filter
-        )
+        let key = ProjectionKey(generation: generation, expandedIDs: expandedIDs, searchText: searchText, filter: filter)
+        return projectionCache.value(for: key) {
+            OutlinerProjection.make(
+                metadata: metadata,
+                expandedIDs: expandedIDs,
+                searchText: searchText,
+                filter: filter
+            )
+        }
     }
 
     var body: some View {
@@ -124,15 +139,14 @@ struct Outliner: View {
                 operation: "Outliner"
             )
         }
-        .onChange(of: metadata) { _, _ in
+        // The metadata changes only with the generation, so the generation answers for it without
+        // comparing the whole metadata on every render.
+        .onChange(of: generation) { _, _ in
             cancelDrag()
             expandedIDs = expandedIDs.intersection(Set(metadata.sceneNodes.keys))
             if let renamingID, metadata.sceneNodes[renamingID] == nil {
                 cancelRename()
             }
-        }
-        .onChange(of: generation) { _, _ in
-            cancelDrag()
         }
     }
 

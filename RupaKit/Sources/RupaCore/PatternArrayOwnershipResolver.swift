@@ -29,6 +29,21 @@ struct PatternArrayOwnershipResolver {
         }?.key
     }
 
+    /// Every scene node a pattern array owns: each array's root and everything below it, the set
+    /// `sourceID(containingOutputSceneNode:in:)` answers one node at a time. A check over many
+    /// nodes asks it once instead of walking every array's outputs per node.
+    func outputSceneNodeIDs(in metadata: ProductMetadata) -> Set<SceneNodeID> {
+        var owned: Set<SceneNodeID> = []
+        for source in metadata.patternArrays.values where metadata.sceneNodes[source.rootSceneNodeID] != nil {
+            var pending = [source.rootSceneNodeID]
+            while let id = pending.popLast() {
+                guard owned.insert(id).inserted, let node = metadata.sceneNodes[id] else { continue }
+                pending.append(contentsOf: node.childIDs)
+            }
+        }
+        return owned
+    }
+
     func sourceID(
         containingOutputSceneNode sceneNodeID: SceneNodeID,
         in metadata: ProductMetadata

@@ -33,35 +33,35 @@ final class WorkspaceDocumentAnalysisCache {
         var query: SectionAnalysisQuery
     }
 
-    let surfaceAnalysis = MemoizedResults<SurfaceAnalysisKey, SurfaceAnalysisResult>()
-    let surfaceContinuity = MemoizedResults<SurfaceContinuityKey, RupaCore.SurfaceContinuityResult>()
-    let surfaceSourceSummary = MemoizedResults<SurfaceSourceSummaryKey, SurfaceSourceSummaryResult>()
+    let surfaceAnalysis = MemoizedResults<SurfaceAnalysisKey, SurfaceAnalysisResult, any Error>()
+    let surfaceContinuity = MemoizedResults<SurfaceContinuityKey, RupaCore.SurfaceContinuityResult, any Error>()
+    let surfaceSourceSummary = MemoizedResults<SurfaceSourceSummaryKey, SurfaceSourceSummaryResult, any Error>()
     /// The command's section and the selected construction plane's section can show together.
-    let sectionAnalysis = MemoizedResults<SectionAnalysisKey, SectionAnalysisResult>(capacity: 2)
+    let sectionAnalysis = MemoizedResults<SectionAnalysisKey, SectionAnalysisResult, any Error>(capacity: 2)
     /// Every shared definition's selection, read by each sidebar row and the inspector.
     let sharedDefinitions = MemoizedResults<
-        DocumentGeneration, [ComponentDefinitionID: Result<SharedDefinitionSelection, any Error>]
+        DocumentGeneration, [ComponentDefinitionID: Result<SharedDefinitionSelection, any Error>], any Error
     >()
 }
 
 /// The results made for the most recent distinct keys, failures included, so a failing input is
-/// not retried on every read either.
-final class MemoizedResults<Key: Equatable, Value> {
+/// not retried on every read either. `Failure` is `Never` for a value that cannot fail.
+final class MemoizedResults<Key: Equatable, Value, Failure: Error> {
     private let capacity: Int
-    private var entries: [(key: Key, result: Result<Value, any Error>)] = []
+    private var entries: [(key: Key, result: Result<Value, Failure>)] = []
 
     init(capacity: Int = 1) {
         precondition(capacity > 0, "A memo holds at least one result.")
         self.capacity = capacity
     }
 
-    func value(for key: Key, make: () throws -> Value) throws -> Value {
+    func value(for key: Key, make: () throws(Failure) -> Value) throws(Failure) -> Value {
         if let index = entries.firstIndex(where: { $0.key == key }) {
             let entry = entries.remove(at: index)
             entries.append(entry)
             return try entry.result.get()
         }
-        let result = Result { try make() }
+        let result = Result<Value, Failure> { () throws(Failure) -> Value in try make() }
         entries.append((key, result))
         if entries.count > capacity {
             entries.removeFirst(entries.count - capacity)

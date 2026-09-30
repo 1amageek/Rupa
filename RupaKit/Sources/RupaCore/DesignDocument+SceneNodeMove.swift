@@ -41,6 +41,7 @@ extension DesignDocument {
         }
 
         let componentSourceIDs = componentDefinitionSourceSceneNodeIDs(in: productMetadata)
+        let patternOwnedSceneNodeIDs = PatternArrayOwnershipResolver().outputSceneNodeIDs(in: productMetadata)
         for id in selectedIDs where componentSourceIDs.contains(id) {
             throw sceneMoveCommandError("Move the shared definition's complete root instead of its internal geometry.")
         }
@@ -48,7 +49,8 @@ extension DesignDocument {
             if let reason = sceneMoveOwnershipReason(
                 for: id,
                 metadata: productMetadata,
-                componentSourceIDs: []
+                componentSourceIDs: [],
+                patternOwnedSceneNodeIDs: patternOwnedSceneNodeIDs
             ) {
                 throw sceneMoveCommandError(reason)
             }
@@ -77,7 +79,8 @@ extension DesignDocument {
             if let reason = sceneMoveOwnershipReason(
                 for: parentID,
                 metadata: productMetadata,
-                componentSourceIDs: componentSourceIDs.union(productMetadata.componentDefinitions.values.flatMap(\.rootSceneNodeIDs))
+                componentSourceIDs: componentSourceIDs.union(productMetadata.componentDefinitions.values.flatMap(\.rootSceneNodeIDs)),
+                patternOwnedSceneNodeIDs: patternOwnedSceneNodeIDs
             ) {
                 throw sceneMoveCommandError("Scene node move destination is source-owned: " + reason)
             }
@@ -234,10 +237,10 @@ private func componentDefinitionSourceSceneNodeIDs(
 private func sceneMoveOwnershipReason(
     for id: SceneNodeID,
     metadata: ProductMetadata,
-    componentSourceIDs: Set<SceneNodeID>
+    componentSourceIDs: Set<SceneNodeID>,
+    patternOwnedSceneNodeIDs: Set<SceneNodeID>
 ) -> String? {
-    let patternResolver = PatternArrayOwnershipResolver()
-    if patternResolver.sourceID(containingOutputSceneNode: id, in: metadata) != nil {
+    if patternOwnedSceneNodeIDs.contains(id) {
         return "Pattern roots and generated Pattern output scene nodes are source-owned."
     }
     if metadata.sceneNodes[id]?.reference?.constructionPlaneID != nil {

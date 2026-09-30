@@ -10,35 +10,35 @@ import Testing
     }
 
     @Test func aResultIsMadeOncePerKey() throws {
-        let memo = MemoizedResults<Int, String>()
+        let memo = MemoizedResults<Int, String, Never>()
         var makes = 0
         func make() -> String { makes += 1; return "made \(makes)" }
-        #expect(try memo.value(for: 1, make: make) == "made 1")
-        #expect(try memo.value(for: 1, make: make) == "made 1")
+        #expect(memo.value(for: 1, make: make) == "made 1")
+        #expect(memo.value(for: 1, make: make) == "made 1")
         #expect(makes == 1)
-        #expect(try memo.value(for: 2, make: make) == "made 2")
-        #expect(try memo.value(for: 1, make: make) == "made 3", "one entry keeps only the latest key")
+        #expect(memo.value(for: 2, make: make) == "made 2")
+        #expect(memo.value(for: 1, make: make) == "made 3", "one entry keeps only the latest key")
     }
 
     @Test func theRecentKeysAreKeptUpToTheCapacity() throws {
-        let memo = MemoizedResults<Int, Int>(capacity: 2)
+        let memo = MemoizedResults<Int, Int, Never>(capacity: 2)
         var makes = 0
         func make() -> Int { makes += 1; return makes }
-        _ = try memo.value(for: 1, make: make)
-        _ = try memo.value(for: 2, make: make)
-        _ = try memo.value(for: 1, make: make)
+        _ = memo.value(for: 1, make: make)
+        _ = memo.value(for: 2, make: make)
+        _ = memo.value(for: 1, make: make)
         #expect(makes == 2)
-        _ = try memo.value(for: 3, make: make)   // evicts 2, the least recently read
-        _ = try memo.value(for: 1, make: make)
+        _ = memo.value(for: 3, make: make)   // evicts 2, the least recently read
+        _ = memo.value(for: 1, make: make)
         #expect(makes == 3)
-        _ = try memo.value(for: 2, make: make)
+        _ = memo.value(for: 2, make: make)
         #expect(makes == 4)
     }
 
     @Test func aFailureIsKeptAndNotRetriedForTheSameKey() {
-        let memo = MemoizedResults<Int, Int>()
+        let memo = MemoizedResults<Int, Int, Failure>()
         var makes = 0
-        func make() throws -> Int { makes += 1; throw Failure.refused }
+        func make() throws(Failure) -> Int { makes += 1; throw Failure.refused }
         #expect(throws: Failure.self) { try memo.value(for: 1, make: make) }
         #expect(throws: Failure.self) { try memo.value(for: 1, make: make) }
         #expect(makes == 1)

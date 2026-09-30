@@ -929,6 +929,9 @@ as spheres elsewhere.
    `ViewportScene.firstItem(sceneNodeID:)` and `firstItem(featureID:)`, an
    index the scene keeps with its items, instead of scanning the items once
    per selected target.
+   Which presented items carry an exact CAD context is decided against one
+   `MeshSourcePresentationEvaluatedBodies` index of the evaluation's bodies,
+   not a scan of the whole subshape table per item.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

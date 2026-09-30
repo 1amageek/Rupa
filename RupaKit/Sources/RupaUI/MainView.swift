@@ -3080,6 +3080,8 @@ private struct ProjectMainViewContent: View {
         snapshot: ProjectViewSnapshot
     ) -> Set<SceneNodeID> {
         let resolver = MeshSourcePresentationCADAffordanceResolver()
+        // One index of the evaluation's bodies serves every presented item.
+        let evaluatedBodies = snapshot.cadInteraction.map { MeshSourcePresentationEvaluatedBodies($0.evaluatedDocument) }
         var availableCounts: [SceneNodeID: Int] = [:]
         var unavailableSceneNodeIDs: Set<SceneNodeID> = []
         for item in snapshot.viewport.items {
@@ -3091,7 +3093,8 @@ private struct ProjectMainViewContent: View {
                       sceneNodeID: sceneNodeID,
                       document: snapshot.document.document,
                       generation: snapshot.documentGeneration,
-                      cadInteraction: snapshot.cadInteraction
+                      cadInteraction: snapshot.cadInteraction,
+                      evaluatedBodies: evaluatedBodies
                   ) else {
                 unavailableSceneNodeIDs.insert(sceneNodeID)
                 continue

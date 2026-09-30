@@ -1606,6 +1606,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
 
     private func validateComponentDefinitions() throws {
         var names: Set<String> = []
+        // Which nodes pattern arrays own is found once, not by walking every array's outputs for
+        // every definition root.
+        let patternOwnedSceneNodeIDs = componentDefinitions.isEmpty
+            ? [] : PatternArrayOwnershipResolver().outputSceneNodeIDs(in: self)
         for (definitionID, definition) in componentDefinitions {
             guard definition.id == definitionID else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -1625,10 +1629,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                         "Component definition root scene node references a missing node."
                     )
                 }
-                guard PatternArrayOwnershipResolver().sourceID(
-                    containingOutputSceneNode: rootSceneNodeID,
-                    in: self
-                ) == nil else {
+                guard !patternOwnedSceneNodeIDs.contains(rootSceneNodeID) else {
                     throw DocumentValidationError.invalidProductMetadata(
                         "Component definition root scene nodes must not reference source-owned pattern array outputs."
                     )

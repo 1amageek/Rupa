@@ -540,6 +540,10 @@ IDs and do not mutate `ProductMetadata` directly.
    Product scene node that references a ComponentInstance is an occurrence
    placement and is not rejected solely for being an instance; generated
    Pattern occurrences remain source-owned through the Pattern resolver.
+   Which nodes pattern arrays own is found once per check
+   (`PatternArrayOwnershipResolver.outputSceneNodeIDs`), for a move's whole
+   subtree and for validating every definition root, instead of walking every
+   array's outputs per node.
 3. A same-parent reorder changes only the parent child/root ID arrays. Every
    selected node's `localTransform` remains bit-for-bit unchanged. A reparent
    computes each moved root's old world transform before changing hierarchy

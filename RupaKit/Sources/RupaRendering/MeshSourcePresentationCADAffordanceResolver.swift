@@ -5,6 +5,30 @@ import RupaCoreTypes
 import RupaProjectModel
 import RupaViewportScene
 
+/// Every feature's evaluated bodies, from one pass over an evaluation's subshape table: resolving
+/// each presented item scanned the whole table, so a scene of many items was quadratic.
+public struct MeshSourcePresentationEvaluatedBodies: Sendable {
+    private let bodyIDsByFeatureID: [FeatureID: [BodyID]]
+
+    public init(_ evaluatedDocument: EvaluatedDocument) {
+        var bodyIDsByFeatureID: [FeatureID: [BodyID]] = [:]
+        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
+            guard case let .body(bodyID) = reference,
+                  evaluatedDocument.brep.bodies[bodyID] != nil else {
+                continue
+            }
+            if bodyIDsByFeatureID[subshapeID.featureID, default: []].contains(bodyID) == false {
+                bodyIDsByFeatureID[subshapeID.featureID, default: []].append(bodyID)
+            }
+        }
+        self.bodyIDsByFeatureID = bodyIDsByFeatureID
+    }
+
+    public func bodyIDs(for featureID: FeatureID) -> [BodyID] {
+        bodyIDsByFeatureID[featureID] ?? []
+    }
+}
+
 public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentationCADAffordanceResolving {
     public init() {}
 
@@ -32,7 +56,8 @@ public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentatio
         sceneNodeID: SceneNodeID,
         document: DesignDocument,
         generation: DocumentGeneration,
-        cadInteraction: DocumentEvaluationContext?
+        cadInteraction: DocumentEvaluationContext?,
+        evaluatedBodies: MeshSourcePresentationEvaluatedBodies? = nil
     ) -> MeshSourcePresentationCADAffordanceAvailability {
         guard case let .cad(sourceID, outputID) = item.reference else {
             return .unavailable(.nonCADPresentation)
@@ -70,11 +95,10 @@ public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentatio
             return .unavailable(.staleCADInteractionContext)
         }
 
-        let evaluatedDocument = cadInteraction.evaluatedDocument
-        let bodyIDs = bodyIDs(
-            for: featureID,
-            in: evaluatedDocument
-        )
+        // A caller resolving many items hands one index of the evaluation's bodies; a single
+        // resolution builds its own.
+        let bodyIDs = (evaluatedBodies ?? MeshSourcePresentationEvaluatedBodies(cadInteraction.evaluatedDocument))
+            .bodyIDs(for: featureID)
         guard bodyIDs.count == 1, let bodyID = bodyIDs.first else {
             if bodyIDs.isEmpty {
                 return .unavailable(.missingEvaluatedBody)
@@ -93,23 +117,5 @@ public struct MeshSourcePresentationCADAffordanceResolver: MeshSourcePresentatio
                 sourceReference: item.reference
             )
         )
-    }
-
-    private func bodyIDs(
-        for featureID: FeatureID,
-        in evaluatedDocument: EvaluatedDocument
-    ) -> [BodyID] {
-        var bodyIDs: [BodyID] = []
-        for (subshapeID, reference) in evaluatedDocument.subshapes.entries {
-            guard subshapeID.featureID == featureID,
-                  case let .body(bodyID) = reference,
-                  evaluatedDocument.brep.bodies[bodyID] != nil else {
-                continue
-            }
-            if bodyIDs.contains(bodyID) == false {
-                bodyIDs.append(bodyID)
-            }
-        }
-        return bodyIDs
     }
 }
