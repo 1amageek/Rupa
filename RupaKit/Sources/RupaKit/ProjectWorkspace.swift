@@ -776,8 +776,9 @@ public final class ProjectWorkspace: ProjectMakeEditable, ProjectMeshEditing, Pr
         _ state: ProjectStateSnapshot
     ) async throws -> ProjectViewSnapshot {
         let builder = viewBuilder
+        let previous = view
         let candidate = try await Task.detached(priority: nil) {
-            try builder.build(from: state)
+            try builder.build(from: state, reusing: previous)
         }.value
         if let view {
             if candidate.publicationSequence > view.publicationSequence {

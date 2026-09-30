@@ -22,6 +22,14 @@ public struct ProjectViewSnapshotBuilder:
     }
 
     public func build(from state: ProjectStateSnapshot) throws -> ProjectViewSnapshot {
+        try build(from: state, reusing: nil)
+    }
+
+    /// A selection change publishes a new state of the same document: the same lifetime,
+    /// generation, transaction revision, presentation evaluation and workspace revision. Its view
+    /// then keeps `previous`'s validated document, presentation scene and navigation, which
+    /// depend only on those, instead of validating, projecting and resolving them again.
+    public func build(from state: ProjectStateSnapshot, reusing previous: ProjectViewSnapshot?) throws -> ProjectViewSnapshot {
         guard state.evaluationSource.id == state.document.projectID,
               state.evaluation.projectID == state.evaluationSource.id,
               state.evaluation.id.projectID == state.evaluationSource.id else {
@@ -53,15 +61,31 @@ public struct ProjectViewSnapshotBuilder:
             )
         }
 
-        let previewProjection = try buildPreviewProjection(
-            document: state.document,
-            evaluationSource: state.evaluationSource,
-            evaluation: state.evaluation
-        )
-        let document = try ProjectReadDocument(
-            document: state.document,
-            objectRegistry: state.objectRegistry
-        )
+        let document: ProjectReadDocument
+        let viewport: UniversalViewportScene
+        let sceneNodeIDByOccurrenceID: [SceneOccurrenceID: SceneNodeID]
+        if let previous,
+           previous.documentLifetimeID == state.documentLifetimeID,
+           previous.documentGeneration == state.documentGeneration,
+           previous.transactionRevision == state.transactionRevision,
+           previous.viewport.snapshotID == state.evaluation.id,
+           previous.workspaceState.revision == state.workspaceState.revision {
+            document = previous.document
+            viewport = previous.viewport
+            sceneNodeIDByOccurrenceID = previous.sceneNodeIDByOccurrenceID
+        } else {
+            let previewProjection = try buildPreviewProjection(
+                document: state.document,
+                evaluationSource: state.evaluationSource,
+                evaluation: state.evaluation
+            )
+            document = try ProjectReadDocument(
+                document: state.document,
+                objectRegistry: state.objectRegistry
+            )
+            viewport = previewProjection.scene
+            sceneNodeIDByOccurrenceID = previewProjection.sceneNodeIDByOccurrenceID
+        }
 
         return ProjectViewSnapshot(
             documentLifetimeID: state.documentLifetimeID,
@@ -78,9 +102,9 @@ public struct ProjectViewSnapshotBuilder:
             workspaceState: state.workspaceState,
             objectRegistry: state.objectRegistry,
             evaluationSnapshot: state.evaluationSnapshot,
-            viewport: previewProjection.scene,
+            viewport: viewport,
             cadInteraction: state.cadInteraction,
-            sceneNodeIDByOccurrenceID: previewProjection.sceneNodeIDByOccurrenceID,
+            sceneNodeIDByOccurrenceID: sceneNodeIDByOccurrenceID,
             retiredObjectProperties: state.retiredObjectProperties
         )
     }

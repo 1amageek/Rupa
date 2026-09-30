@@ -379,6 +379,13 @@ MainActor, and revalidates the exact view before returning.
 ## State, Ownership, and Lifecycle
 
 - `ProjectViewSnapshot` is the caller's immutable observation anchor.
+- A publication of the same document state (same lifetime, generation,
+  transaction revision, presentation evaluation and workspace revision, as a
+  selection change is) builds its view reusing the previous view's validated
+  document, presentation scene and navigation
+  (`ProjectViewSnapshotBuilding.build(from:reusing:)`); every other
+  publication, and `recoverCommittedView`, builds the view whole. A builder
+  that keeps nothing between views takes the protocol's whole-build default.
 - `ProjectViewSnapshot.retiredObjectProperties` carries, unchanged, the values
   the load's object schema migration retired. The
   [RupaProject design](../RupaProject/DESIGN.md) owns what that list means;
