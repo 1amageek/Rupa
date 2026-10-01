@@ -685,6 +685,27 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - expected) < 1e-11)
     }
 
+    @Test func everyEdgeOfABoxChamfersOnTheirPlanes() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edges = try topology.entries.filter { $0.kind == .edge }.map { try #require($0.selectionTarget()) }
+        var draft = makeDraft(.chamfer, targets: edges)
+        draft.distance = "3 mm"
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let (s, d) = (0.02, 0.003)
+        // Each edge's triangle along it, less d³/3 per meeting pair, plus d³/4 per corner.
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (s * s * s - 6 * d * d * s + 6 * d * d * d)) < 1e-11)
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

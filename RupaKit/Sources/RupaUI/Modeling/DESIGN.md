@@ -244,8 +244,8 @@ and an amount above modeling tolerance, except Fillet's Full shape, which takes
 the two edges on either side of a face and no amount (`fullFillet(across:)`).
 Several distinct edges of one body take the same treatment in turn
 (`several(_:more:)`); edges that meet join at the kernel's mitres, and three
-square edges rounded at a corner close on its rolling ball (other shapes there
-are refused by the kernel).
+square edges rounded at a corner close on its rolling ball; chamfers that meet
+close on their planes (other curved shapes at a corner are refused by the kernel).
 Fillet's End radius makes one edge's fillet vary from the radius at its start to
 it at its end (`variableFillet`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
