@@ -692,6 +692,14 @@ struct ModelingOperationDraftTests {
         // its rational face's area measured within its approximation (FB23.3), not exactly.
         let expected = 2 * 0.04 * 0.035 + Double.pi / 2 * 0.005 * 0.04
         #expect(abs(measurement.totals.sheetAreaSquareMeters - expected) < 1e-6)
+
+        // A G2 blend of the bend is a sheet as well.
+        var blend = makeDraft(.g2Blend, targets: [bend])
+        blend.distance = "5 mm"
+        let blended = CADDocumentStore(document: document)
+        _ = try blended.apply(blend.command(in: document))
+        let blendMeasurement = try MeasurementService().measure(document: blended.document, ruler: .standard(for: .meter))
+        #expect(blendMeasurement.counts.sheets == 1 && blendMeasurement.counts.solids == 0)
     }
 
     @Test func aPatchSpansAClosedLoopOfCurves() throws {

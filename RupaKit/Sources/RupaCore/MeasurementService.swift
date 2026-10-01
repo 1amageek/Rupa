@@ -1234,7 +1234,11 @@ public struct MeasurementService {
             case .chamfer(let chamfer):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: chamfer.target.featureID, operationName: "Chamfer")
             case .g2Blend(let blend):
-                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: blend.target.featureID, operationName: "G2 Blend")
+                if node.outputs.contains(where: { $0.role == .sheet }) {
+                    try measureEvaluatedSheetCase(node: node, featureID: featureID, sourceFeatureID: blend.target.featureID, operationName: "G2 Blend")
+                } else {
+                    try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: blend.target.featureID, operationName: "G2 Blend")
+                }
             case .setbackCorner(let corner):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: corner.target.featureID, operationName: "Setback Corner")
             case .patchSurface,
