@@ -526,6 +526,7 @@ struct ModelingOperationDraftTests {
         #expect(loftOptions.simplify)
         #expect(sections.map { $0.continuity?.order } == [.tangent, .curvature])
         #expect(sections.allSatisfy { $0.continuity?.tension == 1.2 })
+        #expect(sections.allSatisfy { abs(($0.continuity?.angularAllowance ?? 0) - 0.1 * Double.pi / 180) < 1e-15 })
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
