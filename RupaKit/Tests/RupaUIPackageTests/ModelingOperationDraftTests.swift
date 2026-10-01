@@ -552,6 +552,36 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func aConicFilletRoundsABoxEdge() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // The top edge along X at y = 0.
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "4 mm"
+        draft.filletShape = .conic
+        guard case .createBodyEdgeTreatment(_, _, let treatment) = try draft.command(in: document),
+              case .shapedFillet(_, let shape, let tension) = treatment else {
+            Issue.record("Expected a shaped fillet.")
+            return
+        }
+        #expect(shape == .conic && tension == nil)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let evaluated = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)
+        // A parabola (rho 0.5) removes a sixth of the 4 mm square's corner along the 20 mm edge.
+        #expect(abs(try evaluated.brep.volume(tolerance: .standard) - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
+    }
+
     @Test func fourCurvesFrameAFlatSquare() throws {
         var document = DesignDocument.empty()
         let ends = [(0.0, 0.0, 0.02, 0.0), (0.02, 0.0, 0.02, 0.02), (0.02, 0.02, 0.0, 0.02), (0.0, 0.02, 0.0, 0.0)]

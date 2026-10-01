@@ -241,6 +241,25 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var sweepGuide = SweepGuideChoice.point
+    /// Fillet Shell's Shape: Round, or a conic, chordal or curvature (G2) cross-section with Tension.
+    enum FilletShapeChoice: String, CaseIterable, Identifiable {
+        case round = "Round"
+        case conic = "Conic"
+        case chordal = "Chordal"
+        case curvature = "G2"
+        var id: Self { self }
+        var shape: FilletShape {
+            switch self {
+            case .round: .round
+            case .conic: .conic
+            case .chordal: .chordal
+            case .curvature: .curvature
+            }
+        }
+        var takesTension: Bool { self == .conic || self == .curvature }
+    }
+    var filletShape = FilletShapeChoice.round
+    var filletTension = ""
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -843,9 +862,13 @@ struct ModelingOperationDraft: Equatable {
                 throw invalid("Select one generated CAD edge. Multi-edge blends are not supported by this operation.")
             }
             let amount = try topologyLength(distance,
-                label: kind == .fillet ? "Radius" : "Distance", in: document)
+                label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", in: document)
             let treatment: BodyEdgeTreatment
             switch kind {
+            case .fillet where filletShape != .round:
+                let text = filletTension.trimmingCharacters(in: .whitespaces)
+                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                treatment = .shapedFillet(distance: amount, shape: filletShape.shape, tension: tension)
             case .fillet: treatment = .fillet(radius: amount)
             case .chamfer: treatment = .chamfer(distance: amount)
             default: treatment = .g2Blend(distance: amount)

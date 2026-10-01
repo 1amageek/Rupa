@@ -380,7 +380,14 @@ struct ModelingOperationView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
         case .fillet:
-            lengthField("Radius", text: $draft.distance)
+            Picker("Shape", selection: $draft.filletShape) {
+                ForEach(ModelingOperationDraft.FilletShapeChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+            if draft.filletShape.takesTension {
+                TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)
+            }
         case .chamfer, .g2Blend:
             lengthField("Distance", text: $draft.distance)
         case .patch, .bridge:
