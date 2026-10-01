@@ -15,7 +15,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     case fullFillet(across: SelectionTarget)
     /// A fillet of `shape` (tension where it takes one) varying from `radius` at the edge's start to
     /// `endRadius` at its end.
-    case variableFillet(radius: CADExpression, endRadius: CADExpression, shape: FilletShape, tension: Double?)
+    /// `points` set the radius between the ends, the radius varying linearly from point to point.
+    case variableFillet(radius: CADExpression, endRadius: CADExpression, shape: FilletShape, tension: Double?,
+                        points: [FilletVariablePoint] = [])
     /// A constant fillet of `shape` (tension where it takes one) over the stretch of the edge
     /// between its `limits`, the edge left sharp beyond them.
     case limitedFillet(distance: CADExpression, shape: FilletShape, tension: Double?, limits: EdgeBlendLimits)
@@ -58,10 +60,16 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
         case .g2Blend(let distance):
             amount = distance
             operation = .g2Blend(.init(target: .init(featureID: sourceID), edges: [reference], distance: distance))
-        case .variableFillet(let radius, let endRadius, let shape, let tension):
+        case .variableFillet(let radius, let endRadius, let shape, let tension, let points):
             amount = radius
             let fillet = FilletFeature(target: .init(featureID: sourceID), edges: [reference], radius: radius,
-                                       shape: shape, tension: tension, endRadius: endRadius)
+                                       shape: shape, tension: tension, endRadius: endRadius, variablePoints: points)
+            for point in points {
+                guard try document.resolvedPositiveLengthValue(point.radius, owner: "Fillet variable point radius")
+                        > document.modelingSettings.tolerance.distance else {
+                    throw EditorError(code: .commandInvalid, message: "A fillet's variable point radius must exceed modeling tolerance.")
+                }
+            }
             do { try fillet.validate() } catch {
                 throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
             }

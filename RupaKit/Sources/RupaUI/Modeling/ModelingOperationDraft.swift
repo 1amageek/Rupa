@@ -308,6 +308,8 @@ struct ModelingOperationDraft: Equatable {
     var chamferFlipped = false
     /// A variable fillet's radius at the edge's end; blank for a constant one.
     var filletEndRadius = ""
+    /// A fillet's variable points, "fraction@radius" separated by commas; blank for none.
+    var filletVariablePoints = ""
     /// A fillet's limit points as fractions of the edge from its start; both blank for the whole edge.
     var filletLimitStart = ""
     var filletLimitEnd = ""
@@ -1004,12 +1006,21 @@ struct ModelingOperationDraft: Equatable {
                     throw invalid("Limits lie within the edge, 0 ≤ start < end ≤ 1, and limit it somewhere.")
                 }
                 treatment = .limitedFillet(distance: amount, shape: filletShape.shape, tension: tension, limits: limits)
-            case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false:
+            case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false
+                || filletVariablePoints.trimmingCharacters(in: .whitespaces).isEmpty == false:
                 guard edges.count == 1 else { throw invalid("A variable fillet rounds one edge.") }
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
                 let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
-                treatment = .variableFillet(radius: amount, endRadius: try topologyLength(filletEndRadius, label: "End radius", in: document),
-                                            shape: filletShape.shape, tension: tension)
+                let endText = filletEndRadius.trimmingCharacters(in: .whitespaces)
+                let points = try filletVariablePoints.split(separator: ",").map { entry -> FilletVariablePoint in
+                    let parts = entry.split(separator: "@", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+                    guard parts.count == 2 else { throw invalid("A variable point is written as fraction@radius.") }
+                    return FilletVariablePoint(position: try number(parts[0], label: "Variable point position"),
+                                               radius: try topologyLength(parts[1], label: "Variable point radius", in: document))
+                }
+                treatment = .variableFillet(radius: amount,
+                                            endRadius: endText.isEmpty ? amount : try topologyLength(endText, label: "End radius", in: document),
+                                            shape: filletShape.shape, tension: tension, points: points)
             case .fillet where filletShape != .round:
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
                 let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil

@@ -393,6 +393,7 @@ struct ModelingOperationView: View {
             } else {
                 lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
                 lengthField("End radius (variable; blank for constant)", text: $draft.filletEndRadius)
+                TextField("Variable points (fraction@radius, …)", text: $draft.filletVariablePoints)
                 TextField("Limit start (fraction of the edge; blank 0)", text: $draft.filletLimitStart)
                 TextField("Limit end (fraction of the edge; blank 1)", text: $draft.filletLimitEnd)
             }

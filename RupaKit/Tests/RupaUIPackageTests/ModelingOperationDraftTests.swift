@@ -775,6 +775,38 @@ struct ModelingOperationDraftTests {
         }
     }
 
+    @Test func variablePointsSetTheRadiusAlongTheEdge() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "2 mm"
+        draft.filletVariablePoints = "0.5@5 mm"
+        guard case .createBodyEdgeTreatment(_, _, .variableFillet(_, _, .round, nil, let points)) = try draft.command(in: document) else {
+            Issue.record("Expected a fillet with a variable point.")
+            return
+        }
+        #expect(points.map(\.position) == [0.5])
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // Each half's radius runs linearly between 2 and 5 mm.
+        let (a, b, s) = (0.002, 0.005, 0.02)
+        let removed = 2 * (1 - Double.pi / 4) * (a * a + a * b + b * b) / 3 * s / 2
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (s * s * s - removed)) < 1e-11)
+        draft.filletVariablePoints = "0.5"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test func limitPointsRoundOnlyTheirStretchOfTheEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
