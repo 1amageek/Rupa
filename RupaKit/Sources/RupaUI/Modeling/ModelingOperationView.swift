@@ -405,8 +405,11 @@ struct ModelingOperationView: View {
                 TextField("Tension", text: $draft.bridgeTension)
             }
             Toggle("Reverse sense", isOn: $draft.bridgeReversesSense)
-            Toggle("Trim walls", isOn: $draft.bridgeTrimsWalls)
-                .help("Cut both sheets back to the bridge and join them with it into one sheet.")
+            Picker("Trim walls", selection: $draft.bridgeTrim) {
+                ForEach(ModelingOperationDraft.BridgeTrimChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            .help("Cut both sheets, or the one reaching less (Short) or more (Long) far from where they meet, back to the bridge and join them with it into one sheet.")
             Text("Select two planar sheets. The bridge meets each the width from where their planes meet, G2 with both, or chamfers across.")
                 .font(.caption).foregroundStyle(.secondary)
         case .square:

@@ -550,26 +550,23 @@ extension DesignDocument {
     }
 
     /// Adds a Bridge Surface between two sheets as a sheet of its own; both sheets must be shown
-    /// where they were built.
+    /// where they were built. `wallByReach` (Short or Long) names the trimmed wall by how far it
+    /// reaches from where the sheets meet, resolved against the evaluated sheets into the first or
+    /// second; the bridge must then trim no walls itself. A trimmed sheet's object is taken away.
     @discardableResult
     public mutating func createBridgeSurface(
         name: String,
         bridge: SheetBridgeFeature,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        wallByReach: SheetBridgeWallReach.Wall? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Bridge Surface")
         do {
             try bridge.validate()
         } catch {
             throw EditorError(code: .commandInvalid, message: "Bridge Surface command is invalid: \(error).")
-        }
-        guard bridge.trimWalls == .none || bridge.trimWalls == .both else {
-            // FIXME(INCOMPLETE_IMPLEMENTATION): Short and Long trim the wall the kernel finds
-            // shorter or longer, which Core cannot supersede before evaluation, so only None and
-            // Both are admitted. Production path: DesignDocument.createBridgeSurface. Complete only
-            // when the trimmed wall's object is retired from the evaluation, verified by a Short
-            // bridge whose other sheet stays shown.
-            throw EditorError(code: .commandInvalid, message: "Bridge Surface trims no walls or both.")
         }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         for sheet in [bridge.first, bridge.second] {
@@ -580,6 +577,24 @@ extension DesignDocument {
             guard try hierarchy.worldTransform(of: node) == .identity else {
                 throw EditorError(code: .commandInvalid,
                     message: "A Bridge Surface's sheets must be shown where they were built; this one has been moved.")
+            }
+        }
+        var bridge = bridge
+        if let wallByReach {
+            guard bridge.trimWalls == .none else {
+                throw EditorError(code: .commandInvalid, message: "A Bridge Surface trims its walls by reach or by name, not both.")
+            }
+            let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
+                document: self, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                failurePrefix: "Bridge Surface requires its sheets evaluated"
+            )
+            do {
+                bridge.trimWalls = try SheetBridgeWallReach().trimWalls(
+                    wallByReach, first: bridge.first, second: bridge.second, reversesSense: bridge.reversesSense, in: evaluated
+                )
+            } catch let error as KernelError {
+                throw EditorError(code: .commandInvalid, message: "Bridge Surface: \(error.message)")
             }
         }
         let featureID = FeatureID()
@@ -601,8 +616,11 @@ extension DesignDocument {
             object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
                           geometryRole: .surface, objectRegistry: objectRegistry)
         )
-        if bridge.trimWalls == .both {
-            try removeSceneNodes(presenting: [bridge.first, bridge.second])
+        switch bridge.trimWalls {
+        case .none: break
+        case .both: try removeSceneNodes(presenting: [bridge.first, bridge.second])
+        case .first: try removeSceneNodes(presenting: [bridge.first])
+        case .second: try removeSceneNodes(presenting: [bridge.second])
         }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)

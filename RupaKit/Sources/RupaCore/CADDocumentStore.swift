@@ -3000,11 +3000,14 @@ public final class CADDocumentStore {
             try run()
         case .createBridgeSurface:
             func run() throws {
-                guard case .createBridgeSurface(let name, let bridge) = command else {
+                guard case .createBridgeSurface(let name, let bridge, let wallByReach) = command else {
                     throw EditorError(code: .commandInvalid, message: "Command dispatch expected createBridgeSurface.")
                 }
                 var updatedDocument = document
-                primaryFeatureID = try updatedDocument.createBridgeSurface(name: name, bridge: bridge, objectRegistry: objectRegistry)
+                primaryFeatureID = try updatedDocument.createBridgeSurface(
+                    name: name, bridge: bridge, wallByReach: wallByReach, objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: generation
+                )
                 document = updatedDocument
                 try commitMutation()
                 evaluateCurrentDocument()

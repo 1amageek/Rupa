@@ -199,7 +199,16 @@ struct ModelingOperationDraft: Equatable {
     var bridgeShape = BridgeShapeChoice.g2
     var bridgeTension = "1"
     var bridgeReversesSense = false
-    var bridgeTrimsWalls = false
+    /// Bridge Surface's Trim walls: none, both, or the sheet reaching less (Short) or more (Long)
+    /// far from where the sheets meet.
+    enum BridgeTrimChoice: String, CaseIterable, Identifiable {
+        case none = "None"
+        case both = "Both"
+        case short = "Short"
+        case long = "Long"
+        var id: Self { self }
+    }
+    var bridgeTrim = BridgeTrimChoice.none
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -800,10 +809,15 @@ struct ModelingOperationDraft: Equatable {
             let tension = try number(bridgeTension, label: "Tension")
             let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
                 width: try topologyLength(distance, label: "Width", in: document), tension: tension,
-                shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrimsWalls ? .both : .none,
+                shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrim == .both ? .both : .none,
                 reversesSense: bridgeReversesSense)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
-            return .createBridgeSurface(name: name, bridge: bridge)
+            let wallByReach: SheetBridgeWallReach.Wall? = switch bridgeTrim {
+            case .short: .short
+            case .long: .long
+            case .none, .both: nil
+            }
+            return .createBridgeSurface(name: name, bridge: bridge, wallByReach: wallByReach)
         case .square:
             // Four sides in any order: edges of bodies (their curves added with the Square), which
             // take the continuity, or whole curve sources.

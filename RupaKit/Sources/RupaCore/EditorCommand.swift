@@ -442,8 +442,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// A Patch spanning curves joined end to end into one closed loop; `edgeCurves` are added
     /// first for edges among them.
     case createCurvePatch(name: String, curves: [CurveSectionReference], edgeCurves: [EdgeCurveSource] = [])
-    /// A Bridge Surface between two sheets.
-    case createBridgeSurface(name: String, bridge: SheetBridgeFeature)
+    /// A Bridge Surface between two sheets; `wallByReach` (Short or Long) trims the sheet reaching
+    /// less or more far from where they meet, resolved when the command applies, and then the
+    /// bridge itself trims no walls.
+    case createBridgeSurface(name: String, bridge: SheetBridgeFeature, wallByReach: SheetBridgeWallReach.Wall? = nil)
     /// Each edge's curve extruded into a sheet of its own; the curves are added first.
     case extrudeEdges(
         name: String, edgeCurves: [EdgeCurveSource], distance: CADExpression, startDistance: CADExpression? = nil,
