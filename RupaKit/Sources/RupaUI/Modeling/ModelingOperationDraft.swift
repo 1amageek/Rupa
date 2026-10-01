@@ -838,7 +838,9 @@ struct ModelingOperationDraft: Equatable {
             let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
                 width: try topologyLength(distance, label: "Width", in: document), tension: tension,
                 shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrim == .both ? .both : .none,
-                reversesSense: bridgeReversesSense)
+                reversesSense: bridgeReversesSense,
+                angularAllowance: try continuityAllowanceRadians(),
+                curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
             let wallByReach: SheetBridgeWallReach.Wall? = switch bridgeTrim {
             case .short: .short

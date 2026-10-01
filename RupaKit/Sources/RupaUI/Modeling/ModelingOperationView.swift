@@ -441,7 +441,11 @@ struct ModelingOperationView: View {
             }
             .contentShape(Rectangle())
             .help("Cut both sheets, or the one reaching less (Short) or more (Long) far from where they meet, back to the bridge and join them with it into one sheet.")
-            Text("Select two planar sheets. The bridge meets each the width from where their planes meet, G2 with both, or chamfers across.")
+            TextField("Angle allowance beside curved sheets (degrees)", text: $draft.continuityAllowance)
+            if draft.bridgeShape == .g2 {
+                lengthField("Curvature allowance radius beside curved sheets", text: $draft.curvatureAllowanceRadius)
+            }
+            Text("Two planar sheets meeting: the bridge meets each the width from where their planes meet. Curved or parallel sheets: the bridge spans their nearest boundary edges, G2 with both within the allowances, or chamfers across.")
                 .font(.caption).foregroundStyle(.secondary)
         case .square:
             Picker("Continuity", selection: $draft.squareContinuity) {

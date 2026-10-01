@@ -1084,6 +1084,38 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.0002) < 1e-12)
     }
 
+    @Test func parallelSheetsBridgeBetweenTheirNearestEdges() throws {
+        var document = DesignDocument.empty()
+        func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {
+            let lines = try corners.indices.map { index in
+                let (start, end) = (corners[index], corners[(index + 1) % corners.count])
+                return try document.createLineSketch(name: "Edge", plane: plane,
+                    start: SketchPoint(x: .length(start.0, .meter), y: .length(start.1, .meter)),
+                    end: SketchPoint(x: .length(end.0, .meter), y: .length(end.1, .meter)))
+            }
+            return try document.createCurvePatch(name: "Sheet", curves: lines.map { CurveSectionReference(featureID: $0) })
+        }
+        // A floor at z = 0 and a shelf 20 mm up, 20 mm apart across y: parallel planes.
+        let floor = try sheet(on: .xy, [(0, 0.01), (0.04, 0.01), (0.04, 0.04), (0, 0.04)])
+        let shelf = try sheet(on: .plane(Plane3D(origin: Point3D(x: 0, y: 0, z: 0.02), normal: .unitZ)),
+                              [(0, -0.04), (0.04, -0.04), (0.04, -0.01), (0, -0.01)])
+        let nodes = try [floor, shelf].map { feature in
+            try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(feature) })
+        }
+        var draft = makeDraft(.bridgeSurface, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.isSurfaceCreation = true
+        draft.distance = "10 mm"
+        guard case .createBridgeSurface(_, let bridge, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Bridge Surface.")
+            return
+        }
+        #expect(bridge.angularAllowance != nil && bridge.curvatureAllowance != nil)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 3)
+    }
+
     @Test func aBridgeSurfaceJoinsTwoPlanarSheets() throws {
         var document = DesignDocument.empty()
         // A floor on z = 0 (y from 10 to 40 mm) and a wall on y = 0 (z from 10 to 40 mm), both 40 mm
