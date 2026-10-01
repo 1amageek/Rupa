@@ -79,7 +79,11 @@ struct ModelingOperationDraftTests {
         draft.reverseSecondBoundary = true
         draft.selectSurfaceOperation(.patch)
         #expect(!draft.reverseSecondBoundary)
-        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        // Curve sources make Patch span them as closed curves.
+        guard case .createCurvePatch = try draft.command(in: document) else {
+            Issue.record("Patch over curve sources spans them as closed curves.")
+            return
+        }
         draft.kind = .box
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
@@ -581,6 +585,30 @@ struct ModelingOperationDraftTests {
         // A parabola (rho 0.5) removes a sixth of the 4 mm square's corner along the 20 mm edge.
         #expect(measurement.counts.solids == 1)
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
+    }
+
+    @Test func aPatchSpansAClosedLoopOfCurves() throws {
+        var document = DesignDocument.empty()
+        // A 20 mm right triangle of three lines.
+        let ends = [(0.0, 0.0, 0.02, 0.0), (0.02, 0.0, 0.0, 0.02), (0.0, 0.02, 0.0, 0.0)]
+        let lines = try ends.map { x0, y0, x1, y1 in
+            try document.createLineSketch(name: "Side", plane: .xy,
+                start: SketchPoint(x: .length(x0, .meter), y: .length(y0, .meter)),
+                end: SketchPoint(x: .length(x1, .meter), y: .length(y1, .meter)))
+        }
+        let nodes = try lines.map { line in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) }) }
+        var draft = makeDraft(.patch, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.isSurfaceCreation = true
+        guard case .createCurvePatch(_, let curves, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected a curve patch.")
+            return
+        }
+        #expect(curves.map(\.featureID) == lines && edgeCurves.isEmpty)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.0002) < 1e-12)
     }
 
     @Test func fourCurvesFrameAFlatSquare() throws {

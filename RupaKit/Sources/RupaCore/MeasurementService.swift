@@ -1080,8 +1080,8 @@ public struct MeasurementService {
                     diagnostics.append(EditorDiagnostic(severity: .info,
                         message: "Measurement skipped Constrained Surface. \(skipReason ?? "No evaluated sheet.")"))
                 }
-            case .squareSurface:
-                // A Square is measured as the sheet it evaluates to.
+            case .squareSurface, .curvePatch:
+                // A Square or a curve Patch is measured as the sheet it evaluates to.
                 guard !isSupersededInDocumentScope(featureID), shouldMeasure(featureID) else { continue }
                 includedSourceFeatureIDs.insert(featureID)
                 var skipReason: String?
@@ -1092,7 +1092,7 @@ public struct MeasurementService {
                     bounds.include(sheet.bounds)
                 } else {
                     diagnostics.append(EditorDiagnostic(severity: .info,
-                        message: "Measurement skipped Square. \(skipReason ?? "No evaluated sheet.")"))
+                        message: "Measurement skipped \(node.name). \(skipReason ?? "No evaluated sheet.")"))
                 }
             case .bSplineSurface(let surfaceFeature):
                 try measureBSplineSurfaceCase(surfaceFeature, node: node, featureID: featureID)

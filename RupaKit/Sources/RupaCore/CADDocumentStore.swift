@@ -2998,6 +2998,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createCurvePatch:
+            func run() throws {
+                guard case .createCurvePatch(let name, let curves, let edgeCurves) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected createCurvePatch.")
+                }
+                var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addEdgeCurve(edgeCurve)
+                }
+                primaryFeatureID = try updatedDocument.createCurvePatch(name: name, curves: curves, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createSquare:
             func run() throws {
                 guard case .createSquare(let name, let sides, let edgeCurves) = command else {

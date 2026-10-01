@@ -549,6 +549,48 @@ extension DesignDocument {
         return featureID
     }
 
+    /// Adds a Patch spanning curves joined end to end into one closed loop as a sheet of its own.
+    @discardableResult
+    public mutating func createCurvePatch(
+        name: String,
+        curves: [CurveSectionReference],
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Patch")
+        let patch = CurvePatchFeature(curves: curves)
+        do {
+            try patch.validate()
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "Patch command is invalid: \(error).")
+        }
+        for curve in curves {
+            try requireSweepSourceCurveFeature(curve.featureID, owner: "Patch curve")
+        }
+        let featureID = FeatureID()
+        let feature = FeatureNode(id: featureID, name: trimmedName, operation: .curvePatch(patch),
+                                  inputs: patch.inputs, outputs: [FeatureOutput(role: .sheet)])
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
+                          geometryRole: .surface, objectRegistry: objectRegistry)
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+
     /// Adds a Square framed by four side curves as a sheet of its own; a continuous side's edge
     /// body must be shown where it was built.
     @discardableResult

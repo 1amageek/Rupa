@@ -805,6 +805,38 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBodyShell(name: name, target: targets[0],
                 thickness: try topologyLength(distance, label: "Wall thickness", in: document))
+        case .patch where targets.contains(where: { $0.component == .object }):
+            // Closed curves (the operands' kind, not their count, selects this): whole curve
+            // sources, with any edges of bodies among them (their curves added with the patch),
+            // joined end to end.
+            var edgeCurves: [EdgeCurveSource] = []
+            let curves = try targets.map { target -> CurveSectionReference in
+                switch target.component {
+                case .edge:
+                    let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                        for: target, operationName: "Patch", currentEvaluation: nil
+                    ))
+                    edgeCurves.append(curve)
+                    return CurveSectionReference(featureID: curve.id)
+                case .object:
+                    let source = try sectionReference(for: target.sceneNodeID, in: document)
+                    switch source {
+                    case .curve(let curve): return curve
+                    case .profile:
+                        // A closed sketch's region is its curve loop.
+                        guard let feature = document.productMetadata.sceneNodes[target.sceneNodeID]?.object?.sourceFeatureID else {
+                            throw invalid("Patch source is missing.")
+                        }
+                        return CurveSectionReference(featureID: feature)
+                    case .face:
+                        throw invalid("Patch spans curves or edges, not faces.")
+                    }
+                default:
+                    throw invalid("Patch spans curves or edges.")
+                }
+            }
+            do { try CurvePatchFeature(curves: curves).validate() } catch { throw invalid("The patch is invalid: \(error).") }
+            return .createCurvePatch(name: name, curves: curves, edgeCurves: edgeCurves)
         case .patch, .bridge:
             guard kind != .patch || targets.count == 1 else {
                 throw invalid("Patch requires exactly one edge of the opening to fill.")

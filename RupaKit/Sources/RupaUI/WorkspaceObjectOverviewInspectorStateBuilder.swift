@@ -728,6 +728,11 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(wrap.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Keep Tools", value: wrap.keepsTarget ? "On" : "Off"),
             ]
+        case .curvePatch(let patch):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Patch"),
+                WorkspaceInspectorTextRow(title: "Curves", value: "\(patch.curves.count)"),
+            ]
         case .squareSurface(let square):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Square"),

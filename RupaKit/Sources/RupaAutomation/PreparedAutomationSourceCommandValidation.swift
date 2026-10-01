@@ -176,6 +176,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createSweep,
              .createPipes,
              .createSquare,
+             .createCurvePatch,
              .extrudeEdges,
              .createLoft,
              .setLoft,
