@@ -1223,6 +1223,15 @@ public struct MeasurementService {
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: thicken.target.featureID, operationName: "Thicken")
             case .faceOffset(let offset):
                 try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: offset.target.featureID, operationName: "Push Face")
+            // An edge treatment rebuilds its body in place; it is measured as the body it evaluates to.
+            case .fillet(let fillet):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: fillet.target.featureID, operationName: "Fillet")
+            case .chamfer(let chamfer):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: chamfer.target.featureID, operationName: "Chamfer")
+            case .g2Blend(let blend):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: blend.target.featureID, operationName: "G2 Blend")
+            case .setbackCorner(let corner):
+                try measureEvaluatedBodyOperationCase(node: node, featureID: featureID, sourceFeatureID: corner.target.featureID, operationName: "Setback Corner")
             case .patchSurface,
                  .faceMove,
                  .edgeMove,
@@ -1232,10 +1241,6 @@ public struct MeasurementService {
                  .radialPattern,
                  .gridPattern,
                  .curveDrivenPattern,
-                 .chamfer,
-                 .fillet,
-                 .g2Blend,
-                 .setbackCorner,
                  .bridgeSurface,
                  .curveExtend,
                  .curveMatch,

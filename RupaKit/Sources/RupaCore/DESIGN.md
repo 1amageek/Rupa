@@ -580,6 +580,9 @@ sheet with `extrudeSection`, all in one transaction.
 `faceSectionReference`) and refuses one shown away from where it was built; an end edge section's
 continuity names the edge's body as an input, which must likewise be shown where it was built.
 
+Edge treatments (Fillet of any shape, Chamfer, G2 Blend, Setback Corner) rebuild their body in
+place and are measured as the body they evaluate to, the treated source being superseded.
+
 `createSquare` adds a native Square sheet framed by four side curves (edge curves it carries are
 added first), admitting a continuous side's body only where it was built; it is measured as its
 evaluated sheet.

@@ -577,9 +577,10 @@ struct ModelingOperationDraftTests {
         #expect(shape == .conic && tension == nil)
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
-        let evaluated = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         // A parabola (rho 0.5) removes a sixth of the 4 mm square's corner along the 20 mm edge.
-        #expect(abs(try evaluated.brep.volume(tolerance: .standard) - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
     }
 
     @Test func fourCurvesFrameAFlatSquare() throws {
