@@ -330,6 +330,13 @@ struct ModelingOperationView: View {
             }
             .contentShape(Rectangle())
             Toggle("Simplify", isOn: $draft.sweepSimplify)
+            Picker("Guide", selection: $draft.sweepGuide) {
+                ForEach(ModelingOperationDraft.SweepGuideChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .contentShape(Rectangle())
+            .help("With a straight guide selected between the section and the path: Point keeps the section's contact on the guide, Chord only turns the section toward it (within the allowance).")
             if !draft.isSurfaceCreation {
                 Picker("Boolean", selection: $draft.solidBoolean) {
                     ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in

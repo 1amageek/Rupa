@@ -386,6 +386,15 @@ struct ModelingOperationDraftTests {
         let h = 0.002
         #expect(abs(roundedVolume - 2 * h * (2 * h * 0.14 - 4 * h * h + Double.pi * h * h)) < 1e-12)
 
+        // Chord steers the section by its guide without scaling it.
+        draft.sweepGuide = .chord
+        guard case .createSweep(_, _, _, _, _, let chord, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(chord.guideMethod == .chord)
+        draft.sweepGuide = .point
+
         // Simplify asks for the flat sides as trimmed planes.
         draft.sweepCorners = .mitre
         draft.sweepSimplify = true

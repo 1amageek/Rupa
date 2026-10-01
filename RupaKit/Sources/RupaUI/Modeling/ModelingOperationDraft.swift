@@ -227,6 +227,20 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var sweepCorners = SweepCornerChoice.mitre
+    /// How a sweep's guide steers the section: Point turns and scales it so its contact stays on
+    /// the guide, Chord only turns it toward the guide.
+    enum SweepGuideChoice: String, CaseIterable, Identifiable {
+        case point = "Point"
+        case chord = "Chord"
+        var id: Self { self }
+        var method: SweepGuideMethod {
+            switch self {
+            case .point: .point
+            case .chord: .chord
+            }
+        }
+    }
+    var sweepGuide = SweepGuideChoice.point
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -617,6 +631,7 @@ struct ModelingOperationDraft: Equatable {
             options.alignment = sweepAlignment.alignment
             options.cornerStyle = sweepCorners.style
             options.simplify = sweepSimplify
+            options.guideMethod = sweepGuide.method
             // The allowance bounds whichever approximation the sweep needs: a twist, or a Normal
             // sweep along a curved path. A twist cannot go without it.
             let twists = degrees != 0 || doubleHelical
