@@ -243,8 +243,8 @@ not extrusion-profile corner rewriting. They require one generated CAD edge
 and an amount above modeling tolerance, except Fillet's Full shape, which takes
 the two edges on either side of a face and no amount (`fullFillet(across:)`).
 Several distinct edges of one body take the same treatment in turn
-(`several(_:more:)`); two edges meeting at a corner join at the kernel's mitre,
-and three or more edges sharing corners are refused by the kernel.
+(`several(_:more:)`); edges joined end to end around one face join at the
+kernel's mitres, and three edges at one corner are refused by the kernel.
 Fillet's End radius makes one edge's fillet vary from the radius at its start to
 it at its end (`variableFillet`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
