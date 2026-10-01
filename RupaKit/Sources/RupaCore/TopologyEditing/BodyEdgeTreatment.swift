@@ -17,7 +17,7 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     case fullFillet(across: SelectionTarget)
     /// A fillet of `shape` (tension where it takes one) varying from `radius` at the edge's start to
     /// `endRadius` at its end.
-    /// `points` set the radius between the ends, the radius varying linearly from point to point.
+    /// `points` set the radius between the ends, the radius following the natural cubic law through them.
     case variableFillet(radius: CADExpression, endRadius: CADExpression, shape: FilletShape, tension: Double?,
                         points: [FilletVariablePoint] = [])
     /// A constant fillet of `shape` (tension where it takes one) over the stretch of the edge
