@@ -732,6 +732,49 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - expected) < 1e-11)
     }
 
+    @Test func theChamferFormsAngleCutsFromItsReferenceFaceAndFlips() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        let (s, d) = (0.02, 0.002)
+        // sin 30° / sin 120° = 1 / √3.
+        let e = d / 3.0.squareRoot()
+        var volumes: [Double] = []
+        for flipped in [false, true] {
+            var draft = makeDraft(.chamfer, targets: [edge])
+            draft.distance = "2 mm"
+            draft.chamferAngle = "30"
+            draft.chamferFlipped = flipped
+            guard case .createBodyEdgeTreatment(_, _, .chamfer(_, _, .some, let isFlipped)) = try draft.command(in: document) else {
+                Issue.record("Expected an angled chamfer.")
+                return
+            }
+            #expect(isFlipped == flipped)
+            let store = CADDocumentStore(document: document)
+            _ = try store.apply(draft.command(in: document))
+            volumes.append(try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters)
+        }
+        // Either way the triangle of the distance and the far contact along the edge.
+        for volume in volumes { #expect(abs(volume - (s * s * s - d * e / 2 * s)) < 1e-11) }
+        // Apex and Offset agree on a square edge.
+        var apex = makeDraft(.chamfer, targets: [edge])
+        apex.distance = "2 mm"
+        apex.chamferMode = .apex
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(_, .apex, nil, false)) = try apex.command(in: document) else {
+            Issue.record("Expected an apex chamfer.")
+            return
+        }
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

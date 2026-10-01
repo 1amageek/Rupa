@@ -23,9 +23,9 @@ public struct NativeFeatureLengthEditor: FeatureLengthEditing {
             value.distance = expression
             return .extrude(value)
         case .fillet(let value):
-            return .fillet(.init(target: value.target, edges: value.edges, radius: expression, allEdges: value.allEdges))
+            return .fillet(value.with(radius: expression))
         case .chamfer(let value):
-            return .chamfer(.init(target: value.target, edges: value.edges, distance: expression))
+            return .chamfer(value.with(distance: expression))
         case .g2Blend(let value):
             return .g2Blend(.init(target: value.target, edges: value.edges, distance: expression))
         case .shell(let value):

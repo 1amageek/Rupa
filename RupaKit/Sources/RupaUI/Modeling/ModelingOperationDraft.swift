@@ -295,6 +295,17 @@ struct ModelingOperationDraft: Equatable {
     }
     var filletShape = FilletShapeChoice.round
     var filletTension = ""
+    /// A chamfer's mode, its angle from the reference face (blank for a symmetric chamfer) and
+    /// whether the reference is each edge's second face.
+    enum ChamferModeChoice: String, CaseIterable, Identifiable {
+        case offset = "Offset"
+        case apex = "Apex"
+        var id: Self { self }
+        var mode: ChamferMode { self == .offset ? .offset : .apex }
+    }
+    var chamferMode = ChamferModeChoice.offset
+    var chamferAngle = ""
+    var chamferFlipped = false
     /// A variable fillet's radius at the edge's end; blank for a constant one.
     var filletEndRadius = ""
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
@@ -987,7 +998,10 @@ struct ModelingOperationDraft: Equatable {
                 let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
                 treatment = .shapedFillet(distance: amount, shape: filletShape.shape, tension: tension)
             case .fillet: treatment = .fillet(radius: amount)
-            case .chamfer: treatment = .chamfer(distance: amount)
+            case .chamfer:
+                let angleText = chamferAngle.trimmingCharacters(in: .whitespaces)
+                let angle = angleText.isEmpty ? nil : CADExpression.angle(try number(angleText, label: "Chamfer angle"), .degree)
+                treatment = .chamfer(distance: amount, mode: chamferMode.mode, angle: angle, flipped: angle != nil && chamferFlipped)
             default: treatment = .g2Blend(distance: amount)
             }
             // Further edges take the same treatment, blended in turn.

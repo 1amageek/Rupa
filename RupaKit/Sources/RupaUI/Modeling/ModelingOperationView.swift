@@ -397,7 +397,18 @@ struct ModelingOperationView: View {
             if draft.filletShape.takesTension {
                 TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)
             }
-        case .chamfer, .g2Blend:
+        case .chamfer:
+            lengthField("Distance", text: $draft.distance)
+            Picker("Mode", selection: $draft.chamferMode) {
+                ForEach(ModelingOperationDraft.ChamferModeChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            .disabled(draft.chamferAngle.trimmingCharacters(in: .whitespaces).isEmpty == false)
+            TextField("Angle (degrees; blank for Offset or Apex)", text: $draft.chamferAngle)
+            if draft.chamferAngle.trimmingCharacters(in: .whitespaces).isEmpty == false {
+                Toggle("Flip reference face", isOn: $draft.chamferFlipped)
+            }
+        case .g2Blend:
             lengthField("Distance", text: $draft.distance)
         case .patch, .bridge:
             EmptyView()

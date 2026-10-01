@@ -6,7 +6,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     case fillet(radius: CADExpression)
     /// Fillet Shell's conic, chordal or curvature shape at `distance`, its tension where it takes one.
     case shapedFillet(distance: CADExpression, shape: FilletShape, tension: Double?)
-    case chamfer(distance: CADExpression)
+    /// A chamfer at `distance` by `mode`, or at `angle` from its reference face (each edge's
+    /// first face, its second when `flipped`).
+    case chamfer(distance: CADExpression, mode: ChamferMode = .offset, angle: CADExpression? = nil, flipped: Bool = false)
     case g2Blend(distance: CADExpression)
     /// Fillet Shell's Full shape: the round across the face between the target edge and `across`,
     /// tangent to it and both faces beside it; its size comes from those faces.
@@ -36,9 +38,20 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
                 throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
             }
             operation = .fillet(fillet)
-        case .chamfer(let distance):
+        case .chamfer(let distance, let mode, let angle, let flipped):
             amount = distance
-            operation = .chamfer(.init(target: .init(featureID: sourceID), edges: [reference], distance: distance))
+            let chamfer = ChamferFeature(target: .init(featureID: sourceID), edges: [reference], distance: distance,
+                                         mode: mode, angle: angle, flipped: flipped)
+            do { try chamfer.validate() } catch {
+                throw EditorError(code: .commandInvalid, message: "The chamfer is invalid: \(error).")
+            }
+            if let angle {
+                let value = try document.resolvedAngleValue(angle, owner: "Chamfer angle")
+                guard value > 0, value < .pi else {
+                    throw EditorError(code: .commandInvalid, message: "A chamfer's angle lies strictly between 0° and 180°.")
+                }
+            }
+            operation = .chamfer(chamfer)
         case .g2Blend(let distance):
             amount = distance
             operation = .g2Blend(.init(target: .init(featureID: sourceID), edges: [reference], distance: distance))
@@ -100,14 +113,13 @@ struct SeveralEdgeTreatment: TopologyEditOperation {
         let edges = [reference] + more
         switch try base.featureOperation(sourceID: sourceID, reference: reference, in: document) {
         case .fillet(let fillet):
-            let several = FilletFeature(target: fillet.target, edges: edges, radius: fillet.radius, shape: fillet.shape,
-                                        tension: fillet.tension)
+            let several = fillet.with(edges: edges)
             do { try several.validate() } catch {
                 throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
             }
             return .fillet(several)
         case .chamfer(let chamfer):
-            return .chamfer(.init(target: chamfer.target, edges: edges, distance: chamfer.distance))
+            return .chamfer(chamfer.with(edges: edges))
         case .g2Blend(let blend):
             return .g2Blend(.init(target: blend.target, edges: edges, distance: blend.distance))
         default:
