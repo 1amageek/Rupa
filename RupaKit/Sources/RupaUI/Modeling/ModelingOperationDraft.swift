@@ -313,6 +313,8 @@ struct ModelingOperationDraft: Equatable {
     /// A fillet's limit points as fractions of the edge from its start; both blank for the whole edge.
     var limitStart = ""
     var limitEnd = ""
+    /// Whether the blend runs over the rest of the edge instead of between its limits.
+    var limitsReversed = false
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -1011,7 +1013,7 @@ struct ModelingOperationDraft: Equatable {
                     return trimmed.isEmpty ? blank : try number(trimmed, label: label)
                 }
                 let stretch = EdgeBlendLimits(start: try fraction(limitStart, blank: 0, label: "Limit start"),
-                                              end: try fraction(limitEnd, blank: 1, label: "Limit end"))
+                                              end: try fraction(limitEnd, blank: 1, label: "Limit end"), reversed: limitsReversed)
                 do { try stretch.validate() } catch {
                     throw invalid("Limits lie within the edge, 0 ≤ start < end ≤ 1, and limit it somewhere.")
                 }

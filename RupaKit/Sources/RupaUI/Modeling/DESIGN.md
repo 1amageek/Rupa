@@ -254,7 +254,7 @@ reference face with Flip choosing the edge's second face (`BodyEdgeTreatment.cha
 Fillet's End radius makes one edge's fillet vary from the radius at its start to
 it at its end (`variableFillet`). Variable points (fraction@radius, …) set the radius between the
 ends along the kernel's natural cubic law through them. Limit start and end (fractions of the edge) round only
-that stretch of one edge, the edge left sharp beyond them (`limitedFillet`); the Chamfer form (and a negative fillet distance) takes the same limits (`chamfer(…, limits:)`). The kernel's unsupported geometry is
+that stretch of one edge, the edge left sharp beyond them (`limitedFillet`); the Chamfer form (and a negative fillet distance) takes the same limits (`chamfer(…, limits:)`); Reverse limits blends the rest of the edge instead (`EdgeBlendLimits.reversed`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
 quality, so these forms do not expose them as shape parameters. Existing
 profile-corner manipulation remains a distinct source-editing operation.

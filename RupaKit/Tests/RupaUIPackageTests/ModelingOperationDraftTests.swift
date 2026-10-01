@@ -891,6 +891,17 @@ struct ModelingOperationDraftTests {
         _ = try chamferStore.apply(chamfer.command(in: document))
         let cut = try MeasurementService().measure(document: chamferStore.document, ruler: .standard(for: .meter))
         #expect(abs(cut.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.002 * 0.002 / 2 * 0.01)) < 1e-11)
+        // Reversed, the chamfer runs over the edge's two ends instead.
+        chamfer.limitsReversed = true
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(_, _, _, _, let reversedLimits)) = try chamfer.command(in: document) else {
+            Issue.record("Expected a reversed limited chamfer.")
+            return
+        }
+        #expect(reversedLimits == EdgeBlendLimits(start: 0.25, end: 0.75, reversed: true))
+        let reversedStore = CADDocumentStore(document: document)
+        _ = try reversedStore.apply(chamfer.command(in: document))
+        let ends = try MeasurementService().measure(document: reversedStore.document, ruler: .standard(for: .meter))
+        #expect(abs(ends.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.002 * 0.002 / 2 * 0.01)) < 1e-11)
     }
 
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
