@@ -1504,3 +1504,28 @@ private func sketchPlaneBasis(
     let v = normal.cross(u)
     return (u, v)
 }
+
+@Test(.timeLimit(.minutes(1))) func twoPointGuidesDeformASweepsSection() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(name: "Section", plane: .xy,
+        width: .length(40, .millimeter), height: .length(20, .millimeter))
+    let pathID = try document.createLineSketch(name: "Path", plane: .yz,
+        start: SketchPoint(x: .length(0, .millimeter), y: .length(0, .millimeter)),
+        end: SketchPoint(x: .length(0, .millimeter), y: .length(50, .millimeter)))
+    // From the corners (20, 10) and (−20, 10) mm to (30, 10) and (−20, 20) mm, 50 mm up: on the
+    // plane across Y sketch x is −x; across X sketch x is y; sketch y is z on both.
+    let first = try document.createLineSketch(name: "Guide", plane: .plane(Plane3D(origin: Point3D(x: 0, y: 0.01, z: 0), normal: .unitY)),
+        start: SketchPoint(x: .length(-20, .millimeter), y: .length(0, .millimeter)),
+        end: SketchPoint(x: .length(-30, .millimeter), y: .length(50, .millimeter)))
+    let second = try document.createLineSketch(name: "Guide", plane: .plane(Plane3D(origin: Point3D(x: -0.02, y: 0, z: 0), normal: .unitX)),
+        start: SketchPoint(x: .length(10, .millimeter), y: .length(0, .millimeter)),
+        end: SketchPoint(x: .length(20, .millimeter), y: .length(50, .millimeter)))
+    _ = try document.createSweep(name: "Guided", sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: pathID),
+        guides: [SweepGuideReference(featureID: first), SweepGuideReference(featureID: second)],
+        options: SweepOptions(alignment: .normal, guideMethod: .point))
+    let measurement = try MeasurementService().measure(document: document, ruler: .standard(for: .meter))
+    // The section's area grows as det(I + t(M − I)) = 1 + 0.75 t + 0.25 t².
+    #expect(measurement.counts.solids == 1)
+    #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.04 * 0.02 * 0.05 * (1 + 0.75 / 2 + 0.25 / 3)) < 1e-12)
+}
