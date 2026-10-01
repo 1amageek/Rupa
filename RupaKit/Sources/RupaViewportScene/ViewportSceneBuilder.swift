@@ -222,6 +222,19 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .sheetBridge(let bridge):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: bridge.first,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
+                    surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .curvePatch(let patch):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,

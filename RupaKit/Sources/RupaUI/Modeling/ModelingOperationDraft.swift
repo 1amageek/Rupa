@@ -21,6 +21,7 @@ struct ModelingOperationDraft: Equatable {
         case patch = "Patch"
         case bridge = "Boundary Bridge (G0)"
         case square = "Square"
+        case bridgeSurface = "Bridge Surface"
         case surfaceOffset = "Sheet Offset"
         case surfaceExtend = "Extend Trim"
         case shell = "Shell"
@@ -34,7 +35,7 @@ struct ModelingOperationDraft: Equatable {
             allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface].contains($0) }
         }
 
-        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square]
+        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square, .bridgeSurface]
 
         var systemImage: String {
             switch self {
@@ -54,6 +55,7 @@ struct ModelingOperationDraft: Equatable {
             case .patch: "square.dashed.inset.filled"
             case .bridge: "rectangle.split.2x1"
             case .square: "square.split.bottomrightquarter"
+            case .bridgeSurface: "point.topleft.down.to.point.bottomright.filled.curvepath"
             case .surfaceOffset: "square.3.layers.3d"
             case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
             case .shell: "shippingbox"
@@ -188,6 +190,15 @@ struct ModelingOperationDraft: Equatable {
     /// The angle (degrees) a G1 surface may stray from a curved face's normals beside an edge; a
     /// planar face is met exactly.
     var continuityAllowance = "0.1"
+    /// Bridge Surface's Shape, Tension, Trim walls and Sense; its width is the distance field.
+    enum BridgeShapeChoice: String, CaseIterable, Identifiable {
+        case g2 = "G2"
+        case chamfer = "Chamfer"
+        var id: Self { self }
+    }
+    var bridgeShape = BridgeShapeChoice.g2
+    var bridgeTension = "1"
+    var bridgeReversesSense = false
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -323,7 +334,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .bridgeSurface, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -765,6 +776,20 @@ struct ModelingOperationDraft: Equatable {
                 simplify: loftSimplify)
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
             return .createLoft(name: name, sections: sections, guides: guides, options: options, edgeCurves: edgeCurves)
+        case .bridgeSurface:
+            // Two sheets, the bridge set back by the width from where they meet.
+            let sheets = zip(nodes, features).filter { _, feature in
+                document.cadDocument.designGraph.nodes[feature]?.outputs.contains(where: { $0.role == .sheet }) == true
+            }.map(\.1)
+            guard targets.count == 2, sheets.count == 2, sheets[0] != sheets[1] else {
+                throw invalid("Bridge Surface joins two sheets; select both.")
+            }
+            let tension = try number(bridgeTension, label: "Tension")
+            let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
+                width: try topologyLength(distance, label: "Width", in: document), tension: tension,
+                shape: bridgeShape == .g2 ? .curvature : .chamfer, reversesSense: bridgeReversesSense)
+            do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
+            return .createBridgeSurface(name: name, bridge: bridge)
         case .square:
             // Four sides in any order: edges of bodies (their curves added with the Square), which
             // take the continuity, or whole curve sources.

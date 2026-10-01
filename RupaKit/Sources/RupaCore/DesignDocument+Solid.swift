@@ -549,6 +549,56 @@ extension DesignDocument {
         return featureID
     }
 
+    /// Adds a Bridge Surface between two sheets as a sheet of its own; both sheets must be shown
+    /// where they were built.
+    @discardableResult
+    public mutating func createBridgeSurface(
+        name: String,
+        bridge: SheetBridgeFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Bridge Surface")
+        do {
+            try bridge.validate()
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "Bridge Surface command is invalid: \(error).")
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for sheet in [bridge.first, bridge.second] {
+            guard cadDocument.designGraph.nodes[sheet]?.outputs.contains(where: { $0.role == .sheet }) == true else {
+                throw EditorError(code: .commandInvalid, message: "A Bridge Surface joins two sheets.")
+            }
+            guard let node = hierarchy.presentingSceneNodeID(for: sheet) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "A Bridge Surface's sheets must be shown where they were built; this one has been moved.")
+            }
+        }
+        let featureID = FeatureID()
+        let feature = FeatureNode(id: featureID, name: trimmedName, operation: .sheetBridge(bridge),
+                                  inputs: bridge.inputs, outputs: [FeatureOutput(role: .sheet)])
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
+                          geometryRole: .surface, objectRegistry: objectRegistry)
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+
     /// Adds a Patch spanning curves joined end to end into one closed loop as a sheet of its own.
     @discardableResult
     public mutating func createCurvePatch(

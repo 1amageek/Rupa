@@ -2998,6 +2998,18 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createBridgeSurface:
+            func run() throws {
+                guard case .createBridgeSurface(let name, let bridge) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected createBridgeSurface.")
+                }
+                var updatedDocument = document
+                primaryFeatureID = try updatedDocument.createBridgeSurface(name: name, bridge: bridge, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createCurvePatch:
             func run() throws {
                 guard case .createCurvePatch(let name, let curves, let edgeCurves) = command else {

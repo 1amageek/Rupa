@@ -1080,7 +1080,7 @@ public struct MeasurementService {
                     diagnostics.append(EditorDiagnostic(severity: .info,
                         message: "Measurement skipped Constrained Surface. \(skipReason ?? "No evaluated sheet.")"))
                 }
-            case .squareSurface, .curvePatch:
+            case .squareSurface, .curvePatch, .sheetBridge:
                 // A Square or a curve Patch is measured as the sheet it evaluates to.
                 guard !isSupersededInDocumentScope(featureID), shouldMeasure(featureID) else { continue }
                 includedSourceFeatureIDs.insert(featureID)

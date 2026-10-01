@@ -442,6 +442,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// A Patch spanning curves joined end to end into one closed loop; `edgeCurves` are added
     /// first for edges among them.
     case createCurvePatch(name: String, curves: [CurveSectionReference], edgeCurves: [EdgeCurveSource] = [])
+    /// A Bridge Surface between two sheets.
+    case createBridgeSurface(name: String, bridge: SheetBridgeFeature)
     /// Each edge's curve extruded into a sheet of its own; the curves are added first.
     case extrudeEdges(
         name: String, edgeCurves: [EdgeCurveSource], distance: CADExpression, startDistance: CADExpression? = nil,
@@ -986,6 +988,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createSquare"
         case .createCurvePatch:
             "createCurvePatch"
+        case .createBridgeSurface:
+            "createBridgeSurface"
         case .extrudeEdges:
             "extrudeEdges"
         case .createLoft:
@@ -1259,6 +1263,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createPipes,
              .createSquare,
              .createCurvePatch,
+             .createBridgeSurface,
              .extrudeEdges,
              .createLoft,
              .setLoft,

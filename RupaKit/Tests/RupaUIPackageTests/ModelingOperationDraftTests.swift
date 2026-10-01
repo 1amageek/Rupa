@@ -611,6 +611,44 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.0002) < 1e-12)
     }
 
+    @Test func aBridgeSurfaceJoinsTwoPlanarSheets() throws {
+        var document = DesignDocument.empty()
+        // A floor on z = 0 (y from 10 to 40 mm) and a wall on y = 0 (z from 10 to 40 mm), both 40 mm
+        // long in x; sketch x is world z and sketch y world x on the ZX plane.
+        func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {
+            let lines = try corners.indices.map { index in
+                let (start, end) = (corners[index], corners[(index + 1) % corners.count])
+                return try document.createLineSketch(name: "Edge", plane: plane,
+                    start: SketchPoint(x: .length(start.0, .meter), y: .length(start.1, .meter)),
+                    end: SketchPoint(x: .length(end.0, .meter), y: .length(end.1, .meter)))
+            }
+            return try document.createCurvePatch(name: "Sheet", curves: lines.map { CurveSectionReference(featureID: $0) })
+        }
+        let floor = try sheet(on: .xy, [(0, 0.01), (0.04, 0.01), (0.04, 0.04), (0, 0.04)])
+        let wall = try sheet(on: .zx, [(0.01, 0), (0.01, 0.04), (0.04, 0.04), (0.04, 0)])
+        let nodes = try [floor, wall].map { feature in
+            try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(feature) })
+        }
+        var draft = makeDraft(.bridgeSurface, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.isSurfaceCreation = true
+        draft.distance = "20 mm"
+        guard case .createBridgeSurface(_, let bridge) = try draft.command(in: document) else {
+            Issue.record("Expected a Bridge Surface.")
+            return
+        }
+        #expect(bridge.first == floor && bridge.second == wall && bridge.shape == .curvature)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 3)
+        // The chamfer strip spans 20√2 mm across and 40 mm along.
+        draft.bridgeShape = .chamfer
+        let chamfered = CADDocumentStore(document: document)
+        _ = try chamfered.apply(draft.command(in: document))
+        let strips = try MeasurementService().measure(document: chamfered.document, ruler: .standard(for: .meter))
+        #expect(abs(strips.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
+    }
+
     @Test func fourCurvesFrameAFlatSquare() throws {
         var document = DesignDocument.empty()
         let ends = [(0.0, 0.0, 0.02, 0.0), (0.02, 0.0, 0.02, 0.02), (0.02, 0.02, 0.0, 0.02), (0.0, 0.02, 0.0, 0.0)]

@@ -728,6 +728,12 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(wrap.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Keep Tools", value: wrap.keepsTarget ? "On" : "Off"),
             ]
+        case .sheetBridge(let bridge):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Bridge Surface"),
+                WorkspaceInspectorTextRow(title: "Shape", value: bridge.shape == .curvature ? "G2" : "Chamfer"),
+                WorkspaceInspectorTextRow(title: "Tension", value: "\(bridge.tension)"),
+            ]
         case .curvePatch(let patch):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Patch"),

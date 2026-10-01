@@ -583,6 +583,10 @@ continuity names the edge's body as an input, which must likewise be shown where
 Edge treatments (Fillet of any shape, Chamfer, G2 Blend, Setback Corner) rebuild their body in
 place and are measured as the body they evaluate to, the treated source being superseded.
 
+`createBridgeSurface` adds a native Bridge Surface sheet between two sheets shown where they were
+built; `createCurvePatch` adds a Patch spanning closed curves (edge curves it carries added first).
+Both are measured as their evaluated sheets.
+
 `createSquare` adds a native Square sheet framed by four side curves (edge curves it carries are
 added first), admitting a continuous side's body only where it was built; it is measured as its
 evaluated sheet.

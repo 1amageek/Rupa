@@ -392,6 +392,18 @@ struct ModelingOperationView: View {
             lengthField("Distance", text: $draft.distance)
         case .patch, .bridge:
             EmptyView()
+        case .bridgeSurface:
+            lengthField("Width", text: $draft.distance)
+            Picker("Shape", selection: $draft.bridgeShape) {
+                ForEach(ModelingOperationDraft.BridgeShapeChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            if draft.bridgeShape == .g2 {
+                TextField("Tension", text: $draft.bridgeTension)
+            }
+            Toggle("Reverse sense", isOn: $draft.bridgeReversesSense)
+            Text("Select two planar sheets. The bridge meets each the width from where their planes meet, G2 with both, or chamfers across.")
+                .font(.caption).foregroundStyle(.secondary)
         case .square:
             Picker("Continuity", selection: $draft.squareContinuity) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }

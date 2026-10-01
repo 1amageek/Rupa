@@ -109,6 +109,8 @@ public struct ParameterSourceUsageService: Sendable {
             if let thickness = feature.thickness { record(thickness, path: "revolve.thickness") }
         case .edgeCurve, .squareSurface, .curvePatch:
             break
+        case .sheetBridge(let bridge):
+            record(bridge.width, path: "sheetBridge.width")
         case .pipe(let feature):
             if let diameter = feature.diameter { record(diameter, path: "pipe.diameter") }
             if let thickness = feature.thickness { record(thickness, path: "pipe.thickness") }
@@ -324,6 +326,8 @@ public struct ParameterSourceUsageService: Sendable {
             "squareSurface"
         case .curvePatch:
             "curvePatch"
+        case .sheetBridge:
+            "sheetBridge"
         case .loft:
             "loft"
         case .boolean:
