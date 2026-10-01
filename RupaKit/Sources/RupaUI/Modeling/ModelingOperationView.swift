@@ -323,6 +323,12 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
+            Picker("Corners", selection: $draft.sweepCorners) {
+                ForEach(ModelingOperationDraft.SweepCornerChoice.allCases) { choice in
+                    Text(choice.rawValue).tag(choice)
+                }
+            }
+            .contentShape(Rectangle())
             if !draft.isSurfaceCreation {
                 Picker("Boolean", selection: $draft.solidBoolean) {
                     ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in

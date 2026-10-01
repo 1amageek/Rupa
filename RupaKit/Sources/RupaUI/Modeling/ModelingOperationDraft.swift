@@ -195,6 +195,19 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var sweepAlignment = SweepAlignmentChoice.normal
+    /// How a Normal sweep turns a corner of its path: a pointed mitre or a round outside.
+    enum SweepCornerChoice: String, CaseIterable, Identifiable {
+        case mitre = "Mitre"
+        case round = "Round"
+        var id: Self { self }
+        var style: SweepCornerStyle {
+            switch self {
+            case .mitre: .mitre
+            case .round: .round
+            }
+        }
+    }
+    var sweepCorners = SweepCornerChoice.mitre
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -583,6 +596,7 @@ struct ModelingOperationDraft: Equatable {
             var options = SweepOptions()
             options.resultKind = createsSheet ? .sheet : .solid
             options.alignment = sweepAlignment.alignment
+            options.cornerStyle = sweepCorners.style
             // The allowance bounds whichever approximation the sweep needs: a twist, or a Normal
             // sweep along a curved path. A twist cannot go without it.
             let twists = degrees != 0 || doubleHelical

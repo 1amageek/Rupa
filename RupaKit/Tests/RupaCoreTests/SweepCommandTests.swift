@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
@@ -200,7 +201,7 @@ import SwiftCAD
     try document.validate()
 }
 
-@Test func createSweepRejectsRoundCornerStyleForConnectedMultiEntityPathSketch() throws {
+@Test func createSweepRoundsTheCornerOfAConnectedMultiEntityPathSketch() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
         name: "Round Multi-Path Sweep Profile",
@@ -219,12 +220,14 @@ import SwiftCAD
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .round)
     )
-    do {
-        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-        Issue.record("Exact kernel must reject round-corner multi-entity sweep paths without blend topology.")
-    } catch let error as KernelError {
-        #expect(error.code == .unsupportedCapability)
-    }
+    // The 1 mm side of the section lies in the path's plane: half of it is the round's radius.
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    #expect(evaluated.brep.bodies.count == 1)
+    try evaluated.brep.validate(level: .volumetric, tolerance: .standard)
+    let turn = atan2(8.0, 10.0), h = 0.0005, armLengths = 0.015 + (0.008 * 0.008 + 0.01 * 0.01).squareRoot()
+    let area = 2 * h * armLengths - h * h * tan(turn / 2) + h * h * turn / 2
+    let volume = try evaluated.brep.volume(tolerance: .standard)
+    #expect(abs(volume - 0.002 * area) < 1e-13)
 }
 
 @Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {

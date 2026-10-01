@@ -360,7 +360,7 @@ struct ModelingOperationDraftTests {
             oppositeCorner: SketchPoint(x: .length(0.04, .meter), y: .length(0.03, .meter))
         )
         let nodes = try [square, frame].map { id in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(id) }) }
-        let draft = makeDraft(.sweep, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        var draft = makeDraft(.sweep, targets: nodes.map { .init(sceneNodeID: $0.id) })
         guard case .createSweep(_, let sections, let path, _, _, _, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
@@ -370,6 +370,21 @@ struct ModelingOperationDraftTests {
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.004 * 0.004 * 0.14) < 1e-12)
+
+        // Round corners round each outer corner by half the section's width and keep the inner
+        // ones mitred.
+        draft.sweepCorners = .round
+        guard case .createSweep(_, _, _, _, _, let options, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(options.cornerStyle == .round)
+        let rounded = CADDocumentStore(document: document)
+        _ = try rounded.apply(draft.command(in: document))
+        let roundedVolume = try MeasurementService().measure(document: rounded.document, ruler: .standard(for: .meter))
+            .totals.solidVolumeCubicMeters
+        let h = 0.002
+        #expect(abs(roundedVolume - 2 * h * (2 * h * 0.14 - 4 * h * h + Double.pi * h * h)) < 1e-12)
     }
 
     @Test func anEdgeOfABodyExtrudesIntoASheet() throws {
