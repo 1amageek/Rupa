@@ -1553,6 +1553,26 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.001 + 0.25 * 2 * Double.pi * 0.025 * ring)) < 1e-12)
     }
 
+    @Test func aRevolveTakesItsSectionsTangentAxis() throws {
+        var document = DesignDocument.empty()
+        let fixture = try stripAndCube(in: &document)
+        var draft = makeDraft(.revolve, targets: [fixture.stripTarget])
+        draft.revolveAxisChoice = .tangent
+        guard case .revolveSection(_, let section, let axis, _, _, _, _, _, _) = try draft.command(in: document) else {
+            Issue.record("A revolve about its section's tangent is one revolve.")
+            return
+        }
+        // The axis the kernel reads from the section: through its boundary start, along it there.
+        let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(document: document, failurePrefix: "test")
+        #expect(axis == (try RevolveSectionAxis().axis(.tangent, section: section, in: evaluated)))
+        draft.revolveAxisChoice = .binormal
+        guard case .revolveSection(_, _, let across, _, _, _, _, _, _) = try draft.command(in: document) else {
+            Issue.record("A revolve about its section's binormal is one revolve.")
+            return
+        }
+        #expect(abs(across.direction.dot(axis.direction)) < 1e-12 && across.origin == axis.origin)
+    }
+
     @Test func aThinExtrusionCarriesItsWallThickness() throws {
         var document = DesignDocument.empty()
         let profile = try addProfile(to: &document, z: 0)

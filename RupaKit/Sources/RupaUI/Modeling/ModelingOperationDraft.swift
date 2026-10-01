@@ -109,6 +109,10 @@ struct ModelingOperationDraft: Equatable {
     enum RevolveAxisChoice: String, CaseIterable, Identifiable {
         case direction = "Direction"
         case twoPoints = "Two Points"
+        /// The section's own axes (`RevolveSectionAxis`).
+        case normal = "Normal"
+        case binormal = "Binormal"
+        case tangent = "Tangent"
         var id: Self { self }
     }
     var revolveAxisChoice = RevolveAxisChoice.direction
@@ -573,33 +577,20 @@ struct ModelingOperationDraft: Equatable {
             guard degrees != 0, abs(degrees) <= 360 else {
                 throw invalid("Revolve angle must be non-zero and within -360…360 degrees.")
             }
-            let axisOrigin = Point3D(
-                x: try length(origin[0], label: "Axis origin X"),
-                y: try length(origin[1], label: "Axis origin Y"),
-                z: try length(origin[2], label: "Axis origin Z")
-            )
-            let direction: Vector3D
+            let revolveAxis: RevolveAxis
             switch revolveAxisChoice {
-            case .direction:
-                direction = Vector3D(
-                    x: try number(axis[0], label: "Axis X"),
-                    y: try number(axis[1], label: "Axis Y"),
-                    z: try number(axis[2], label: "Axis Z")
-                )
-            case .twoPoints:
-                let end = Point3D(
-                    x: try length(axisEnd[0], label: "Axis end X"),
-                    y: try length(axisEnd[1], label: "Axis end Y"),
-                    z: try length(axisEnd[2], label: "Axis end Z")
-                )
-                direction = end - axisOrigin
-            }
-            let revolveAxis = RevolveAxis(origin: axisOrigin, direction: direction)
-            do {
-                try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
-            } catch {
-                throw invalid(revolveAxisChoice == .twoPoints
-                    ? "The axis's two points must be apart." : "The axis direction must not be zero.")
+            case .normal, .binormal, .tangent:
+                let choice: RevolveSectionAxis.Direction = revolveAxisChoice == .normal ? .normal
+                    : (revolveAxisChoice == .binormal ? .binormal : .tangent)
+                let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
+                    document: document, failurePrefix: "Revolve's section axes need the section evaluated")
+                do {
+                    revolveAxis = try RevolveSectionAxis().axis(choice, section: section, in: evaluated)
+                } catch let error as KernelError {
+                    throw invalid("Revolve axis: \(error.message)")
+                }
+            case .direction, .twoPoints:
+                revolveAxis = try explicitRevolveAxis(in: document)
             }
             let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
                 ? nil : try length(wallThickness, label: "Thickness")
@@ -1068,6 +1059,39 @@ struct ModelingOperationDraft: Equatable {
             return .createBodyEdgeTreatment(name: name, target: edges[0],
                                             treatment: edges.count == 1 ? treatment : .several(treatment, more: Array(edges.dropFirst())))
         }
+    }
+
+    /// A revolve's axis typed in: through its origin along a direction, or from its origin to its end.
+    private func explicitRevolveAxis(in document: DesignDocument) throws -> RevolveAxis {
+        let axisOrigin = Point3D(
+            x: try length(origin[0], label: "Axis origin X"),
+            y: try length(origin[1], label: "Axis origin Y"),
+            z: try length(origin[2], label: "Axis origin Z")
+        )
+        let direction: Vector3D
+        switch revolveAxisChoice {
+        case .twoPoints:
+            let end = Point3D(
+                x: try length(axisEnd[0], label: "Axis end X"),
+                y: try length(axisEnd[1], label: "Axis end Y"),
+                z: try length(axisEnd[2], label: "Axis end Z")
+            )
+            direction = end - axisOrigin
+        default:
+            direction = Vector3D(
+                x: try number(axis[0], label: "Axis X"),
+                y: try number(axis[1], label: "Axis Y"),
+                z: try number(axis[2], label: "Axis Z")
+            )
+        }
+        let revolveAxis = RevolveAxis(origin: axisOrigin, direction: direction)
+        do {
+            try revolveAxis.validate(tolerance: document.modelingSettings.tolerance)
+        } catch {
+            throw invalid(revolveAxisChoice == .twoPoints
+                ? "The axis's two points must be apart." : "The axis direction must not be zero.")
+        }
+        return revolveAxis
     }
 
     func operandTitle(at index: Int, in document: DesignDocument) -> String {

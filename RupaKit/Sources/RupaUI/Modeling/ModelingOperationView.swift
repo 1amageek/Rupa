@@ -263,11 +263,16 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
-            vectorFields(draft.revolveAxisChoice == .twoPoints ? "Axis start" : "Axis origin", values: $draft.origin, unit: draft.unit.symbol)
-            if draft.revolveAxisChoice == .twoPoints {
-                vectorFields("Axis end", values: $draft.axisEnd, unit: draft.unit.symbol)
-            } else {
+            switch draft.revolveAxisChoice {
+            case .direction:
+                vectorFields("Axis origin", values: $draft.origin, unit: draft.unit.symbol)
                 vectorFields("Axis direction", values: $draft.axis, unit: "")
+            case .twoPoints:
+                vectorFields("Axis start", values: $draft.origin, unit: draft.unit.symbol)
+                vectorFields("Axis end", values: $draft.axisEnd, unit: draft.unit.symbol)
+            case .normal, .binormal, .tangent:
+                Text("Through the section's boundary start: Tangent along it, Normal along the section's normal, Binormal across both.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             TextField("Angle (degrees)", text: $draft.angle)
             if !draft.createsSheet {
