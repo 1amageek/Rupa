@@ -2937,13 +2937,16 @@ public final class CADDocumentStore {
             try run()
         case .createSweep:
             func run() throws {
-                guard case .createSweep(let name, let sections, let path, let guides, let targets, let options) = command else {
+                guard case .createSweep(let name, let sections, let path, let guides, let targets, let options, let edgeCurves) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected createSweep."
                     )
                 }
                 var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addEdgeCurve(edgeCurve)
+                }
                 primaryFeatureID = try updatedDocument.createSweep(
                     name: name,
                     sections: sections,

@@ -139,7 +139,7 @@ struct ModelingOperationDraftTests {
         draft.twistAngle = "30"
         #expect(throws: EditorError.self) { try draft.command(in: document) }
         draft.approximationTolerance = "0.001 mm"
-        guard case .createSweep(_, _, _, _, _, let options) = try draft.command(in: document) else {
+        guard case .createSweep(_, _, _, _, _, let options, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -165,7 +165,7 @@ struct ModelingOperationDraftTests {
         let pathNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
         var draft = makeDraft(.sweep, targets: [.init(sceneNodeID: circleNode.id), .init(sceneNodeID: pathNode.id)])
         draft.approximationTolerance = "0.0001 mm"
-        guard case .createSweep(_, _, _, _, _, let options) = try draft.command(in: document) else {
+        guard case .createSweep(_, _, _, _, _, let options, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -195,7 +195,7 @@ struct ModelingOperationDraftTests {
         let refused = CADDocumentStore(document: document)
         #expect(throws: EditorError.self) { _ = try refused.apply(draft.command(in: document)) }
         draft.sweepAlignment = .parallel
-        guard case .createSweep(_, _, _, _, _, let parallel) = try draft.command(in: document) else {
+        guard case .createSweep(_, _, _, _, _, let parallel, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -220,7 +220,7 @@ struct ModelingOperationDraftTests {
             end: SketchPoint(x: .length(0.05, .meter), y: .length(0.01, .meter)))
         let pathNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
         var draft = makeDraft(.sweep, targets: [top, .init(sceneNodeID: pathNode.id)])
-        guard case .createSweep(_, let sections, _, _, let targets, _) = try draft.command(in: document) else {
+        guard case .createSweep(_, let sections, _, _, let targets, _, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -235,7 +235,7 @@ struct ModelingOperationDraftTests {
         #expect(abs(separate.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + 0.02 * 0.02 * 0.03)) < 1e-12)
 
         draft.solidBoolean = .union
-        guard case .createSweep(_, _, _, _, let grownTargets, let options) = try draft.command(in: document) else {
+        guard case .createSweep(_, _, _, _, let grownTargets, let options, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -327,7 +327,7 @@ struct ModelingOperationDraftTests {
         )
         let nodes = try [square, frame].map { id in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(id) }) }
         let draft = makeDraft(.sweep, targets: nodes.map { .init(sceneNodeID: $0.id) })
-        guard case .createSweep(_, let sections, let path, _, _, _) = try draft.command(in: document) else {
+        guard case .createSweep(_, let sections, let path, _, _, _, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
@@ -366,6 +366,38 @@ struct ModelingOperationDraftTests {
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(measurement.counts.sheets == 1)
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.01) < 1e-12)
+    }
+
+    @Test func aSectionSweepsAlongAnEdgeOfABody() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        // A 4 mm square across the top front edge's end at the origin side.
+        let square = try document.createRectangleSketchFromCorners(
+            name: "Section", plane: .plane(Plane3D(origin: Point3D(x: 0, y: 0, z: 0.02), normal: .unitX)),
+            firstCorner: SketchPoint(x: .length(-0.002, .meter), y: .length(-0.002, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.002, .meter), y: .length(0.002, .meter))
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        let squareNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(square) })
+        let draft = makeDraft(.sweep, targets: [.init(sceneNodeID: squareNode.id), edge])
+        guard case .createSweep(_, let sections, let path, _, _, _, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(sections.map(\.featureID) == [square] && edgeCurves.map(\.id) == [path.featureID])
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + 0.004 * 0.004 * 0.02)) < 1e-12)
     }
 
     @Test func twoEdgesOfABoxLoftIntoASheet() throws {
@@ -842,7 +874,7 @@ struct ModelingOperationDraftTests {
         let pathNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) })
         let sweepDraft = makeDraft(.sweep, targets: [targets[0], SelectionTarget(sceneNodeID: pathNode.id)])
         let sweepCommand = try sweepDraft.command(in: document)
-        guard case .createSweep(_, let sweepSections, _, _, _, _) = sweepCommand else {
+        guard case .createSweep(_, let sweepSections, _, _, _, _, _) = sweepCommand else {
             Issue.record("Expected Sweep."); return
         }
         #expect(sweepSections == [sections[0].section])

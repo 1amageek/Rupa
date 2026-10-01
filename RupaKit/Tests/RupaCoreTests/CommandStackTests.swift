@@ -1866,7 +1866,8 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         plannedPath,
         plannedGuides,
         plannedTargets,
-        plannedOptions
+        plannedOptions,
+        plannedEdgeCurves
     ) = plannedCommand else {
         Issue.record("The immutable sweep planner must produce createSweep.")
         return
@@ -1879,6 +1880,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(plannedGuides.isEmpty)
     #expect(plannedTargets.isEmpty)
     #expect(plannedOptions.resultKind == .sheet)
+    #expect(plannedEdgeCurves.isEmpty)
     #expect(preview.status == .ready)
     #expect(preview.section == .curve(CurveSectionReference(featureID: sectionFeatureID)))
     #expect(preview.pathFeatureID == pathFeatureID)

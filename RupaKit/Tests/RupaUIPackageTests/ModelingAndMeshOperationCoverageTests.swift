@@ -112,7 +112,7 @@ struct ModelingAndMeshOperationCoverageTests {
         )
         sweep.name = "Sweep"
         let sweepCommand = try sweep.command(in: sweepDocument)
-        guard case .createSweep(_, let sections, let path, _, _, _) = sweepCommand else {
+        guard case .createSweep(_, let sections, let path, _, _, _, _) = sweepCommand else {
             Issue.record("Sweep draft must use the existing sweep command.")
             return
         }

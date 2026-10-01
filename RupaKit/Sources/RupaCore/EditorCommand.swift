@@ -422,13 +422,16 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         name: String, section: SectionReference, axis: RevolveAxis, angle: CADExpression, resultKind: BodyKind,
         operation: SolidOperation = .newBody, targets: [FeatureID] = [], keepTools: Bool = false, thickness: CADExpression? = nil
     )
+    /// A sweep; `edgeCurves` (a path or sections along edges of bodies) are added first, without
+    /// objects of their own.
     case createSweep(
         name: String,
         sections: [SectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference],
         targets: [SweepTargetReference],
-        options: SweepOptions
+        options: SweepOptions,
+        edgeCurves: [EdgeCurveSource] = []
     )
     /// A pipe along each curve, each persisted as a feature of its own, all in one transaction.
     /// `edgeCurves` are added first, without objects of their own, for pipes that follow edges.

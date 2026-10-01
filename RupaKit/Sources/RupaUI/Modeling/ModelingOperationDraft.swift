@@ -567,6 +567,14 @@ struct ModelingOperationDraft: Equatable {
             // A Boolean sweep combines with the bodies selected after its section and path, or
             // with the body its face section lies on.
             var sources = targets
+            // An edge selected for the path is the path along its curve.
+            var pathEdgeCurve: EdgeCurveSource?
+            if let edgeIndex = sources.lastIndex(where: { if case .edge = $0.component { return true }; return false }) {
+                pathEdgeCurve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                    for: sources[edgeIndex], operationName: "Sweep", currentEvaluation: nil
+                ))
+                sources.remove(at: edgeIndex)
+            }
             var bodies: [SweepTargetReference] = []
             if solidBoolean != .newBody {
                 guard let operation = SweepBooleanOperation(rawValue: solidBoolean.operation.rawValue), !createsSheet else {
@@ -590,7 +598,7 @@ struct ModelingOperationDraft: Equatable {
             }
             return try SweepSelectionPlanningService(
                 document: document, selection: SelectionModel(selectedTargets: sources)
-            ).command(name: name, options: options, targets: bodies)
+            ).command(name: name, options: options, targets: bodies, pathEdgeCurve: pathEdgeCurve)
         case .loft:
             // Sections in selection order: each edge or face of a body its own section, each other
             // source once.

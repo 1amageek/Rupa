@@ -31,11 +31,13 @@ public struct SweepSelectionPlanningService: Sendable {
         targetSceneNodeID: SceneNodeID? = nil,
         name: String,
         options: SweepOptions = SweepOptions(),
-        targets: [SweepTargetReference] = []
+        targets: [SweepTargetReference] = [],
+        pathEdgeCurve: EdgeCurveSource? = nil
     ) throws -> EditorCommand {
         let resolution = try resolution(targetSceneNodeID: targetSceneNodeID)
+        // A path along an edge is the edge's curve, added with the sweep.
         guard let section = resolution.section,
-              let pathFeatureID = resolution.pathFeatureID else {
+              let pathFeatureID = pathEdgeCurve?.id ?? resolution.pathFeatureID else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sweep tool requires one profile or curve section source, one separate path curve source, and optional guide curve selections."
@@ -51,7 +53,8 @@ public struct SweepSelectionPlanningService: Sendable {
             path: SweepPathReference(featureID: pathFeatureID),
             guides: resolution.guideFeatureIDs.map { SweepGuideReference(featureID: $0) },
             targets: targets,
-            options: resolvedOptions
+            options: resolvedOptions,
+            edgeCurves: pathEdgeCurve.map { [$0] } ?? []
         )
     }
 
