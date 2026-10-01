@@ -36,6 +36,7 @@ extension FeatureOperation {
              .constrainedSurface,
              .bSplineSurface,
              .patchSurface,
+             .squareSurface,
              .faceLoopOffset,
              .edgeOffset,
              .faceKnife,
@@ -122,6 +123,7 @@ extension FeatureOperation {
             return false
         case .primitive,
              .patchSurface,
+             .squareSurface,
              .bridgeSurface,
              .faceOffset,
              .faceMove,
@@ -305,6 +307,7 @@ extension FeatureOperation {
             return [feature.target.featureID]
         case .primitive,
              .patchSurface,
+             .squareSurface,
              .bridgeSurface,
              .linearPattern,
              .radialPattern,

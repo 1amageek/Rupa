@@ -377,6 +377,16 @@ struct ModelingOperationView: View {
             lengthField("Distance", text: $draft.distance)
         case .patch, .bridge:
             EmptyView()
+        case .square:
+            Picker("Continuity", selection: $draft.squareContinuity) {
+                ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            if draft.squareContinuity != .g0 {
+                TextField("Tension", text: $draft.squareTension)
+            }
+            Text("Select four sides meeting end to end: edges of bodies or curves. G1 and G2 apply along edges, on one side or two opposite ones, meeting the planar face beside each.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

@@ -436,6 +436,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// A pipe along each curve, each persisted as a feature of its own, all in one transaction.
     /// `edgeCurves` are added first, without objects of their own, for pipes that follow edges.
     case createPipes(name: String, sources: [PipeFeature], edgeCurves: [EdgeCurveSource] = [])
+    /// A Square framed by four side curves; `edgeCurves` are added first, without objects of
+    /// their own, for sides along edges of bodies.
+    case createSquare(name: String, sides: [SquareSide], edgeCurves: [EdgeCurveSource] = [])
     /// Each edge's curve extruded into a sheet of its own; the curves are added first.
     case extrudeEdges(
         name: String, edgeCurves: [EdgeCurveSource], distance: CADExpression, startDistance: CADExpression? = nil,
@@ -976,6 +979,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createSweep"
         case .createPipes:
             "createPipes"
+        case .createSquare:
+            "createSquare"
         case .extrudeEdges:
             "extrudeEdges"
         case .createLoft:
@@ -1247,6 +1252,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .revolveSection,
              .createSweep,
              .createPipes,
+             .createSquare,
              .extrudeEdges,
              .createLoft,
              .setLoft,

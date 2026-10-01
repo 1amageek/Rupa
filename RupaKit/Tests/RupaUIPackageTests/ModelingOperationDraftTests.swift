@@ -542,6 +542,73 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func fourCurvesFrameAFlatSquare() throws {
+        var document = DesignDocument.empty()
+        let ends = [(0.0, 0.0, 0.02, 0.0), (0.02, 0.0, 0.02, 0.02), (0.02, 0.02, 0.0, 0.02), (0.0, 0.02, 0.0, 0.0)]
+        let lines = try ends.map { x0, y0, x1, y1 in
+            try document.createLineSketch(name: "Side", plane: .xy,
+                start: SketchPoint(x: .length(x0, .meter), y: .length(y0, .meter)),
+                end: SketchPoint(x: .length(x1, .meter), y: .length(y1, .meter)))
+        }
+        let nodes = try lines.map { line in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) }) }
+        // Selected out of boundary order.
+        let draft = makeDraft(.square, targets: [nodes[0], nodes[2], nodes[1], nodes[3]].map { .init(sceneNodeID: $0.id) })
+        guard case .createSquare(_, let sides, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected a Square command.")
+            return
+        }
+        #expect(sides.count == 4 && edgeCurves.isEmpty && sides.allSatisfy { $0.continuity == nil })
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.0004) < 1e-12)
+    }
+
+    @Test func aSquareBetweenEdgesOfTwoBoxesIsTangentToTheirFaces() throws {
+        var document = DesignDocument.empty()
+        // Box A spans [0, 20 mm]³, box B [0, 20] × [-70, -50] × [30, 50] mm.
+        let boxes = try [Point3D(x: 0, y: 0, z: 0), Point3D(x: 0, y: -0.07, z: 0.03)].map { origin in
+            try document.createExtrudedRectangleFromCorners(
+                name: "Box", plane: .plane(Plane3D(origin: origin, normal: .unitZ)),
+                firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+                oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+                depth: .length(0.02, .meter), direction: .normal
+            )
+        }
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edges = try [(0.0, 0.02), (-0.05, 0.03)].map { y, z in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return abs(start.y - y) < 1e-9 && abs(end.y - y) < 1e-9 && abs(start.z - z) < 1e-9 && abs(end.z - z) < 1e-9
+            }?.selectionTarget())
+        }
+        // Rails leaving A's top face and arriving at B's bottom face level, in the planes x = 0 and
+        // x = 20 mm (sketch x is world y and sketch y is world z on planes across X).
+        let rail: [(Double, Double)] = [(0, 0.02), (-0.02, 0.02), (-0.03, 0.03), (-0.05, 0.03)]
+        let rails = try [SketchPlane.yz, .plane(Plane3D(origin: Point3D(x: 0.02, y: 0, z: 0), normal: .unitX))].map { plane in
+            try document.createSketch(name: "Rail", sketch: Sketch(plane: plane, entities: [
+                SketchEntityID(): .spline(SketchSpline(controlPoints: rail.map { SketchPoint(x: .length($0.0, .meter), y: .length($0.1, .meter)) })),
+            ]), geometryRole: .curve)
+        }
+        let railNodes = try rails.map { rail in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(rail) }) }
+        var draft = makeDraft(.square, targets: [edges[0], .init(sceneNodeID: railNodes[1].id), edges[1], .init(sceneNodeID: railNodes[0].id)])
+        draft.squareContinuity = .g1
+        guard case .createSquare(_, let sides, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected a Square command.")
+            return
+        }
+        #expect(edgeCurves.count == 2)
+        #expect(sides.compactMap { $0.continuity?.source } == boxes)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // Bending from one face's level to the other's, the sheet is wider than the flat one
+        // between the edges.
+        #expect(measurement.counts.sheets == 1)
+        #expect(measurement.totals.sheetAreaSquareMeters > 0.02 * (0.05 * 0.05 + 0.01 * 0.01).squareRoot())
+    }
+
     @Test func facesOfTwoBodiesLoftIntoASolid() throws {
         var document = DesignDocument.empty()
         let boxes = try [0.0, 0.05].map { z in

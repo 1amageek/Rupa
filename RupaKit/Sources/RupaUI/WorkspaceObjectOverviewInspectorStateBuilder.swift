@@ -728,6 +728,18 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(wrap.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Keep Tools", value: wrap.keepsTarget ? "On" : "Off"),
             ]
+        case .squareSurface(let square):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Square"),
+                WorkspaceInspectorTextRow(title: "Sides", value: "\(square.sides.count)"),
+                WorkspaceInspectorTextRow(title: "Continuity", value: square.sides.map { side in
+                    switch side.continuity?.order {
+                    case nil: "G0"
+                    case .tangent?: "G1"
+                    case .curvature?: "G2"
+                    }
+                }.joined(separator: " · ")),
+            ]
         case .edgeCurve(let edgeCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Edge Curves"),

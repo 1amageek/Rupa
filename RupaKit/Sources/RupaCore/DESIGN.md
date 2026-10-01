@@ -580,6 +580,10 @@ sheet with `extrudeSection`, all in one transaction.
 `faceSectionReference`) and refuses one shown away from where it was built; an end edge section's
 continuity names the edge's body as an input, which must likewise be shown where it was built.
 
+`createSquare` adds a native Square sheet framed by four side curves (edge curves it carries are
+added first), admitting a continuous side's body only where it was built; it is measured as its
+evaluated sheet.
+
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve
 features without objects of their own, read with `edgeCurveFeature(for:)`), admits a custom profile that is a sketch region or a face (never a curve), refuses a face profile, path or target shown away from where it was built, takes a Boolean

@@ -20,6 +20,7 @@ struct ModelingOperationDraft: Equatable {
         case surfacePatch = "Plane Surface"
         case patch = "Patch"
         case bridge = "Boundary Bridge (G0)"
+        case square = "Square"
         case surfaceOffset = "Sheet Offset"
         case surfaceExtend = "Extend Trim"
         case shell = "Shell"
@@ -33,7 +34,7 @@ struct ModelingOperationDraft: Equatable {
             allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface].contains($0) }
         }
 
-        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge]
+        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square]
 
         var systemImage: String {
             switch self {
@@ -52,6 +53,7 @@ struct ModelingOperationDraft: Equatable {
             case .surfacePatch: "square.dashed"
             case .patch: "square.dashed.inset.filled"
             case .bridge: "rectangle.split.2x1"
+            case .square: "square.split.bottomrightquarter"
             case .surfaceOffset: "square.3.layers.3d"
             case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
             case .shell: "shippingbox"
@@ -168,7 +170,7 @@ struct ModelingOperationDraft: Equatable {
         case g1 = "G1"
         case g2 = "G2"
         var id: Self { self }
-        var order: LoftEdgeContinuity.Order? {
+        var order: SurfaceEdgeContinuity.Order? {
             switch self {
             case .g0: nil
             case .g1: .tangent
@@ -180,6 +182,9 @@ struct ModelingOperationDraft: Equatable {
     var loftEndContinuity = LoftContinuityChoice.g0
     /// The cross-boundary scale of a G1 or G2 end, times the distance between the end sections.
     var loftEdgeTension = "1"
+    /// How a Square meets the faces beside the edges among its sides, and their tension.
+    var squareContinuity = LoftContinuityChoice.g0
+    var squareTension = "1"
     var closesSectionLoop = false
     var uBounds = ["0", "1"]
     var vBounds = ["0", "1"]
@@ -275,7 +280,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -680,7 +685,7 @@ struct ModelingOperationDraft: Equatable {
             let sections = try sectionTargets.enumerated().map { index, target in
                 let reference: SectionReference
                 let choice = index == 0 ? loftStartContinuity : index == sectionTargets.count - 1 ? loftEndContinuity : .g0
-                var continuity: LoftEdgeContinuity?
+                var continuity: SurfaceEdgeContinuity?
                 switch target.component {
                 case .edge:
                     let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
@@ -689,7 +694,7 @@ struct ModelingOperationDraft: Equatable {
                     edgeCurves.append(curve)
                     reference = .curve(CurveSectionReference(featureID: curve.id))
                     if let order = choice.order, let edge = curve.feature.edges.first {
-                        continuity = LoftEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                        continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
                                                         edge: edge, order: order, tension: edgeTension)
                     }
                 case .face:
@@ -715,6 +720,37 @@ struct ModelingOperationDraft: Equatable {
                 simplify: loftSimplify)
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
             return .createLoft(name: name, sections: sections, guides: guides, options: options, edgeCurves: edgeCurves)
+        case .square:
+            // Four sides in any order: edges of bodies (their curves added with the Square), which
+            // take the continuity, or whole curve sources.
+            guard targets.count == 4 else { throw invalid("Square takes four sides: edges of bodies or curves meeting end to end.") }
+            let tension = squareContinuity == .g0 ? 1 : try number(squareTension, label: "Tension")
+            guard tension.isFinite, tension > 0 else { throw invalid("Tension must be positive.") }
+            var edgeCurves: [EdgeCurveSource] = []
+            let sides = try targets.map { target -> SquareSide in
+                switch target.component {
+                case .edge:
+                    let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                        for: target, operationName: "Square", currentEvaluation: nil
+                    ))
+                    edgeCurves.append(curve)
+                    var continuity: SurfaceEdgeContinuity?
+                    if let order = squareContinuity.order, let edge = curve.feature.edges.first {
+                        continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                                                           edge: edge, order: order, tension: tension)
+                    }
+                    return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
+                case .object:
+                    guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
+                        throw invalid("A Square's side is an open curve or an edge of a body.")
+                    }
+                    return SquareSide(curve: curve)
+                default:
+                    throw invalid("A Square's side is an open curve or an edge of a body.")
+                }
+            }
+            do { try SquareSurfaceFeature(sides: sides).validate() } catch { throw invalid("The Square is invalid: \(error).") }
+            return .createSquare(name: name, sides: sides, edgeCurves: edgeCurves)
         case .shell:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,

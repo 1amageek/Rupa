@@ -549,6 +549,60 @@ extension DesignDocument {
         return featureID
     }
 
+    /// Adds a Square framed by four side curves as a sheet of its own; a continuous side's edge
+    /// body must be shown where it was built.
+    @discardableResult
+    public mutating func createSquare(
+        name: String,
+        sides: [SquareSide],
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Square")
+        let square = SquareSurfaceFeature(sides: sides)
+        do {
+            try square.validate()
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "Square command is invalid: \(error).")
+        }
+        for side in sides {
+            try requireSweepSourceCurveFeature(side.curve.featureID, owner: "Square side")
+            if let continuity = side.continuity {
+                try requireSweepTargetBodyFeature(continuity.source, owner: "Square continuity edge")
+            }
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for featureID in sides.compactMap(\.continuity?.source) {
+            guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "A Square's continuity edges must be shown where they were built; this one has been moved.")
+            }
+        }
+        let featureID = FeatureID()
+        let feature = FeatureNode(id: featureID, name: trimmedName, operation: .squareSurface(square),
+                                  inputs: square.inputs, outputs: [FeatureOutput(role: .sheet)])
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
+                          geometryRole: .surface, objectRegistry: objectRegistry)
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+
     @discardableResult
     public mutating func createLoft(
         name: String,
