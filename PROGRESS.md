@@ -182,7 +182,8 @@
     - [x] SC1.6.f Bridge Surface's Trim walls: both walls cut at their contacts and joined with the bridge into one sheet (kernel 31bf7c5); the form's Trim walls, the joined sheet superseding both sources. Rupa the commit accompanying this record. `depends:SC1.6.d` `parallel:none`
     - [x] SC1.6.g Bridge Surface's Short/Long: the feature names the trimmed wall, Core resolving Short or Long by reach against the evaluated sheets and taking that sheet's object away (kernel a547391, 0aef670). Rupa the commit accompanying this record. `depends:SC1.6.f` `parallel:none`
     - [x] SC1.6.h Bridge Surface's trimmed walls longer than the bridge: the sheet joiner splits an edge where another sheet's edge ends inside it, so Join also sews sheets sharing part of an edge (kernel b189a4a). `depends:SC1.6.g` `parallel:none`
-    - [ ] SC1.6.e Bridge Surface's curved and many-faced sheets and parallel planes. `depends:SC1.6.h` `parallel:none`
+    - [x] SC1.6.i Bridge Surface from sheets of several faces in one plane (kernel d3b06db). `depends:SC1.6.h` `parallel:none`
+    - [ ] SC1.6.e Bridge Surface's curved sheets, sheets bending out of one plane and parallel planes. `depends:SC1.6.i` `parallel:none`
     - [x] SC1.6.c Patch from closed curves: curve sources joined end to end, exact trimmed plane when planar, exact Coons patch of four sides otherwise (kernel d938045); Patch over curve sources in the form, measured as its sheet. Rupa the commit accompanying this record. `depends:SC1.6.a` `parallel:none`
     - [ ] SC1.6.b2 G1/G2 continuity and tension at edge sections, vertex ends, limit points, Simplify and guide trim overlap. `depends:SC1.6.b1` `parallel:none`
       - [x] SC1.6.b2.a Exact G1/G2 with the planar face beside an end edge section and its tension (kernel cb1ed48); the Loft form's Start/End continuity and Edge tension. Rupa the commit accompanying this record. `depends:SC1.6.b1` `parallel:none`
