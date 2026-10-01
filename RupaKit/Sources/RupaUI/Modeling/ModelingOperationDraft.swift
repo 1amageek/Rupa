@@ -207,6 +207,17 @@ struct ModelingOperationDraft: Equatable {
         guard degrees.isFinite, degrees > 0, degrees < 90 else { throw invalid("Angle allowance is between 0 and 90 degrees.") }
         return degrees * Double.pi / 180
     }
+    /// The radius-of-curvature mismatch (as curvature, 1/length) a G2 surface may keep beside a
+    /// curved face; entered as a length whose reciprocal is the allowance.
+    var curvatureAllowanceRadius = "1 m"
+
+    /// The curvature allowance for `order`: none for tangent continuity.
+    private func curvatureAllowance(for order: SurfaceEdgeContinuity.Order) throws -> Double? {
+        guard order == .curvature else { return nil }
+        let radius = try length(curvatureAllowanceRadius, label: "Curvature allowance radius")
+        guard radius > 0 else { throw invalid("Curvature allowance radius must be positive.") }
+        return 1 / radius
+    }
     var closesSectionLoop = false
     var uBounds = ["0", "1"]
     var vBounds = ["0", "1"]
@@ -752,7 +763,8 @@ struct ModelingOperationDraft: Equatable {
                     if let order = choice.order, let edge = curve.feature.edges.first {
                         continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
                                                         edge: edge, order: order, tension: edgeTension,
-                                                        angularAllowance: try continuityAllowanceRadians())
+                                                        angularAllowance: try continuityAllowanceRadians(),
+                                                        curvatureAllowance: try curvatureAllowance(for: order))
                     }
                 case .face:
                     // A selected face of a body is a section of its own.
@@ -810,7 +822,8 @@ struct ModelingOperationDraft: Equatable {
                     if let order = squareContinuity.order, let edge = curve.feature.edges.first {
                         continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
                                                            edge: edge, order: order, tension: tension,
-                                                           angularAllowance: try continuityAllowanceRadians())
+                                                           angularAllowance: try continuityAllowanceRadians(),
+                                                           curvatureAllowance: try curvatureAllowance(for: order))
                     }
                     return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
                 case .object:

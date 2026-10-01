@@ -540,6 +540,11 @@ struct ModelingOperationDraftTests {
         #expect(sections.map { $0.continuity?.order } == [.tangent, .curvature])
         #expect(sections.allSatisfy { $0.continuity?.tension == 1.2 })
         #expect(sections.allSatisfy { abs(($0.continuity?.angularAllowance ?? 0) - 0.1 * Double.pi / 180) < 1e-15 })
+        // Only the G2 end carries a curvature allowance, the reciprocal of the entered radius.
+        #expect(sections.map { $0.continuity?.curvatureAllowance } == [nil, 1])
+        draft.curvatureAllowanceRadius = "0 m"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.curvatureAllowanceRadius = "1 m"
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))

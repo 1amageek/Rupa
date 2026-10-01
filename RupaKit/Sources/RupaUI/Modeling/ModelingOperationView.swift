@@ -376,7 +376,10 @@ struct ModelingOperationView: View {
             if draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 {
                 TextField("Edge tension", text: $draft.loftEdgeTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
-                Text("G1 and G2 ends meet a planar face beside the edge exactly; beside a curved face G1 holds within the angle allowance.")
+                if draft.loftStartContinuity == .g2 || draft.loftEndContinuity == .g2 {
+                    lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
+                }
+                Text("G1 and G2 ends meet a planar face beside the edge exactly; beside a curved face within the allowances.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         case .fillet:
@@ -414,6 +417,9 @@ struct ModelingOperationView: View {
             if draft.squareContinuity != .g0 {
                 TextField("Tension", text: $draft.squareTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
+                if draft.squareContinuity == .g2 {
+                    lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
+                }
             }
             Text("Select four sides meeting end to end: edges of bodies or curves. G1 applies along any edges (G2 along one side or two opposite ones): exactly beside planar faces, within the angle allowance beside curved ones.")
                 .font(.caption).foregroundStyle(.secondary)
