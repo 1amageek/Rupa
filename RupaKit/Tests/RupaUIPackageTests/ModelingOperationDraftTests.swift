@@ -626,6 +626,33 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 2 * (r * r - Double.pi * r * r / 4) * 0.02)) < 1e-11)
     }
 
+    @Test func aVariableFilletGrowsAlongItsEdge() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "2 mm"
+        draft.filletEndRadius = "6 mm"
+        guard case .createBodyEdgeTreatment(_, _, .variableFillet) = try draft.command(in: document) else {
+            Issue.record("Expected a variable fillet.")
+            return
+        }
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let (r0, r1) = (0.002, 0.006)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - (1 - Double.pi / 4) * (r0 * r0 + r0 * r1 + r1 * r1) / 3 * 0.02)) < 1e-11)
+    }
+
     @Test func aConicFilletRoundsABoxEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

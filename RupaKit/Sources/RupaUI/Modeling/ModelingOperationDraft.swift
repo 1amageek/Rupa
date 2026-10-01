@@ -295,6 +295,8 @@ struct ModelingOperationDraft: Equatable {
     }
     var filletShape = FilletShapeChoice.round
     var filletTension = ""
+    /// A variable fillet's radius at the edge's end; blank for a constant one.
+    var filletEndRadius = ""
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -974,6 +976,12 @@ struct ModelingOperationDraft: Equatable {
                 label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", in: document)
             let treatment: BodyEdgeTreatment
             switch kind {
+            case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false:
+                guard edges.count == 1 else { throw invalid("A variable fillet rounds one edge.") }
+                let text = filletTension.trimmingCharacters(in: .whitespaces)
+                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                treatment = .variableFillet(radius: amount, endRadius: try topologyLength(filletEndRadius, label: "End radius", in: document),
+                                            shape: filletShape.shape, tension: tension)
             case .fillet where filletShape != .round:
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
                 let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil

@@ -392,6 +392,7 @@ struct ModelingOperationView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+                lengthField("End radius (variable; blank for constant)", text: $draft.filletEndRadius)
             }
             if draft.filletShape.takesTension {
                 TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)

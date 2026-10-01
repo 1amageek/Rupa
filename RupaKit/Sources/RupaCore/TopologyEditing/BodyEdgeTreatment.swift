@@ -11,6 +11,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     /// Fillet Shell's Full shape: the round across the face between the target edge and `across`,
     /// tangent to it and both faces beside it; its size comes from those faces.
     case fullFillet(across: SelectionTarget)
+    /// A fillet of `shape` (tension where it takes one) varying from `radius` at the edge's start to
+    /// `endRadius` at its end.
+    case variableFillet(radius: CADExpression, endRadius: CADExpression, shape: FilletShape, tension: Double?)
     /// `treatment` of the target edge and of `more` edges of the same body, which must not meet it
     /// or each other at a corner.
     case several(BodyEdgeTreatment, more: [SelectionTarget])
@@ -39,6 +42,17 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
         case .g2Blend(let distance):
             amount = distance
             operation = .g2Blend(.init(target: .init(featureID: sourceID), edges: [reference], distance: distance))
+        case .variableFillet(let radius, let endRadius, let shape, let tension):
+            amount = radius
+            let fillet = FilletFeature(target: .init(featureID: sourceID), edges: [reference], radius: radius,
+                                       shape: shape, tension: tension, endRadius: endRadius)
+            do { try fillet.validate() } catch {
+                throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
+            }
+            guard try document.resolvedPositiveLengthValue(endRadius, owner: "Fillet end radius") > document.modelingSettings.tolerance.distance else {
+                throw EditorError(code: .commandInvalid, message: "Fillet end radius must exceed modeling tolerance.")
+            }
+            operation = .fillet(fillet)
         case .several:
             // The further edges are resolved by `DesignDocument.prepareBodyEdgeTreatment` into
             // `SeveralEdgeTreatment`, which builds the feature.

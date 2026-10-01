@@ -243,7 +243,9 @@ not extrusion-profile corner rewriting. They require one generated CAD edge
 and an amount above modeling tolerance, except Fillet's Full shape, which takes
 the two edges on either side of a face and no amount (`fullFillet(across:)`).
 Several distinct edges of one body take the same treatment in turn
-(`several(_:more:)`); edges meeting at a corner are refused by the kernel. The kernel's unsupported geometry is
+(`several(_:more:)`); edges meeting at a corner are refused by the kernel.
+Fillet's End radius makes one edge's fillet vary from the radius at its start to
+it at its end (`variableFillet`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
 quality, so these forms do not expose them as shape parameters. Existing
 profile-corner manipulation remains a distinct source-editing operation.
