@@ -730,10 +730,11 @@ extension DesignDocument {
         sections: [LoftSectionReference],
         guides: [LoftGuideReference] = [],
         options: LoftOptions = LoftOptions(),
+        apex: LoftApex? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Loft")
-        let loft = LoftFeature(sections: sections, guides: guides, options: options)
+        let loft = LoftFeature(sections: sections, guides: guides, options: options, apex: apex)
         do {
             try loft.validate()
         } catch {
@@ -761,11 +762,15 @@ extension DesignDocument {
         // A loft is built where its sources were built: a face shown elsewhere would loft from the
         // wrong place, and a continuity edge's face would turn the loft the wrong way.
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        for featureID in sections.filter(\.section.isFace).map(\.featureID) + sections.compactMap(\.continuity?.source) {
+        if let apex {
+            try requireSweepTargetBodyFeature(apex.source, owner: "Loft vertex")
+        }
+        for featureID in sections.filter(\.section.isFace).map(\.featureID) + sections.compactMap(\.continuity?.source)
+            + (apex.map { [$0.source] } ?? []) {
             guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
             guard try hierarchy.worldTransform(of: node) == .identity else {
                 throw EditorError(code: .commandInvalid,
-                    message: "A loft's face sections and continuity edges must be shown where they were built; this one has been moved.")
+                    message: "A loft's face sections, continuity edges and vertex must be shown where they were built; this one has been moved.")
             }
         }
 

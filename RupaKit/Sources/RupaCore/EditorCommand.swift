@@ -461,6 +461,10 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         edgeCurves: [EdgeCurveSource] = []
     )
     case setLoft(featureID: FeatureID, loft: LoftFeature)
+    /// A loft from one section to a vertex of a body; `edgeCurves` (a section along an edge) are
+    /// added first.
+    case createApexLoft(name: String, section: LoftSectionReference, apex: LoftApex, options: LoftOptions,
+                        edgeCurves: [EdgeCurveSource] = [])
     case createBoolean(
         name: String,
         targets: [BooleanTargetReference],
@@ -998,6 +1002,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createLoft"
         case .setLoft:
             "setLoft"
+        case .createApexLoft:
+            "createApexLoft"
         case .createBoolean:
             "createBoolean"
         case .cut:
@@ -1269,6 +1275,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .extrudeEdges,
              .createLoft,
              .setLoft,
+             .createApexLoft,
              .createBoolean,
              .cut,
              .duplicateBodyFaces,

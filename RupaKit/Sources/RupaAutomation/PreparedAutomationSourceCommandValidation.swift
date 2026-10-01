@@ -180,6 +180,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createBridgeSurface,
              .extrudeEdges,
              .createLoft,
+             .createApexLoft,
              .setLoft,
              .createBoolean,
              .cut,

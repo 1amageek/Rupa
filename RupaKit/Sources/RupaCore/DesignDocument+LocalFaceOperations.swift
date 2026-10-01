@@ -446,6 +446,22 @@ extension DesignDocument {
         )
     }
 
+    /// The vertex of a body a Loft ends at, read from the body as it is now.
+    public func loftApex(
+        for target: SelectionTarget,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> LoftApex {
+        let object = try offsetObject(for: [target], operationName: "Loft")
+        let role = productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        return LoftApex(source: object.featureID, bodyRole: role == .surface ? .sheet : .body,
+                        vertex: try stableReference(of: target, kind: .vertex, in: topology, operationName: "Loft"))
+    }
+
     /// The section a selected planar face of a body stands for, read from the body as it is now.
     public func faceSectionReference(
         for target: SelectionTarget,

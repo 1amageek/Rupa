@@ -585,6 +585,9 @@ place and are measured as the body they evaluate to, the treated source being su
 fillet (`BodyEdgeTreatment.fullFillet(across:)`) resolves both edges and states the round's radius,
 which the kernel's `FullFilletRadius` reads from the faces (and the evaluator checks).
 
+`createApexLoft` adds a Loft from one section to a vertex of a body (`loftApex(for:)` reads the
+vertex's stable reference), the body shown where it was built.
+
 `createBridgeSurface` adds a native Bridge Surface sheet between two sheets shown where they were
 built, resolving Short or Long (`wallByReach`) against the evaluated sheets into the first or second
 through `SheetBridgeWallReach` so the feature names the wall it trims, whose object it takes away; `createCurvePatch` adds a Patch spanning closed curves (edge curves it carries added first).

@@ -103,20 +103,21 @@ extension DesignDocument {
         return (nodeID, featureID)
     }
 
-    /// The stable reference of the edge or face a target selects.
+    /// The stable reference of the edge, face or vertex a target selects.
     func stableReference(
         of target: SelectionTarget, kind: TopologySummaryResult.Entry.Kind, in topology: TopologySnapshot, operationName: String
     ) throws -> StableSubshapeReference {
         let componentID: SelectionComponentID
+        let noun = kind == .edge ? "edge" : kind == .face ? "face" : "vertex"
         switch (target.component, kind) {
-        case (.edge(let id), .edge), (.face(let id), .face): componentID = id
+        case (.edge(let id), .edge), (.face(let id), .face), (.vertex(let id), .vertex): componentID = id
         default:
-            throw EditorError(code: .commandInvalid, message: "\(operationName) needs \(kind == .edge ? "edges" : "faces") of the object.")
+            throw EditorError(code: .commandInvalid, message: "\(operationName) needs a \(noun) of the object.")
         }
         guard let entry = topology.entries.first(where: {
             $0.kind == kind && $0.sceneNodeID == target.sceneNodeID.description && $0.selectionComponentID == componentID.rawValue
         }), let reference = entry.stableReference else {
-            throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not resolve a selected \(kind == .edge ? "edge" : "face").")
+            throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not resolve a selected \(noun).")
         }
         return reference
     }

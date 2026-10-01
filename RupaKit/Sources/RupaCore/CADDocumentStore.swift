@@ -3067,6 +3067,17 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case let .createApexLoft(name, section, apex, options, edgeCurves):
+            var updatedDocument = document
+            for edgeCurve in edgeCurves {
+                try updatedDocument.addEdgeCurve(edgeCurve)
+            }
+            primaryFeatureID = try updatedDocument.createLoft(
+                name: name, sections: [section], options: options, apex: apex, objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .setLoft(featureID, loft):
             var updatedDocument = document
             try updatedDocument.setLoft(featureID: featureID, loft: loft, objectRegistry: objectRegistry)

@@ -475,6 +475,40 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + 0.004 * 0.004 * 0.02)) < 1e-12)
     }
 
+    @Test func aSquareLoftsToABoxsCornerAsAPyramid() throws {
+        var document = DesignDocument.empty()
+        // A 20 mm box from z = 30 mm; its corner (0, 0, 30) mm is the apex.
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .plane(Plane3D(origin: Point3D(x: 0, y: 0, z: 0.03), normal: .unitZ)),
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let square = try document.createRectangleSketchFromCorners(
+            name: "Square", plane: .xy,
+            firstCorner: SketchPoint(x: .length(-0.01, .meter), y: .length(-0.01, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.01, .meter), y: .length(0.01, .meter))
+        )
+        let squareNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(square) })
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let corner = try #require(topology.entries.first { entry in
+            guard entry.kind == .vertex, let point = entry.start else { return false }
+            return abs(point.x) < 1e-9 && abs(point.y) < 1e-9 && abs(point.z - 0.03) < 1e-9
+        }?.selectionTarget())
+        let draft = makeDraft(.loft, targets: [.init(sceneNodeID: squareNode.id), corner])
+        guard case .createApexLoft(_, _, let apex, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected a loft to a vertex.")
+            return
+        }
+        #expect(document.cadDocument.designGraph.nodes[apex.source] != nil)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The box and the pyramid, a third of its 20 mm square base times its 30 mm height.
+        #expect(measurement.counts.solids == 2)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 + 0.02 * 0.02 * 0.03 / 3)) < 1e-12)
+    }
+
     @Test func twoEdgesOfABoxLoftIntoASheet() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

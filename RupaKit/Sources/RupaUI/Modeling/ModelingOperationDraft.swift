@@ -744,14 +744,20 @@ struct ModelingOperationDraft: Equatable {
             // Sections in selection order: each edge or face of a body its own section, each other
             // source once.
             var seenTargets = Set<SelectionTarget>(), seenNodes = Set<SceneNodeID>()
+            // A selected vertex of a body is the loft's apex, after its one section.
+            let vertices = targets.filter { if case .vertex = $0.component { return true }; return false }
             let sectionTargets = targets.filter { target in
                 guard !loftGuideNodeIDs.contains(target.sceneNodeID), seenTargets.insert(target).inserted else { return false }
                 switch target.component {
                 case .edge, .face: return true
+                case .vertex: return false
                 default: return seenNodes.insert(target.sceneNodeID).inserted
                 }
             }
-            guard sectionTargets.count >= 2 else { throw invalid("Select at least two ordered sections, separate from guides.") }
+            guard vertices.count <= 1 else { throw invalid("A loft ends at one vertex.") }
+            guard sectionTargets.count >= (vertices.isEmpty ? 2 : 1) else {
+                throw invalid(vertices.isEmpty ? "Select at least two ordered sections, separate from guides." : "Select a section to loft to the vertex.")
+            }
             let guides = zip(nodes, features).compactMap { node, feature in
                 loftGuideNodeIDs.contains(node.id) ? LoftGuideReference(featureID: feature) : nil
             }
@@ -799,6 +805,12 @@ struct ModelingOperationDraft: Equatable {
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"),
                 simplify: loftSimplify)
+            if let vertex = vertices.first {
+                let apex = try document.loftApex(for: vertex, currentEvaluation: nil)
+                guard sections.count == 1, guides.isEmpty else { throw invalid("A loft to a vertex takes one section and no guides.") }
+                try LoftFeature(sections: sections, options: options, apex: apex).validate()
+                return .createApexLoft(name: name, section: sections[0], apex: apex, options: options, edgeCurves: edgeCurves)
+            }
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
             return .createLoft(name: name, sections: sections, guides: guides, options: options, edgeCurves: edgeCurves)
         case .bridgeSurface:
