@@ -2997,13 +2997,16 @@ public final class CADDocumentStore {
             try run()
         case .createLoft:
             func run() throws {
-                guard case .createLoft(let name, let sections, let guides, let options) = command else {
+                guard case .createLoft(let name, let sections, let guides, let options, let edgeCurves) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected createLoft."
                     )
                 }
                 var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addEdgeCurve(edgeCurve)
+                }
                 primaryFeatureID = try updatedDocument.createLoft(
                     name: name,
                     sections: sections,

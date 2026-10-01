@@ -438,11 +438,14 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         name: String, edgeCurves: [EdgeCurveSource], distance: CADExpression, startDistance: CADExpression? = nil,
         direction: ExtrudeDirection
     )
+    /// A loft of `sections` in order; `edgeCurves` (sections along edges of bodies) are added
+    /// first, without objects of their own.
     case createLoft(
         name: String,
         sections: [LoftSectionReference],
         guides: [LoftGuideReference] = [],
-        options: LoftOptions
+        options: LoftOptions,
+        edgeCurves: [EdgeCurveSource] = []
     )
     case setLoft(featureID: FeatureID, loft: LoftFeature)
     case createBoolean(

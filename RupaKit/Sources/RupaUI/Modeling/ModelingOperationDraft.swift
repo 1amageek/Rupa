@@ -592,23 +592,38 @@ struct ModelingOperationDraft: Equatable {
                 document: document, selection: SelectionModel(selectedTargets: sources)
             ).command(name: name, options: options, targets: bodies)
         case .loft:
-            let sectionNodes = nodes.filter { !loftGuideNodeIDs.contains($0.id) }
-            guard sectionNodes.count >= 2 else { throw invalid("Select at least two ordered sections, separate from guides.") }
+            // Sections in selection order: each edge or face of a body its own section, each other
+            // source once.
+            var seenTargets = Set<SelectionTarget>(), seenNodes = Set<SceneNodeID>()
+            let sectionTargets = targets.filter { target in
+                guard !loftGuideNodeIDs.contains(target.sceneNodeID), seenTargets.insert(target).inserted else { return false }
+                switch target.component {
+                case .edge, .face: return true
+                default: return seenNodes.insert(target.sceneNodeID).inserted
+                }
+            }
+            guard sectionTargets.count >= 2 else { throw invalid("Select at least two ordered sections, separate from guides.") }
             let guides = zip(nodes, features).compactMap { node, feature in
                 loftGuideNodeIDs.contains(node.id) ? LoftGuideReference(featureID: feature) : nil
             }
-            let sections = try sectionNodes.map { node in
-                // A selected face of a body is a section of its own.
+            // A selected edge of a body is a curve section along it, its curve added with the loft.
+            var edgeCurves: [EdgeCurveSource] = []
+            let sections = try sectionTargets.map { target in
                 let reference: SectionReference
-                if let face = targets.first(where: { target in
-                    guard target.sceneNodeID == node.id, case .face = target.component else { return false }
-                    return true
-                }) {
-                    reference = .face(try document.faceSectionReference(for: face, operationName: "Loft", currentEvaluation: nil))
-                } else {
-                    reference = try sectionReference(for: node.id, in: document)
+                switch target.component {
+                case .edge:
+                    let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                        for: target, operationName: "Loft", currentEvaluation: nil
+                    ))
+                    edgeCurves.append(curve)
+                    reference = .curve(CurveSectionReference(featureID: curve.id))
+                case .face:
+                    // A selected face of a body is a section of its own.
+                    reference = .face(try document.faceSectionReference(for: target, operationName: "Loft", currentEvaluation: nil))
+                default:
+                    reference = try sectionReference(for: target.sceneNodeID, in: document)
                 }
-                let controls = loftSectionControls[node.id] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
+                let controls = loftSectionControls[target.sceneNodeID] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
                 return try controls.applying(to: LoftSectionReference(section: reference))
             }
             guard createsSheet || sections.allSatisfy({ $0.section.isClosedRegion }) else {
@@ -618,7 +633,7 @@ struct ModelingOperationDraft: Equatable {
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"))
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
-            return .createLoft(name: name, sections: sections, guides: guides, options: options)
+            return .createLoft(name: name, sections: sections, guides: guides, options: options, edgeCurves: edgeCurves)
         case .shell:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,

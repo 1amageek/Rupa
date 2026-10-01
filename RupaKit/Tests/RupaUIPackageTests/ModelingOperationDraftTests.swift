@@ -368,6 +368,37 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.01) < 1e-12)
     }
 
+    @Test func twoEdgesOfABoxLoftIntoASheet() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // The top edge along X at y = 0 and the bottom edge along X at y = 20 mm.
+        let edges = try [(0.0, 0.02), (0.02, 0.0)].map { y, z in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return abs(start.y - y) < 1e-9 && abs(end.y - y) < 1e-9 && abs(start.z - z) < 1e-9 && abs(end.z - z) < 1e-9
+            }?.selectionTarget())
+        }
+        var draft = makeDraft(.loft, targets: edges)
+        draft.sheet = true
+        guard case .createLoft(_, let sections, _, _, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected native Loft source intent.")
+            return
+        }
+        #expect(edgeCurves.count == 2 && sections.map(\.featureID) == edgeCurves.map(\.id))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The diagonal sheet between them: 20 mm by 20√2 mm.
+        #expect(measurement.counts.sheets == 1)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.02 * 2.0.squareRoot()) < 1e-12)
+    }
+
     @Test func facesOfTwoBodiesLoftIntoASolid() throws {
         var document = DesignDocument.empty()
         let boxes = try [0.0, 0.05].map { z in
@@ -388,7 +419,7 @@ struct ModelingOperationDraftTests {
             }?.selectionTarget())
         }
         let draft = makeDraft(.loft, targets: faces)
-        guard case .createLoft(_, let sections, _, _) = try draft.command(in: document) else {
+        guard case .createLoft(_, let sections, _, _, _) = try draft.command(in: document) else {
             Issue.record("Expected native Loft source intent.")
             return
         }
@@ -742,7 +773,7 @@ struct ModelingOperationDraftTests {
             draft.loftSectionControls[target.sceneNodeID] = controls
         }
         draft.targets.swapAt(0, 1)
-        guard case .createLoft(_, let sections, _, let options) = try draft.command(in: document) else {
+        guard case .createLoft(_, let sections, _, let options, _) = try draft.command(in: document) else {
             Issue.record("Expected loft source command.")
             return
         }
@@ -790,7 +821,7 @@ struct ModelingOperationDraftTests {
         }
         var draft = makeDraft(.loft, targets: targets)
         let command = try draft.command(in: document)
-        guard case .createLoft(_, let sections, _, _) = command else { Issue.record("Expected Loft."); return }
+        guard case .createLoft(_, let sections, _, _, _) = command else { Issue.record("Expected Loft."); return }
         #expect(sections.allSatisfy { if case .profile(let reference) = $0.section { return reference.profileIndex == 1 }; return false })
         for kind in [ModelingOperationDraft.Kind.extrude, .revolve] {
             let sibling = makeDraft(kind, targets: [targets[0]])
@@ -867,7 +898,7 @@ struct ModelingOperationDraftTests {
         draft.loftGuideNodeIDs.insert(guideNode.id)
         draft.targets.insert(draft.targets.removeLast(), at: 0)
         let command = try draft.command(in: document)
-        guard case .createLoft(_, let sections, let guides, _) = command else {
+        guard case .createLoft(_, let sections, let guides, _, _) = command else {
             Issue.record("Expected a Loft command."); return
         }
         #expect(sections.count == 2)
@@ -908,7 +939,7 @@ struct ModelingOperationDraftTests {
             usesCurveInterval: true, lowerParameter: "0.005", upperParameter: "0.035", isReversed: true)
         draft.targets.reverse()
         let command = try draft.command(in: document)
-        guard case .createLoft(_, let sections, _, _) = command else { Issue.record("Expected Loft."); return }
+        guard case .createLoft(_, let sections, _, _, _) = command else { Issue.record("Expected Loft."); return }
         #expect(sections.map(\.smoothTangentScale) == [1.25, 0.5])
         guard case .curve(let first) = sections[0].section else { Issue.record("Expected curve."); return }
         #expect(first.parameterDomain == .closed(0.005, 0.035))
@@ -949,7 +980,7 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.loft, targets: targets)
         draft.isSurfaceCreation = true
         let command = try draft.command(in: document)
-        guard case .createLoft(_, let sections, _, _) = command else { Issue.record("Expected Loft."); return }
+        guard case .createLoft(_, let sections, _, _, _) = command else { Issue.record("Expected Loft."); return }
         #expect(sections[0].section.isProfile)
         #expect(!sections[1].section.isProfile)
         let store = CADDocumentStore(document: document)

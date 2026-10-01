@@ -307,7 +307,7 @@ func loftProfileRegionIndexIsPreservedBySemanticLowering() throws {
       let compiled = try compiler.compile(request,
         context: SemanticCompilationContext(existingSourceReferences: [first, second]), limits: semanticCADLimits())
       let command = try buildCommand(from: #require(compiled.preparedProgram.steps.first))
-      guard case .createLoft(_, let sections, _, _) = command.command,
+      guard case .createLoft(_, let sections, _, _, _) = command.command,
             case .profile(let profile) = sections[0].section else {
         Issue.record("Expected an indexed profile Loft."); return
       }
