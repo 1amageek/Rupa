@@ -485,16 +485,29 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "Pipe command is invalid: \(error).")
         }
+        switch source.profile {
+        case .profile(let profile)?:
+            try requireSweepSourceProfileFeature(profile.featureID, owner: "Pipe profile")
+        case .face(let face)?:
+            try requireSweepTargetBodyFeature(face.featureID, owner: "Pipe face profile")
+        case .curve?:
+            throw EditorError(code: .commandInvalid, message: "A pipe's custom profile is a region or a face, not a curve.")
+        case nil:
+            break
+        }
         try requireSweepSourceCurveFeature(source.path.featureID, owner: "Pipe path")
         for target in source.targets {
             try requireSweepTargetBodyFeature(target.featureID, owner: "Pipe target")
         }
+        // A face profile is carried from where its body was built, so like the path and targets
+        // its body must be shown there.
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        for featureID in [source.path.featureID] + source.targets.map(\.featureID) {
+        let faceProfiles = source.profile.map { $0.isFace ? [$0.featureID] : [] } ?? []
+        for featureID in faceProfiles + [source.path.featureID] + source.targets.map(\.featureID) {
             guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
             guard try hierarchy.worldTransform(of: node) == .identity else {
                 throw EditorError(code: .commandInvalid,
-                    message: "A pipe's path and target bodies must be shown where they were built; this one has been moved.")
+                    message: "A pipe's face profile, path and target bodies must be shown where they were built; this one has been moved.")
             }
         }
         let featureID = FeatureID()
@@ -502,8 +515,7 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .pipe(source),
-            inputs: [FeatureInput(featureID: source.path.featureID, role: .path)]
-                + source.targets.map { FeatureInput(featureID: $0.featureID, role: .target) },
+            inputs: source.inputs,
             outputs: [FeatureOutput(role: .body)]
         )
         let previousCADDocument = cadDocument

@@ -226,7 +226,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Pipe"),
                 WorkspaceInspectorTextRow(title: "Path Source", value: WorkspaceInspectorNumberText.shortID(pipe.path.featureID)),
-                WorkspaceInspectorTextRow(title: "Section", value: pipe.vertexCount == 0 ? "Circle" : "\(pipe.vertexCount)-gon"),
+                WorkspaceInspectorTextRow(title: "Section", value: pipe.profile != nil ? "Custom profile"
+                    : pipe.vertexCount == 0 ? "Circle" : "\(pipe.vertexCount)-gon"),
                 WorkspaceInspectorTextRow(title: "Wall", value: pipe.thickness == nil ? "Solid" : "Hollow"),
             ]
         case .sweep(let sweep):

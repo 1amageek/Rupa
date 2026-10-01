@@ -277,6 +277,40 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func aPipeCarriesACustomProfileAlongEachCurve() throws {
+        var document = DesignDocument.empty()
+        // A 4 mm square drawn away from the path, then a 50 mm line up the Z axis.
+        let square = try document.createRectangleSketchFromCorners(
+            name: "Profile", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0.03, .meter), y: .length(0.03, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.034, .meter), y: .length(0.034, .meter))
+        )
+        let path = try document.createLineSketch(name: "Path", plane: .zx,
+            start: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            end: SketchPoint(x: .length(0.05, .meter), y: .length(0, .meter)))
+        let nodes = try [square, path].map { feature in
+            try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(feature) })
+        }
+        var draft = makeDraft(.pipe, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.pipeCustomProfile = true
+        draft.wallThickness = "1 mm"
+        guard case .createPipes(_, let sources, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(sources.count == 1 && sources[0].path.featureID == path && sources[0].diameter == nil
+            && sources[0].profile?.featureID == square)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.004 * 0.004 - 0.002 * 0.002) * 0.05) < 1e-12)
+
+        // Without a curve after it, the profile leaves no path.
+        draft.targets = [.init(sceneNodeID: nodes[0].id)]
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test func aPipeFollowsAnEdgeOfABody() throws {
         var document = DesignDocument.empty()
         let box = try document.createExtrudedRectangleFromCorners(

@@ -180,6 +180,8 @@ struct ModelingOperationDraft: Equatable {
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
+    /// Whether the first selected region or face is the pipe's section in place of the circle.
+    var pipeCustomProfile = false
     var pipeAngle = "0"
     var pipeEndScale = "1"
     /// The fractions of each path's length a pipe runs between.
@@ -472,8 +474,26 @@ struct ModelingOperationDraft: Equatable {
             )
         case .pipe:
             // A pipe follows each selected curve and each selected edge of a body; an edge's curve
-            // is added with the pipes.
-            guard targets.allSatisfy({ target in
+            // is added with the pipes. With a custom profile the first selected region or face is
+            // the section.
+            var pathTargets = targets
+            var profile: SectionReference?
+            if pipeCustomProfile {
+                guard let first = pathTargets.first else { throw invalid("Select the custom profile first, then the curves.") }
+                switch first.component {
+                case .face:
+                    profile = .face(try document.faceSectionReference(for: first, operationName: "Pipe", currentEvaluation: nil))
+                case .object:
+                    profile = try sectionReference(for: first.sceneNodeID, in: document)
+                default:
+                    throw invalid("A pipe's custom profile is a region or a face.")
+                }
+                guard profile?.isClosedRegion == true else { throw invalid("A pipe's custom profile is a closed region or a face.") }
+                pathTargets.removeFirst()
+            }
+            let profileNode = profile == nil || pathTargets.contains(where: { $0.sceneNodeID == targets.first?.sceneNodeID && $0.component == .object })
+                ? nil : targets.first?.sceneNodeID
+            guard pathTargets.allSatisfy({ target in
                 switch target.component {
                 case .object, .edge: true
                 default: false
@@ -482,13 +502,13 @@ struct ModelingOperationDraft: Equatable {
                 throw invalid("Pipe follows curves and edges; select whole curve sources or edges.")
             }
             var edgeCurves: [EdgeCurveSource] = []
-            for edge in targets where edge.component != .object {
+            for edge in pathTargets where edge.component != .object {
                 edgeCurves.append(EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
                     for: edge, operationName: "Pipe", currentEvaluation: nil
                 )))
             }
-            let edgeOwners = Set(targets.filter { $0.component != .object }.map(\.sceneNodeID))
-            var paths = zip(nodes, features).filter { !edgeOwners.contains($0.0.id) }.map(\.1)
+            let edgeOwners = Set(pathTargets.filter { $0.component != .object }.map(\.sceneNodeID))
+            var paths = zip(nodes, features).filter { !edgeOwners.contains($0.0.id) && $0.0.id != profileNode }.map(\.1)
             var bodies: [SweepTargetReference] = []
             if solidBoolean != .newBody {
                 // The bodies to combine with come after the curves, or a pipe along an edge
@@ -505,7 +525,7 @@ struct ModelingOperationDraft: Equatable {
             }
             paths += edgeCurves.map(\.id)
             guard !paths.isEmpty else { throw invalid("Select at least one curve or edge for the pipe to follow.") }
-            let vertices = try number(pipeVertices, label: "Vertices")
+            let vertices = profile == nil ? try number(pipeVertices, label: "Vertices") : 0
             guard vertices == vertices.rounded(), vertices == 0 || (3...256).contains(vertices) else {
                 throw invalid("Vertices is 0 for a circle or 3 to 256 for a polygon.")
             }
@@ -517,12 +537,12 @@ struct ModelingOperationDraft: Equatable {
             let sources = paths.map { path in
                 PipeFeature(
                     path: SweepPathReference(featureID: path),
-                    diameter: .length(0, .meter), thickness: thickness, vertexCount: Int(vertices),
+                    diameter: profile == nil ? .length(0, .meter) : nil, profile: profile, thickness: thickness, vertexCount: Int(vertices),
                     booleanOperation: operation, targets: bodies, keepTools: solidBoolean != .newBody && keepsTools,
                     approximationTolerance: .length(0, .meter)
                 )
             }
-            let diameter = CADExpression.length(try length(pipeDiameter, label: "Diameter"), .meter)
+            let diameter = profile == nil ? CADExpression.length(try length(pipeDiameter, label: "Diameter"), .meter) : nil
             let angle = CADExpression.angle(try number(pipeAngle, label: "Angle"), .degree)
             let endScale = CADExpression.scalar(try number(pipeEndScale, label: "Scale"))
             let start = CADExpression.scalar(try number(pipeStart, label: "Start"))

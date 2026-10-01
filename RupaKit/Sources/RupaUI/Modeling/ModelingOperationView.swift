@@ -288,9 +288,14 @@ struct ModelingOperationView: View {
                 }
             }
         case .pipe:
-            lengthField("Diameter", text: $draft.pipeDiameter)
+            Toggle("Custom profile", isOn: $draft.pipeCustomProfile)
+            if !draft.pipeCustomProfile {
+                lengthField("Diameter", text: $draft.pipeDiameter)
+            }
             lengthField("Thickness", text: $draft.wallThickness)
-            TextField("Vertices (0 for a circle)", text: $draft.pipeVertices)
+            if !draft.pipeCustomProfile {
+                TextField("Vertices (0 for a circle)", text: $draft.pipeVertices)
+            }
             TextField("Angle (degrees)", text: $draft.pipeAngle)
             TextField("Scale at the end", text: $draft.pipeEndScale)
             TextField("Start (0–1)", text: $draft.pipeStart)
@@ -305,7 +310,9 @@ struct ModelingOperationView: View {
             if draft.solidBoolean != .newBody {
                 Toggle("Keep Tools", isOn: $draft.keepsTools)
             }
-            Text("Select one or more curves, then any bodies to combine with. A pipe follows each curve; along a curved path it is built within the allowance.")
+            Text(draft.pipeCustomProfile
+                ? "Select the profile (a region or a face) first, then one or more curves, then any bodies to combine with. The profile is centred on each curve's start."
+                : "Select one or more curves, then any bodies to combine with. A pipe follows each curve; along a curved path it is built within the allowance.")
                 .font(.caption).foregroundStyle(.secondary)
         case .sweep:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }
