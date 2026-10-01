@@ -252,6 +252,10 @@ import Testing
             targets: [sheetFace], method: .explicit(SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 2, vSpans: 2)), extendU: 0.2
         ))
         #expect(session.evaluationStatus == .valid)
+        // Remove Nominal Surface cuts the extended sheet's surface back to its edges.
+        let extendedFace = try #require(try faces(of: sheet, in: session).first?.selectionTarget())
+        _ = try session.execute(.rebuildFaces(targets: [extendedFace], method: .nominal))
+        #expect(session.evaluationStatus == .valid)
         let object = try box(session, "Box")
         let top = try face(of: object, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
         _ = try session.execute(.rebuildFaces(targets: [top], method: .tolerance(.length(0.00001, .meter))))

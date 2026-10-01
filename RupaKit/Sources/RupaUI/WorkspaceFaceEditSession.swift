@@ -62,9 +62,15 @@ struct WorkspaceFaceEditSession: Equatable {
     var partialEnd = 0.0
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
-    /// Rebuild Face's method, which Tab steps (the explicit `layout`, or a tolerance in meters),
-    /// its extensions past the face each way as fractions of its extent, and Shrink.
-    var rebuildsWithinTolerance = false
+    /// Rebuild Face's method, which Tab steps: the explicit `layout`, a tolerance in meters, or
+    /// Remove Nominal Surface (the face's spline cut exactly to its extent); its extensions past
+    /// the face each way as fractions of its extent, and Shrink.
+    enum RebuildMethodChoice: String, CaseIterable {
+        case explicit = "Explicit"
+        case tolerance = "Tolerance"
+        case nominal = "Remove Nominal Surface"
+    }
+    var rebuildMethod = RebuildMethodChoice.explicit
     var rebuildToleranceMeters = 0.00001
     var extendU = 0.0
     var extendV = 0.0
@@ -100,7 +106,8 @@ struct WorkspaceFaceEditSession: Equatable {
     /// Align Surface's continuities.
     mutating func stepGrow() {
         if case .rebuildFace = kind {
-            rebuildsWithinTolerance.toggle()
+            let all = RebuildMethodChoice.allCases
+            rebuildMethod = all[((all.firstIndex(of: rebuildMethod) ?? 0) + 1) % all.count]
             return
         }
         if case .alignSurface = kind {
@@ -143,8 +150,10 @@ struct WorkspaceFaceEditSession: Equatable {
         case let .rebuildFace(faces):
             return .rebuildFaces(
                 targets: faces,
-                method: rebuildsWithinTolerance ? .tolerance(.length(rebuildToleranceMeters, .meter)) : .explicit(layout),
-                extendU: extendU, extendV: extendV, shrinks: shrinks
+                method: rebuildMethod == .nominal ? .nominal
+                    : (rebuildMethod == .tolerance ? .tolerance(.length(rebuildToleranceMeters, .meter)) : .explicit(layout)),
+                extendU: rebuildMethod == .nominal ? 0 : extendU, extendV: rebuildMethod == .nominal ? 0 : extendV,
+                shrinks: rebuildMethod == .nominal || shrinks
             )
         case let .alignSurface(edge, reference):
             return .alignSurface(

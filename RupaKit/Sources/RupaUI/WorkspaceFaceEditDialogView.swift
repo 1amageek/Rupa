@@ -64,16 +64,18 @@ struct WorkspaceFaceEditDialogView: View {
                 layoutFields($dialog.layout)
             }
         case .rebuildFace:
-            Picker("Method", selection: $dialog.rebuildsWithinTolerance) {
-                Text("Explicit").tag(false)
-                Text("Tolerance").tag(true)
+            Picker("Method", selection: $dialog.rebuildMethod) {
+                ForEach(WorkspaceFaceEditSession.RebuildMethodChoice.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .fixedSize()
             .accessibilityIdentifier("WorkspaceFaceEdit.rebuildMethod")
-            if dialog.rebuildsWithinTolerance {
+            switch dialog.rebuildMethod {
+            case .tolerance:
                 lengthField("Tolerance", meters: $dialog.rebuildToleranceMeters, identifier: "WorkspaceFaceEdit.rebuildTolerance")
-            } else {
+            case .explicit:
                 layoutFields($dialog.layout)
+            case .nominal:
+                EmptyView()
             }
             TextField("Extend U", value: $dialog.extendU, format: .number)
                 .frame(width: 56)

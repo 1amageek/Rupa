@@ -365,6 +365,10 @@ extension DesignDocument {
             guard try resolvedLengthValue(distance, owner: "\(operationName) tolerance") > 0 else {
                 throw EditorError(code: .commandInvalid, message: "\(operationName) tolerance must be positive.")
             }
+        case .nominal:
+            guard extendU == 0, extendV == 0 else {
+                throw EditorError(code: .commandInvalid, message: "Remove Nominal Surface cuts a face's surface to its extent, with no extension.")
+            }
         }
         guard FaceRebuildFeature.extensions.contains(extendU), FaceRebuildFeature.extensions.contains(extendV) else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) extends each way by 0 to 1 of the face's extent.")

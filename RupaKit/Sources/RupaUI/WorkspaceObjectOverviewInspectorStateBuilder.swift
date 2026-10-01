@@ -641,6 +641,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             let method: String = switch rebuild.method {
             case let .explicit(layout): "Degree \(layout.uDegree)×\(layout.vDegree), Spans \(layout.uSpans)×\(layout.vSpans)"
             case .tolerance: "Tolerance"
+            case .nominal: "Nominal surface removed"
             }
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Rebuild Face"),
