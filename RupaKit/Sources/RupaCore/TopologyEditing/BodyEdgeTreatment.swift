@@ -7,8 +7,10 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     /// Fillet Shell's conic, chordal or curvature shape at `distance`, its tension where it takes one.
     case shapedFillet(distance: CADExpression, shape: FilletShape, tension: Double?)
     /// A chamfer at `distance` by `mode`, or at `angle` from its reference face (each edge's
-    /// first face, its second when `flipped`).
-    case chamfer(distance: CADExpression, mode: ChamferMode = .offset, angle: CADExpression? = nil, flipped: Bool = false)
+    /// first face, its second when `flipped`), over the stretch of the edge between its `limits`
+    /// when it has them.
+    case chamfer(distance: CADExpression, mode: ChamferMode = .offset, angle: CADExpression? = nil, flipped: Bool = false,
+                 limits: EdgeBlendLimits? = nil)
     case g2Blend(distance: CADExpression)
     /// Fillet Shell's Full shape: the round across the face between the target edge and `across`,
     /// tangent to it and both faces beside it; its size comes from those faces.
@@ -43,10 +45,10 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
                 throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
             }
             operation = .fillet(fillet)
-        case .chamfer(let distance, let mode, let angle, let flipped):
+        case .chamfer(let distance, let mode, let angle, let flipped, let limits):
             amount = distance
             let chamfer = ChamferFeature(target: .init(featureID: sourceID), edges: [reference], distance: distance,
-                                         mode: mode, angle: angle, flipped: flipped)
+                                         mode: mode, angle: angle, flipped: flipped, limits: limits)
             do { try chamfer.validate() } catch {
                 throw EditorError(code: .commandInvalid, message: "The chamfer is invalid: \(error).")
             }

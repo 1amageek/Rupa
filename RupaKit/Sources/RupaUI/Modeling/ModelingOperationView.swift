@@ -394,8 +394,8 @@ struct ModelingOperationView: View {
                 lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
                 lengthField("End radius (variable; blank for constant)", text: $draft.filletEndRadius)
                 TextField("Variable points (fraction@radius, …)", text: $draft.filletVariablePoints)
-                TextField("Limit start (fraction of the edge; blank 0)", text: $draft.filletLimitStart)
-                TextField("Limit end (fraction of the edge; blank 1)", text: $draft.filletLimitEnd)
+                TextField("Limit start (fraction of the edge; blank 0)", text: $draft.limitStart)
+                TextField("Limit end (fraction of the edge; blank 1)", text: $draft.limitEnd)
             }
             if draft.filletShape.takesTension {
                 TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)
@@ -411,6 +411,8 @@ struct ModelingOperationView: View {
             if draft.chamferAngle.trimmingCharacters(in: .whitespaces).isEmpty == false {
                 Toggle("Flip reference face", isOn: $draft.chamferFlipped)
             }
+            TextField("Limit start (fraction of the edge; blank 0)", text: $draft.limitStart)
+            TextField("Limit end (fraction of the edge; blank 1)", text: $draft.limitEnd)
         case .g2Blend:
             lengthField("Distance", text: $draft.distance)
         case .patch, .bridge:

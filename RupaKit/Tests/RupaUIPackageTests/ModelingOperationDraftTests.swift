@@ -763,7 +763,7 @@ struct ModelingOperationDraftTests {
             draft.distance = "2 mm"
             draft.chamferAngle = "30"
             draft.chamferFlipped = flipped
-            guard case .createBodyEdgeTreatment(_, _, .chamfer(_, _, .some, let isFlipped)) = try draft.command(in: document) else {
+            guard case .createBodyEdgeTreatment(_, _, .chamfer(_, _, .some, let isFlipped, nil)) = try draft.command(in: document) else {
                 Issue.record("Expected an angled chamfer.")
                 return
             }
@@ -778,7 +778,7 @@ struct ModelingOperationDraftTests {
         var apex = makeDraft(.chamfer, targets: [edge])
         apex.distance = "2 mm"
         apex.chamferMode = .apex
-        guard case .createBodyEdgeTreatment(_, _, .chamfer(_, .apex, nil, false)) = try apex.command(in: document) else {
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(_, .apex, nil, false, nil)) = try apex.command(in: document) else {
             Issue.record("Expected an apex chamfer.")
             return
         }
@@ -796,7 +796,7 @@ struct ModelingOperationDraftTests {
         let edge = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
         var draft = makeDraft(.fillet, targets: [edge])
         draft.distance = "-2 mm"
-        guard case .createBodyEdgeTreatment(_, _, .chamfer(let distance, .offset, nil, false)) = try draft.command(in: document) else {
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(let distance, .offset, nil, false, nil)) = try draft.command(in: document) else {
             Issue.record("Expected a chamfer.")
             return
         }
@@ -835,7 +835,7 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
-    @Test func limitPointsRoundOnlyTheirStretchOfTheEdge() throws {
+    @Test func limitPointsBlendOnlyTheirStretchOfTheEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
             name: "Box", plane: .xy,
@@ -850,8 +850,8 @@ struct ModelingOperationDraftTests {
         }?.selectionTarget())
         var draft = makeDraft(.fillet, targets: [edge])
         draft.distance = "3 mm"
-        draft.filletLimitStart = "0.25"
-        draft.filletLimitEnd = "0.75"
+        draft.limitStart = "0.25"
+        draft.limitEnd = "0.75"
         guard case .createBodyEdgeTreatment(_, _, .limitedFillet(_, .round, nil, let limits)) = try draft.command(in: document) else {
             Issue.record("Expected a limited fillet.")
             return
@@ -862,8 +862,22 @@ struct ModelingOperationDraftTests {
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         let r = 0.003
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - r * r * (1 - Double.pi / 4) * 0.01)) < 1e-11)
-        draft.filletLimitStart = "0.8"
+        draft.limitStart = "0.8"
         #expect(throws: EditorError.self) { try draft.command(in: document) }
+        // A chamfer takes the same limits: its triangle over the stretch only.
+        var chamfer = makeDraft(.chamfer, targets: [edge])
+        chamfer.distance = "2 mm"
+        chamfer.limitStart = "0.25"
+        chamfer.limitEnd = "0.75"
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(_, .offset, nil, false, let chamferLimits)) = try chamfer.command(in: document) else {
+            Issue.record("Expected a limited chamfer.")
+            return
+        }
+        #expect(chamferLimits == EdgeBlendLimits(start: 0.25, end: 0.75))
+        let chamferStore = CADDocumentStore(document: document)
+        _ = try chamferStore.apply(chamfer.command(in: document))
+        let cut = try MeasurementService().measure(document: chamferStore.document, ruler: .standard(for: .meter))
+        #expect(abs(cut.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.002 * 0.002 / 2 * 0.01)) < 1e-11)
     }
 
     @Test func aVariableFilletGrowsAlongItsEdge() throws {

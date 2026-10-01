@@ -311,8 +311,8 @@ struct ModelingOperationDraft: Equatable {
     /// A fillet's variable points, "fraction@radius" separated by commas; blank for none.
     var filletVariablePoints = ""
     /// A fillet's limit points as fractions of the edge from its start; both blank for the whole edge.
-    var filletLimitStart = ""
-    var filletLimitEnd = ""
+    var limitStart = ""
+    var limitEnd = ""
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -1002,23 +1002,32 @@ struct ModelingOperationDraft: Equatable {
             } else {
                 amount = signedAmount
             }
-            let treatment: BodyEdgeTreatment
-            switch kind {
-            case .fillet where chamfers:
-                treatment = .chamfer(distance: amount)
-            case .fillet where filletLimitStart.trimmingCharacters(in: .whitespaces).isEmpty == false
-                || filletLimitEnd.trimmingCharacters(in: .whitespaces).isEmpty == false:
-                let text = filletTension.trimmingCharacters(in: .whitespaces)
-                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+            // Limit points bound one fillet's or chamfer's edge to a stretch of it.
+            let limits: EdgeBlendLimits?
+            if kind != .g2Blend, limitStart.trimmingCharacters(in: .whitespaces).isEmpty == false
+                || limitEnd.trimmingCharacters(in: .whitespaces).isEmpty == false {
                 func fraction(_ value: String, blank: Double, label: String) throws -> Double {
                     let trimmed = value.trimmingCharacters(in: .whitespaces)
                     return trimmed.isEmpty ? blank : try number(trimmed, label: label)
                 }
-                let limits = EdgeBlendLimits(start: try fraction(filletLimitStart, blank: 0, label: "Limit start"),
-                                             end: try fraction(filletLimitEnd, blank: 1, label: "Limit end"))
-                do { try limits.validate() } catch {
+                let stretch = EdgeBlendLimits(start: try fraction(limitStart, blank: 0, label: "Limit start"),
+                                              end: try fraction(limitEnd, blank: 1, label: "Limit end"))
+                do { try stretch.validate() } catch {
                     throw invalid("Limits lie within the edge, 0 ≤ start < end ≤ 1, and limit it somewhere.")
                 }
+                guard edges.count == 1 else { throw invalid("Limits bound one edge.") }
+                limits = stretch
+            } else {
+                limits = nil
+            }
+            let treatment: BodyEdgeTreatment
+            switch kind {
+            case .fillet where chamfers:
+                treatment = .chamfer(distance: amount, limits: limits)
+            case .fillet where limits != nil:
+                let text = filletTension.trimmingCharacters(in: .whitespaces)
+                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                guard let limits else { throw invalid("A limited fillet has its limits.") }
                 treatment = .limitedFillet(distance: amount, shape: filletShape.shape, tension: tension, limits: limits)
             case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false
                 || filletVariablePoints.trimmingCharacters(in: .whitespaces).isEmpty == false:
@@ -1043,7 +1052,8 @@ struct ModelingOperationDraft: Equatable {
             case .chamfer:
                 let angleText = chamferAngle.trimmingCharacters(in: .whitespaces)
                 let angle = angleText.isEmpty ? nil : CADExpression.angle(try number(angleText, label: "Chamfer angle"), .degree)
-                treatment = .chamfer(distance: amount, mode: chamferMode.mode, angle: angle, flipped: angle != nil && chamferFlipped)
+                treatment = .chamfer(distance: amount, mode: chamferMode.mode, angle: angle, flipped: angle != nil && chamferFlipped,
+                                     limits: limits)
             default: treatment = .g2Blend(distance: amount)
             }
             // Further edges take the same treatment, blended in turn.
