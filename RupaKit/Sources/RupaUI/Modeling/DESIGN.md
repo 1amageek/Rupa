@@ -246,6 +246,7 @@ Several distinct edges of one body take the same treatment in turn
 (`several(_:more:)`); edges that meet join at the kernel's mitres, and three
 square edges rounded at a corner close on its rolling ball; chamfers that meet
 close on their planes (other curved shapes at a corner are refused by the kernel).
+An arc of a circular rim rounds or chamfers the whole rim (the kernel's torus or cone band).
 Fillet's End radius makes one edge's fillet vary from the radius at its start to
 it at its end (`variableFillet`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display

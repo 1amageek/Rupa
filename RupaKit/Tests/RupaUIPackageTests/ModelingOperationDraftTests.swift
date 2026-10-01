@@ -706,6 +706,32 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (s * s * s - 6 * d * d * s + 6 * d * d * d)) < 1e-11)
     }
 
+    @Test func oneArcOfACylindersRimRoundsTheWholeRim() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedCircle(
+            name: "Cylinder", plane: .xy,
+            center: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            radius: .length(0.01, .meter), depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // One arc of the top rim, the edges there not upright.
+        let arc = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [arc])
+        draft.distance = "2 mm"
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let r = 0.002
+        // Pappus: the corner section about the axis at its centroid's radius.
+        let inset = r * (10 - 3 * Double.pi) / (12 - 3 * Double.pi)
+        let expected = Double.pi * 0.01 * 0.01 * 0.02 - r * r * (1 - Double.pi / 4) * 2 * Double.pi * (0.01 - inset)
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - expected) < 1e-11)
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
