@@ -988,10 +988,24 @@ struct ModelingOperationDraft: Equatable {
                   }) else {
                 throw invalid("Select distinct generated CAD edges of one body.")
             }
-            let amount = try topologyLength(distance,
-                label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", in: document)
+            // Fillet Shell: a negative distance chamfers the edges by its size.
+            let signedAmount = try topologyLength(distance,
+                label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", signed: kind == .fillet, in: document)
+            let signedValue = try document.cadDocument.parameters.resolvedValue(for: signedAmount).value
+            let chamfers = kind == .fillet && signedValue < 0
+            let amount: CADExpression
+            if chamfers {
+                let text = distance.trimmingCharacters(in: .whitespaces)
+                amount = text.hasPrefix("-")
+                    ? try topologyLength(String(text.dropFirst()), label: "Distance", in: document)
+                    : .length(-signedValue, .meter)
+            } else {
+                amount = signedAmount
+            }
             let treatment: BodyEdgeTreatment
             switch kind {
+            case .fillet where chamfers:
+                treatment = .chamfer(distance: amount)
             case .fillet where filletLimitStart.trimmingCharacters(in: .whitespaces).isEmpty == false
                 || filletLimitEnd.trimmingCharacters(in: .whitespaces).isEmpty == false:
                 let text = filletTension.trimmingCharacters(in: .whitespaces)

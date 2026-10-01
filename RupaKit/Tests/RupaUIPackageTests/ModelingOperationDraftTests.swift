@@ -107,9 +107,18 @@ struct ModelingOperationDraftTests {
             case .chamfer: #expect(command == .createBodyEdgeTreatment(name: draft.name, target: edge, treatment: .chamfer(distance: expression)))
             default: #expect(command == .createBodyEdgeTreatment(name: draft.name, target: edge, treatment: .g2Blend(distance: expression)))
             }
-            for invalid in ["missingParameter", "wall_thickness / 0", "-wall_thickness", "2 deg"] {
+            // A negative Fillet distance chamfers instead (Fillet Shell); elsewhere it is invalid.
+            for invalid in ["missingParameter", "wall_thickness / 0", "2 deg"] + (kind == .fillet ? [] : ["-wall_thickness"]) {
                 draft.distance = invalid
                 #expect(throws: (any Error).self) { try draft.command(in: document) }
+            }
+            if kind == .fillet {
+                draft.distance = "-wall_thickness"
+                let negative = try draft.command(in: document)
+                guard case .createBodyEdgeTreatment(_, _, .chamfer) = negative else {
+                    Issue.record("A negative fillet distance chamfers.")
+                    continue
+                }
             }
         }
         #expect(document.productMetadata.sceneNodes[body.sceneNodeID] != nil)
@@ -773,6 +782,25 @@ struct ModelingOperationDraftTests {
             Issue.record("Expected an apex chamfer.")
             return
         }
+    }
+
+    @Test func aNegativeFilletDistanceChamfers() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "-2 mm"
+        guard case .createBodyEdgeTreatment(_, _, .chamfer(let distance, .offset, nil, false)) = try draft.command(in: document) else {
+            Issue.record("Expected a chamfer.")
+            return
+        }
+        #expect(abs(try document.cadDocument.parameters.resolvedValue(for: distance).value - 0.002) < 1e-12)
     }
 
     @Test func variablePointsSetTheRadiusAlongTheEdge() throws {
