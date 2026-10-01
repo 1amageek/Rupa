@@ -700,6 +700,15 @@ struct ModelingOperationDraftTests {
         _ = try blended.apply(blend.command(in: document))
         let blendMeasurement = try MeasurementService().measure(document: blended.document, ruler: .standard(for: .meter))
         #expect(blendMeasurement.counts.sheets == 1 && blendMeasurement.counts.solids == 0)
+
+        // A chamfer of the bend: a flat strip 5√2 mm across.
+        var chamfer = makeDraft(.chamfer, targets: [bend])
+        chamfer.distance = "5 mm"
+        let chamfered = CADDocumentStore(document: document)
+        _ = try chamfered.apply(chamfer.command(in: document))
+        let chamferMeasurement = try MeasurementService().measure(document: chamfered.document, ruler: .standard(for: .meter))
+        #expect(chamferMeasurement.counts.sheets == 1 && chamferMeasurement.counts.solids == 0)
+        #expect(abs(chamferMeasurement.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.035 + 0.005 * 2.0.squareRoot() * 0.04)) < 1e-9)
     }
 
     @Test func aPatchSpansAClosedLoopOfCurves() throws {
