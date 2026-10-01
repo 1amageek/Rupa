@@ -659,6 +659,41 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.03 - 0.02 * (2 * r * r - Double.pi * r * r / 2))) < 1e-11)
     }
 
+    @Test func aSheetsBendFilletsIntoARoundedSheet() throws {
+        var document = DesignDocument.empty()
+        func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {
+            let lines = try corners.indices.map { index in
+                let (start, end) = (corners[index], corners[(index + 1) % corners.count])
+                return try document.createLineSketch(name: "Side", plane: plane,
+                    start: SketchPoint(x: .length(start.0, .meter), y: .length(start.1, .meter)),
+                    end: SketchPoint(x: .length(end.0, .meter), y: .length(end.1, .meter)))
+            }
+            return try document.createCurvePatch(name: "Sheet", curves: lines.map { CurveSectionReference(featureID: $0) })
+        }
+        // A 40 mm floor and wall meeting along X (on the ZX plane sketch x is z).
+        let pieces = [try sheet(on: .xy, [(0, 0), (0.04, 0), (0.04, 0.04), (0, 0.04)]),
+                      try sheet(on: .zx, [(0, 0), (0, 0.04), (0.04, 0.04), (0.04, 0)])]
+        let nodes = try pieces.map { feature in
+            try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(feature) })
+        }
+        try document.joinSheets(targets: nodes.map { SelectionTarget(sceneNodeID: $0.id) })
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let bend = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return [start, end].allSatisfy { abs($0.y) < 1e-9 && abs($0.z) < 1e-9 }
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [bend])
+        draft.distance = "5 mm"
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1 && measurement.counts.solids == 0)
+        // Each flat face loses 5 mm of its 40 mm; the quarter cylinder adds π/2 · 5 mm across 40 mm,
+        // its rational face's area measured within its approximation (FB23.3), not exactly.
+        let expected = 2 * 0.04 * 0.035 + Double.pi / 2 * 0.005 * 0.04
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - expected) < 1e-6)
+    }
+
     @Test func aPatchSpansAClosedLoopOfCurves() throws {
         var document = DesignDocument.empty()
         // A 20 mm right triangle of three lines.
