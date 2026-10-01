@@ -447,24 +447,24 @@ extension DesignDocument {
         return featureID
     }
 
-    /// Adds the curve along an edge that a pipe follows, without an object of its own: the pipe
-    /// shows it. The edge's body must be shown where it was built.
-    public mutating func addPipeEdgeCurve(_ edgeCurve: PipeEdgeCurve) throws {
+    /// Adds the curve along an edge that a pipe or an extrusion consumes, without an object of its
+    /// own: its consumer shows it. The edge's body must be shown where it was built.
+    public mutating func addEdgeCurve(_ edgeCurve: EdgeCurveSource) throws {
         do {
             try edgeCurve.feature.validate()
         } catch {
-            throw EditorError(code: .commandInvalid, message: "Pipe edge curve is invalid: \(error).")
+            throw EditorError(code: .commandInvalid, message: "Edge curve is invalid: \(error).")
         }
-        try requireSweepTargetBodyFeature(edgeCurve.feature.source, owner: "Pipe edge")
+        try requireSweepTargetBodyFeature(edgeCurve.feature.source, owner: "Edge curve")
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         if let node = hierarchy.presentingSceneNodeID(for: edgeCurve.feature.source),
            try hierarchy.worldTransform(of: node) != .identity {
             throw EditorError(code: .commandInvalid,
-                message: "A pipe's edge must be on a body shown where it was built; this one has been moved.")
+                message: "An edge must be on a body shown where it was built; this one has been moved.")
         }
         try appendFeature(FeatureNode(
             id: edgeCurve.id,
-            name: "Pipe Edge",
+            name: "Edge Curve",
             operation: .edgeCurve(edgeCurve.feature),
             inputs: [FeatureInput(featureID: edgeCurve.feature.source, role: edgeCurve.feature.bodyRole)],
             outputs: [FeatureOutput(role: .curve)]

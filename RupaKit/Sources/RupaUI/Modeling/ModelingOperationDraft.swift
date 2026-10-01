@@ -332,11 +332,34 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .surfacePatch, .constrainedSurface:
             throw invalid("Primitive planning reached an invalid operand route.")
         case .extrude, .revolve:
-            // FIXME(INCOMPLETE_IMPLEMENTATION): the edges of a sheet and a face beside whole objects
-            // are refused rather than read as their whole object (Revolve takes regions and curves
-            // only, as Plasticity's does). Production path: ModelingOperationDraft.command(in:) for
-            // Extrude. Complete only when a sheet's edges extrude into a sheet, verified by the
-            // generated sheet's area.
+            // Edges of bodies alone extrude into sheets, each along its curve.
+            if kind == .extrude, targets.isEmpty == false,
+               targets.allSatisfy({ if case .edge = $0.component { return true }; return false }) {
+                let edgeCurves = try targets.map { edge in
+                    EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                        for: edge, operationName: "Extrude", currentEvaluation: nil
+                    ))
+                }
+                let direction: ExtrudeDirection
+                switch extrusionDirection {
+                case .normal: direction = .normal
+                case .symmetric: direction = .symmetric
+                case .vector:
+                    let vector = Vector3D(x: try number(axis[0], label: "Direction X"),
+                        y: try number(axis[1], label: "Direction Y"), z: try number(axis[2], label: "Direction Z"))
+                    direction = .vector(try vector.normalized(tolerance: document.modelingSettings.tolerance.distance))
+                }
+                return .extrudeEdges(
+                    name: name, edgeCurves: edgeCurves,
+                    distance: .length(try length(distance, label: "End position"), .meter),
+                    startDistance: extrusionDirection == .symmetric ? nil
+                        : .length(try length(startDistance, label: "Start position"), .meter),
+                    direction: direction
+                )
+            }
+            // A face beside whole objects, a vertex, or an edge beside other operands is refused
+            // rather than read as its whole object (Revolve takes regions and curves only, as
+            // Plasticity's does).
             guard targets.allSatisfy({ target in
                 switch target.component {
                 case .face, .edge, .vertex: false
@@ -344,7 +367,7 @@ struct ModelingOperationDraft: Equatable {
                 }
             }) else {
                 throw invalid(kind == .extrude
-                    ? "Extrude takes faces alone, or whole sections; edges and vertices are not sections."
+                    ? "Extrude takes faces alone, edges alone, or whole sections; vertices are not sections."
                     : "Revolve takes whole sections, not faces, edges or vertices.")
             }
             // A Boolean extrusion or revolve takes the section first and the bodies it combines
@@ -458,9 +481,9 @@ struct ModelingOperationDraft: Equatable {
             }) else {
                 throw invalid("Pipe follows curves and edges; select whole curve sources or edges.")
             }
-            var edgeCurves: [PipeEdgeCurve] = []
+            var edgeCurves: [EdgeCurveSource] = []
             for edge in targets where edge.component != .object {
-                edgeCurves.append(PipeEdgeCurve(id: FeatureID(), feature: try document.edgeCurveFeature(
+                edgeCurves.append(EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
                     for: edge, operationName: "Pipe", currentEvaluation: nil
                 )))
             }

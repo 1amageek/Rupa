@@ -183,7 +183,7 @@ native preview and cannot be applied.
 | --- | --- | --- |
 | Bridge Surface | Stable two-edge G0 ruled bridge | Separated/intersecting sheet walls, width/tension, G2/Chamfer, Both/Short/Long/None trims, Sense 1/2 and additional wall pairs |
 | Constrained Surface | Retained points, UI/API creation and replacement, bounded point interpolation and angular relaxation | Admissible height-graph projection; native admission rejects unproven geometry |
-| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves; Boolean (Union/Difference/Intersect/Slice) with the bodies selected after the section, placed where they are shown, and Keep Tools; Degrees drafting and Thickness walling line and tangent-arc sections; planar faces of one body, Individual or Direct | Surface edges as operands; faces beside whole objects; drafts and walls of spline sections, sharp arc corners, curves, and drafts in oblique directions |
+| Extrude | Profile/curve extrusion; explicit vectors also admit spatial curves; Boolean (Union/Difference/Intersect/Slice) with the bodies selected after the section, placed where they are shown, and Keep Tools; Degrees drafting and Thickness walling line and tangent-arc sections; planar faces of one body, Individual or Direct | Faces beside whole objects; drafts and walls of spline sections, sharp arc corners, curves, and drafts in oblique directions |
 | Loft | Ordered profile/curve sections and faces of bodies (each read as its section), mixed single-loop Sheet input, exact guide connectors and discrete spatial contacts, source-sample seams, shared ruled/smooth connectors | Edge sections with G0/G1/G2 continuity and tension, vertex ends, limit points, Simplify, guide trim overlap, general coincident/tangent guide contacts and whole-surface embedding admission |
 | Patch | Exact planar hole or admissible nonplanar Coons opening | General N-sided constrained fill, guides and G1/G2 |
 | Pipe | A native Pipe feature per selected curve or edge of a body (the edge's curve added with it): circle or polygon (Vertices), Diameter, Thickness, Angle, end Scale, Start/End fractions, positional allowance, Boolean with the bodies selected after the curves and Keep Tools | Custom sections, end scale along curved paths |
@@ -336,6 +336,8 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   point; its Thickness, Boolean picker and Keep Tools behave as Extrude's, in one
   `revolveSection`. A revolved curve may ask for a solid: the kernel closes it along the
   axis when both its ends lie on it and reports the evaluation invalid otherwise.
+- Extrude takes edges of bodies alone as operands (`extrudeEdges`): each edge's curve,
+  added without an object of its own, extrudes into a sheet along the chosen direction.
 - Extrude takes faces of one body alone as operands (`extrudeFaces`): Individual
   extrudes each along its own normal, Direct all along the first's; the Boolean
   picker combines them with that body. An edge, a vertex, or a face beside whole

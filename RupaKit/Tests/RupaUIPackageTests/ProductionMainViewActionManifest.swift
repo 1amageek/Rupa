@@ -152,6 +152,7 @@ enum ProductionMainViewActionManifest {
         "unwrapFace",
         "extrudeFaces",
         "createPipes",
+        "extrudeEdges",
         "duplicateSceneNodes",
         "extendSketchCurve",
         "extendSketchCurveToCurve",

@@ -573,6 +573,9 @@ dimension/corner adapters or closed-profile display shortcuts. Sheet measurement
 come from evaluated BRep, before any sketch profile recognition. Source and
 product publication remain atomic on failure.
 
+`extrudeEdges` adds each edge's curve (an `EdgeCurveSource`, as for pipes) and extrudes it into a
+sheet with `extrudeSection`, all in one transaction.
+
 `createLoft` takes planar faces of bodies as sections (the form reads a selected face with
 `faceSectionReference`) and refuses one shown away from where it was built.
 

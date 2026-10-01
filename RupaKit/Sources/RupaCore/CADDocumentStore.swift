@@ -2958,6 +2958,26 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .extrudeEdges:
+            func run() throws {
+                guard case .extrudeEdges(let name, let edgeCurves, let distance, let startDistance, let direction) = command,
+                      edgeCurves.isEmpty == false else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected extrudeEdges with at least one edge.")
+                }
+                var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addEdgeCurve(edgeCurve)
+                    primaryFeatureID = try updatedDocument.extrudeSection(
+                        name: name, section: .curve(CurveSectionReference(featureID: edgeCurve.id)),
+                        distance: distance, startDistance: startDistance, direction: direction, resultKind: .sheet,
+                        objectRegistry: objectRegistry
+                    )
+                }
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createPipes:
             func run() throws {
                 guard case .createPipes(let name, let sources, let edgeCurves) = command, sources.isEmpty == false else {
@@ -2965,7 +2985,7 @@ public final class CADDocumentStore {
                 }
                 var updatedDocument = document
                 for edgeCurve in edgeCurves {
-                    try updatedDocument.addPipeEdgeCurve(edgeCurve)
+                    try updatedDocument.addEdgeCurve(edgeCurve)
                 }
                 for source in sources {
                     primaryFeatureID = try updatedDocument.createPipe(name: name, source: source, objectRegistry: objectRegistry)

@@ -312,6 +312,36 @@ struct ModelingOperationDraftTests {
         #expect(combined.first?.targets == [SweepTargetReference(featureID: box)])
     }
 
+    @Test func anEdgeOfABodyExtrudesIntoASheet() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.extrude, targets: [edge])
+        draft.extrusionDirection = .vector
+        draft.axis = ["0", "0", "1"]
+        draft.startDistance = "0"
+        draft.distance = "10 mm"
+        guard case .extrudeEdges(_, let edgeCurves, _, _, let direction) = try draft.command(in: document) else {
+            Issue.record("Edges extrude through extrudeEdges.")
+            return
+        }
+        #expect(edgeCurves.count == 1 && direction == .vector(.unitZ))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.01) < 1e-12)
+    }
+
     @Test func facesOfTwoBodiesLoftIntoASolid() throws {
         var document = DesignDocument.empty()
         let boxes = try [0.0, 0.05].map { z in
