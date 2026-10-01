@@ -26,6 +26,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     /// `treatment` of the target edge and of `more` edges of the same body, which must not meet it
     /// or each other at a corner.
     case several(BodyEdgeTreatment, more: [SelectionTarget])
+    /// A fillet or chamfer `treatment` with Fillet Shell's Tangent Edges off: only the selected
+    /// edges, not the edges continuing them tangentially.
+    case tangentEdgesOff(BodyEdgeTreatment)
 
     static var selectionKind: TopologySummaryResult.Entry.Kind { .edge }
 
@@ -91,6 +94,15 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
             // The further edges are resolved by `DesignDocument.prepareBodyEdgeTreatment` into
             // `SeveralEdgeTreatment`, which builds the feature.
             throw EditorError(code: .commandInvalid, message: "Several edges are prepared with all of their edges.")
+        case .tangentEdgesOff(let base):
+            switch try base.featureOperation(sourceID: sourceID, reference: reference, in: document) {
+            case .fillet(let fillet) where fillet.shape != .full:
+                return .fillet(fillet.with(tangentEdges: false))
+            case .chamfer(let chamfer):
+                return .chamfer(chamfer.with(tangentEdges: false))
+            default:
+                throw EditorError(code: .commandInvalid, message: "Tangent Edges turns off for fillets and chamfers.")
+            }
         case .fullFillet:
             // The second edge is resolved by `DesignDocument.prepareBodyEdgeTreatment` into a
             // `FullFilletEdges`, which builds the feature.

@@ -902,6 +902,19 @@ struct ModelingOperationDraftTests {
         _ = try reversedStore.apply(chamfer.command(in: document))
         let ends = try MeasurementService().measure(document: reversedStore.document, ruler: .standard(for: .meter))
         #expect(abs(ends.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.002 * 0.002 / 2 * 0.01)) < 1e-11)
+        // Tangent Edges off wraps the treatment, the feature taking only the selected edges.
+        chamfer.limitsReversed = false
+        chamfer.tangentEdges = false
+        guard case .createBodyEdgeTreatment(_, _, .tangentEdgesOff(.chamfer)) = try chamfer.command(in: document) else {
+            Issue.record("Expected a chamfer with Tangent Edges off.")
+            return
+        }
+        let alone = CADDocumentStore(document: document)
+        _ = try alone.apply(chamfer.command(in: document))
+        #expect(alone.document.cadDocument.designGraph.nodes.values.contains { node in
+            if case let .chamfer(feature) = node.operation { return feature.tangentEdges == false }
+            return false
+        })
     }
 
     @Test func aVariableFilletGrowsAlongItsEdge() throws {

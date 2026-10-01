@@ -315,6 +315,8 @@ struct ModelingOperationDraft: Equatable {
     var limitEnd = ""
     /// Whether the blend runs over the rest of the edge instead of between its limits.
     var limitsReversed = false
+    /// Fillet Shell's Tangent Edges: whether a selected edge takes the edges continuing it tangentially.
+    var tangentEdges = true
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -1022,7 +1024,7 @@ struct ModelingOperationDraft: Equatable {
             } else {
                 limits = nil
             }
-            let treatment: BodyEdgeTreatment
+            var treatment: BodyEdgeTreatment
             switch kind {
             case .fillet where chamfers:
                 treatment = .chamfer(distance: amount, limits: limits)
@@ -1057,6 +1059,10 @@ struct ModelingOperationDraft: Equatable {
                 treatment = .chamfer(distance: amount, mode: chamferMode.mode, angle: angle, flipped: angle != nil && chamferFlipped,
                                      limits: limits)
             default: treatment = .g2Blend(distance: amount)
+            }
+            // Tangent Edges off: only the selected edges.
+            if tangentEdges == false, kind != .g2Blend {
+                treatment = .tangentEdgesOff(treatment)
             }
             // Further edges take the same treatment, blended in turn.
             return .createBodyEdgeTreatment(name: name, target: edges[0],
