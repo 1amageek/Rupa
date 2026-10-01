@@ -563,6 +563,14 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "Bridge Surface command is invalid: \(error).")
         }
+        guard bridge.trimWalls == .none || bridge.trimWalls == .both else {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Short and Long trim the wall the kernel finds
+            // shorter or longer, which Core cannot supersede before evaluation, so only None and
+            // Both are admitted. Production path: DesignDocument.createBridgeSurface. Complete only
+            // when the trimmed wall's object is retired from the evaluation, verified by a Short
+            // bridge whose other sheet stays shown.
+            throw EditorError(code: .commandInvalid, message: "Bridge Surface trims no walls or both.")
+        }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         for sheet in [bridge.first, bridge.second] {
             guard cadDocument.designGraph.nodes[sheet]?.outputs.contains(where: { $0.role == .sheet }) == true else {
@@ -593,6 +601,9 @@ extension DesignDocument {
             object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
                           geometryRole: .surface, objectRegistry: objectRegistry)
         )
+        if bridge.trimWalls == .both {
+            try removeSceneNodes(presenting: [bridge.first, bridge.second])
+        }
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true

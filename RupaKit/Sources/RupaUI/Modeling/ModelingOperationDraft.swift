@@ -199,6 +199,7 @@ struct ModelingOperationDraft: Equatable {
     var bridgeShape = BridgeShapeChoice.g2
     var bridgeTension = "1"
     var bridgeReversesSense = false
+    var bridgeTrimsWalls = false
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -787,7 +788,8 @@ struct ModelingOperationDraft: Equatable {
             let tension = try number(bridgeTension, label: "Tension")
             let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
                 width: try topologyLength(distance, label: "Width", in: document), tension: tension,
-                shape: bridgeShape == .g2 ? .curvature : .chamfer, reversesSense: bridgeReversesSense)
+                shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrimsWalls ? .both : .none,
+                reversesSense: bridgeReversesSense)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
             return .createBridgeSurface(name: name, bridge: bridge)
         case .square:

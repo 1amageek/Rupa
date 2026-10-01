@@ -200,6 +200,9 @@ extension FeatureOperation {
             return Set(feature.targets.map(\.featureID))
         case .loft:
             return []
+        // A Bridge Surface trimming both walls joins them into its sheet, replacing them.
+        case .sheetBridge(let bridge):
+            return bridge.trimWalls == .both ? [bridge.first, bridge.second] : []
         case .boolean(let feature):
             // The result replaces its targets; Keep Tools keeps only the tools.
             return Set(feature.targets.map(\.featureID) + (feature.keepTools ? [] : feature.tools.map(\.featureID)))
@@ -313,7 +316,6 @@ extension FeatureOperation {
              .patchSurface,
              .squareSurface,
              .curvePatch,
-             .sheetBridge,
              .bridgeSurface,
              .linearPattern,
              .radialPattern,

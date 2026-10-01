@@ -647,6 +647,14 @@ struct ModelingOperationDraftTests {
         _ = try chamfered.apply(draft.command(in: document))
         let strips = try MeasurementService().measure(document: chamfered.document, ruler: .standard(for: .meter))
         #expect(abs(strips.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
+
+        // Trimming the walls joins what is left of them with the strip into one sheet.
+        draft.bridgeTrimsWalls = true
+        let trimmed = CADDocumentStore(document: document)
+        _ = try trimmed.apply(draft.command(in: document))
+        let joined = try MeasurementService().measure(document: trimmed.document, ruler: .standard(for: .meter))
+        #expect(joined.counts.sheets == 1)
+        #expect(abs(joined.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.02 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
     @Test func fourCurvesFrameAFlatSquare() throws {
