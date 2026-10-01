@@ -158,6 +158,24 @@ struct ModelingOperationDraft: Equatable {
     var isSurfaceCreation = false
     var smooth = false
     var loftDefaultTension = "1"
+    /// How a Loft meets the face beside an edge selected as its first or last section.
+    enum LoftContinuityChoice: String, CaseIterable, Identifiable {
+        case g0 = "G0"
+        case g1 = "G1"
+        case g2 = "G2"
+        var id: Self { self }
+        var order: LoftEdgeContinuity.Order? {
+            switch self {
+            case .g0: nil
+            case .g1: .tangent
+            case .g2: .curvature
+            }
+        }
+    }
+    var loftStartContinuity = LoftContinuityChoice.g0
+    var loftEndContinuity = LoftContinuityChoice.g0
+    /// The cross-boundary scale of a G1 or G2 end, times the distance between the end sections.
+    var loftEdgeTension = "1"
     var closesSectionLoop = false
     var uBounds = ["0", "1"]
     var vBounds = ["0", "1"]
@@ -636,8 +654,14 @@ struct ModelingOperationDraft: Equatable {
             }
             // A selected edge of a body is a curve section along it, its curve added with the loft.
             var edgeCurves: [EdgeCurveSource] = []
-            let sections = try sectionTargets.map { target in
+            // A G1 or G2 end is continuous with the face beside the edge selected there.
+            let hasContinuity = loftStartContinuity != .g0 || loftEndContinuity != .g0
+            let edgeTension = hasContinuity ? try number(loftEdgeTension, label: "Edge tension") : 1
+            guard edgeTension.isFinite, edgeTension > 0 else { throw invalid("Edge tension must be positive.") }
+            let sections = try sectionTargets.enumerated().map { index, target in
                 let reference: SectionReference
+                let choice = index == 0 ? loftStartContinuity : index == sectionTargets.count - 1 ? loftEndContinuity : .g0
+                var continuity: LoftEdgeContinuity?
                 switch target.component {
                 case .edge:
                     let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
@@ -645,14 +669,23 @@ struct ModelingOperationDraft: Equatable {
                     ))
                     edgeCurves.append(curve)
                     reference = .curve(CurveSectionReference(featureID: curve.id))
+                    if let order = choice.order, let edge = curve.feature.edges.first {
+                        continuity = LoftEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                                                        edge: edge, order: order, tension: edgeTension)
+                    }
                 case .face:
                     // A selected face of a body is a section of its own.
                     reference = .face(try document.faceSectionReference(for: target, operationName: "Loft", currentEvaluation: nil))
                 default:
                     reference = try sectionReference(for: target.sceneNodeID, in: document)
                 }
+                guard choice == .g0 || continuity != nil else {
+                    throw invalid("\(choice.rawValue) continuity needs an edge of a body at that end of the loft.")
+                }
                 let controls = loftSectionControls[target.sceneNodeID] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
-                return try controls.applying(to: LoftSectionReference(section: reference))
+                var section = try controls.applying(to: LoftSectionReference(section: reference))
+                section.continuity = continuity
+                return section
             }
             guard createsSheet || sections.allSatisfy({ $0.section.isClosedRegion }) else {
                 throw invalid("A selected curve requires Sheet output.")

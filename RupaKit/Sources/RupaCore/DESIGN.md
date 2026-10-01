@@ -577,7 +577,8 @@ product publication remain atomic on failure.
 sheet with `extrudeSection`, all in one transaction.
 
 `createLoft` takes planar faces of bodies as sections (the form reads a selected face with
-`faceSectionReference`) and refuses one shown away from where it was built.
+`faceSectionReference`) and refuses one shown away from where it was built; an end edge section's
+continuity names the edge's body as an input, which must likewise be shown where it was built.
 
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve

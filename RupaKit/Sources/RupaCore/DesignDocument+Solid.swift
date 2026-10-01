@@ -576,18 +576,21 @@ extension DesignDocument {
             case .face(let face):
                 try requireSweepTargetBodyFeature(face.featureID, owner: "Loft face section")
             }
+            if let continuity = section.continuity {
+                try requireSweepTargetBodyFeature(continuity.source, owner: "Loft continuity edge")
+            }
         }
         for guide in guides {
             try requireSweepSourceCurveFeature(guide.featureID, owner: "Loft guide")
         }
         // A loft is built where its sources were built: a face shown elsewhere would loft from the
-        // wrong place.
+        // wrong place, and a continuity edge's face would turn the loft the wrong way.
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
-        for featureID in sections.filter(\.section.isFace).map(\.featureID) {
+        for featureID in sections.filter(\.section.isFace).map(\.featureID) + sections.compactMap(\.continuity?.source) {
             guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
             guard try hierarchy.worldTransform(of: node) == .identity else {
                 throw EditorError(code: .commandInvalid,
-                    message: "A loft's face sections must be shown where they were built; this one has been moved.")
+                    message: "A loft's face sections and continuity edges must be shown where they were built; this one has been moved.")
             }
         }
 
@@ -596,9 +599,7 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .loft(loft),
-            inputs: sections.map { section in
-                FeatureInput(featureID: section.featureID, role: section.section.inputRole)
-            } + guides.map { guide in
+            inputs: sections.flatMap(\.inputs) + guides.map { guide in
                 FeatureInput(featureID: guide.featureID, role: .guide)
             },
             outputs: [FeatureOutput(role: options.resultKind.featureOutputRole)]

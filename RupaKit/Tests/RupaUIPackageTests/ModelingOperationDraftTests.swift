@@ -465,6 +465,53 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.02 * 2.0.squareRoot()) < 1e-12)
     }
 
+    @Test func edgesOfTwoBoxesLoftTangentToTheirFaces() throws {
+        var document = DesignDocument.empty()
+        // Box A spans [0, 20 mm]³, box B [0, 20] × [-70, -50] × [30, 50] mm.
+        let boxes = try [Point3D(x: 0, y: 0, z: 0), Point3D(x: 0, y: -0.07, z: 0.03)].map { origin in
+            try document.createExtrudedRectangleFromCorners(
+                name: "Box", plane: .plane(Plane3D(origin: origin, normal: .unitZ)),
+                firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+                oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+                depth: .length(0.02, .meter), direction: .normal
+            )
+        }
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // A's top front edge and B's bottom back edge, both along X.
+        let edges = try [(0.0, 0.02), (-0.05, 0.03)].map { y, z in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return abs(start.y - y) < 1e-9 && abs(end.y - y) < 1e-9 && abs(start.z - z) < 1e-9 && abs(end.z - z) < 1e-9
+            }?.selectionTarget())
+        }
+        var draft = makeDraft(.loft, targets: edges)
+        draft.sheet = true
+        draft.loftStartContinuity = .g1
+        draft.loftEndContinuity = .g2
+        draft.loftEdgeTension = "1.2"
+        guard case .createLoft(_, let sections, _, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Loft source intent.")
+            return
+        }
+        #expect(sections.map { $0.continuity?.source } == boxes)
+        #expect(sections.map { $0.continuity?.order } == [.tangent, .curvature])
+        #expect(sections.allSatisfy { $0.continuity?.tension == 1.2 })
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The S-shaped sheet is longer across than the flat one between the edges (√(50² + 10²) mm).
+        #expect(measurement.counts.sheets == 1)
+        #expect(measurement.totals.sheetAreaSquareMeters > 0.02 * (0.05 * 0.05 + 0.01 * 0.01).squareRoot() + 1e-9)
+
+        // A G1 end needs an edge there.
+        let sketch = try document.createLineSketch(name: "Line", plane: .xy,
+            start: SketchPoint(x: .length(0, .meter), y: .length(-0.1, .meter)),
+            end: SketchPoint(x: .length(0.02, .meter), y: .length(-0.1, .meter)))
+        let line = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(sketch) })
+        draft.targets = [edges[0], .init(sceneNodeID: line.id)]
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test func facesOfTwoBodiesLoftIntoASolid() throws {
         var document = DesignDocument.empty()
         let boxes = try [0.0, 0.05].map { z in

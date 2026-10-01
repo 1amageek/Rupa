@@ -350,6 +350,19 @@ struct ModelingOperationView: View {
             .disabled(!draft.smooth).contentShape(Rectangle())
             .help("Positive dimensionless scale inherited by sections with blank tension. Applies to smooth connectors.")
             Toggle("Closed section loop", isOn: $draft.closesSectionLoop)
+            Picker("Start continuity", selection: $draft.loftStartContinuity) {
+                ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            Picker("End continuity", selection: $draft.loftEndContinuity) {
+                ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            if draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 {
+                TextField("Edge tension", text: $draft.loftEdgeTension)
+                Text("G1 and G2 ends meet the planar face beside the edge selected there.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         case .fillet:
             lengthField("Radius", text: $draft.distance)
         case .chamfer, .g2Blend:
