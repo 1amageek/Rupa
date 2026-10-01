@@ -963,10 +963,12 @@ struct ModelingOperationDraft: Equatable {
             return .createBodyEdgeTreatment(name: name, target: edges[0], treatment: .fullFillet(across: edges[1]))
         case .fillet, .chamfer, .g2Blend:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
-            guard edges.count == 1, targets.count == 1,
-                  case .edge(let component) = edges[0].component,
-                  component.generatedTopologySubshapeID != nil else {
-                throw invalid("Select one generated CAD edge. Multi-edge blends are not supported by this operation.")
+            guard edges.isEmpty == false, edges.count == targets.count, Set(edges).count == edges.count,
+                  edges.allSatisfy({ edge in
+                      guard case .edge(let component) = edge.component else { return false }
+                      return component.generatedTopologySubshapeID != nil
+                  }) else {
+                throw invalid("Select distinct generated CAD edges of one body.")
             }
             let amount = try topologyLength(distance,
                 label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", in: document)
@@ -980,7 +982,9 @@ struct ModelingOperationDraft: Equatable {
             case .chamfer: treatment = .chamfer(distance: amount)
             default: treatment = .g2Blend(distance: amount)
             }
-            return .createBodyEdgeTreatment(name: name, target: edges[0], treatment: treatment)
+            // Further edges take the same treatment, blended in turn.
+            return .createBodyEdgeTreatment(name: name, target: edges[0],
+                                            treatment: edges.count == 1 ? treatment : .several(treatment, more: Array(edges.dropFirst())))
         }
     }
 

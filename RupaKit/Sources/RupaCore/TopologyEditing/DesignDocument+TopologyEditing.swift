@@ -12,6 +12,21 @@ extension DesignDocument {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureGraphTransaction {
+        if case .several(let base, let more) = treatment {
+            let first = try topologyEditSelection(target, kind: .edge, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            let others = try more.map { edge in
+                try topologyEditSelection(edge, kind: .edge, objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            }
+            guard others.allSatisfy({ $0.sourceID == first.sourceID }),
+                  Set(([first] + others).map(\.reference)).count == others.count + 1 else {
+                throw EditorError(code: .commandInvalid, message: "An edge treatment of several edges takes distinct edges of one body.")
+            }
+            return try prepareTopologyEdit(name: name, target: target,
+                operation: SeveralEdgeTreatment(base: base, more: others.map(\.reference)),
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        }
         if case .fullFillet(let across) = treatment {
             let first = try topologyEditSelection(target, kind: .edge, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
