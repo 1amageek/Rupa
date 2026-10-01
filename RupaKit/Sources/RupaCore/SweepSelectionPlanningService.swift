@@ -108,6 +108,13 @@ public struct SweepSelectionPlanningService: Sendable {
                 candidates.append(candidate)
             }
         }
+        // A closed source selected last after a section is the path (a closed frame to sweep
+        // around), not a second section.
+        let orderedProfiles = candidates.compactMap(\.profileReference)
+        if orderedProfiles.count + candidates.compactMap(\.face).count == 2, let last = candidates.last,
+           let pathProfile = last.profileReference, candidates.contains(where: { $0.curveFeatureID != nil }) == false {
+            candidates[candidates.count - 1] = Candidate(isTarget: last.isTarget, profileReference: nil, curveFeatureID: pathProfile.featureID)
+        }
         let profileReferences = Set(candidates.compactMap(\.profileReference))
         let faces = candidates.compactMap(\.face)
         guard profileReferences.count + faces.count <= 1 else {

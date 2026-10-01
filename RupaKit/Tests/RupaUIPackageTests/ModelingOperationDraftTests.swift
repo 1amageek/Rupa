@@ -312,6 +312,32 @@ struct ModelingOperationDraftTests {
         #expect(combined.first?.targets == [SweepTargetReference(featureID: box)])
     }
 
+    @Test func aSquareSweepsAroundARectangularFrame() throws {
+        var document = DesignDocument.empty()
+        let square = try document.createRectangleSketchFromCorners(
+            name: "Section", plane: .xy,
+            firstCorner: SketchPoint(x: .length(-0.002, .meter), y: .length(-0.002, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.002, .meter), y: .length(0.002, .meter))
+        )
+        // A 40 × 30 mm frame in the ZX plane with a corner at the origin (sketch x is world z).
+        let frame = try document.createRectangleSketchFromCorners(
+            name: "Frame", plane: .zx,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.04, .meter), y: .length(0.03, .meter))
+        )
+        let nodes = try [square, frame].map { id in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(id) }) }
+        let draft = makeDraft(.sweep, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        guard case .createSweep(_, let sections, let path, _, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(sections.map(\.featureID) == [square] && path.featureID == frame)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.004 * 0.004 * 0.14) < 1e-12)
+    }
+
     @Test func anEdgeOfABodyExtrudesIntoASheet() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

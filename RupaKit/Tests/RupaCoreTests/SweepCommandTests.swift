@@ -166,12 +166,9 @@ import SwiftCAD
         return
     }
     #expect(sweep.path == SweepPathReference(featureID: pathID))
-    do {
-        _ = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
-        Issue.record("Exact kernel must reject multi-entity path-normal sweeps without an exact moving-frame surface.")
-    } catch let error as KernelError {
-        #expect(error.code == .sweepPathNormalUnavailable)
-    }
+    // Straight connected arms sweep with mitred corners.
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    #expect(evaluated.brep.bodies.count == 1)
     try document.validate()
 }
 
