@@ -581,7 +581,9 @@ sheet with `extrudeSection`, all in one transaction.
 continuity names the edge's body as an input, which must likewise be shown where it was built.
 
 Edge treatments (Fillet of any shape, Chamfer, G2 Blend, Setback Corner) rebuild their body in
-place and are measured as the body they evaluate to, the treated source being superseded.
+place and are measured as the body they evaluate to, the treated source being superseded. A Full
+fillet (`BodyEdgeTreatment.fullFillet(across:)`) resolves both edges and states the round's radius,
+which the kernel's `FullFilletRadius` reads from the faces (and the evaluator checks).
 
 `createBridgeSurface` adds a native Bridge Surface sheet between two sheets shown where they were
 built, resolving Short or Long (`wallByReach`) against the evaluated sheets into the first or second

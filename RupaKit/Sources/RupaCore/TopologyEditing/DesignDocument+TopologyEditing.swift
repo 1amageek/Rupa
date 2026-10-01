@@ -12,7 +12,30 @@ extension DesignDocument {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> FeatureGraphTransaction {
-        try prepareTopologyEdit(name: name, target: target, operation: treatment, objectRegistry: objectRegistry,
+        if case .fullFillet(let across) = treatment {
+            let first = try topologyEditSelection(target, kind: .edge, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            let second = try topologyEditSelection(across, kind: .edge, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            guard first.sourceID == second.sourceID, first.reference != second.reference else {
+                throw EditorError(code: .commandInvalid, message: "A full fillet takes two edges of one body.")
+            }
+            // The round's radius, which its faces fix.
+            let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
+                document: self, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                failurePrefix: "A full fillet requires its edges evaluated")
+            let radius: Double
+            do {
+                radius = try FullFilletRadius().radius(target: first.sourceID, edges: (first.reference, second.reference), in: evaluated)
+            } catch let error as KernelError {
+                throw EditorError(code: .commandInvalid, message: "Full fillet: \(error.message)")
+            }
+            return try prepareTopologyEdit(name: name, target: target,
+                operation: FullFilletEdges(across: second.reference, radius: radius),
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        }
+        return try prepareTopologyEdit(name: name, target: target, operation: treatment, objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
     }
 

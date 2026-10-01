@@ -273,12 +273,14 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var sweepGuide = SweepGuideChoice.point
-    /// Fillet Shell's Shape: Round, or a conic, chordal or curvature (G2) cross-section with Tension.
+    /// Fillet Shell's Shape: Round, a conic, chordal or curvature (G2) cross-section with Tension,
+    /// or Full across the face between two edges.
     enum FilletShapeChoice: String, CaseIterable, Identifiable {
         case round = "Round"
         case conic = "Conic"
         case chordal = "Chordal"
         case curvature = "G2"
+        case full = "Full"
         var id: Self { self }
         var shape: FilletShape {
             switch self {
@@ -286,6 +288,7 @@ struct ModelingOperationDraft: Equatable {
             case .conic: .conic
             case .chordal: .chordal
             case .curvature: .curvature
+            case .full: .full
             }
         }
         var takesTension: Bool { self == .conic || self == .curvature }
@@ -940,6 +943,12 @@ struct ModelingOperationDraft: Equatable {
                 edit = .extend(uDomain: .closed(u0, u1), vDomain: .closed(v0, v1))
             }
             return .createSheetSurfaceEdit(name: name, target: targets[0], edit: edit)
+        case .fillet where filletShape == .full:
+            let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
+            guard edges.count == 2, targets.count == 2 else {
+                throw invalid("Full rounds across the face between two edges; select both.")
+            }
+            return .createBodyEdgeTreatment(name: name, target: edges[0], treatment: .fullFillet(across: edges[1]))
         case .fillet, .chamfer, .g2Blend:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
             guard edges.count == 1, targets.count == 1,

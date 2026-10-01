@@ -592,6 +592,39 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
     }
 
+    @Test func aFullFilletRoundsABlocksTopBetweenTwoEdges() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Block", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.03, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // The top edges along X at y = 0 and y = 20 mm.
+        let edges = try [0.0, 0.02].map { y in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return abs(start.z - 0.03) < 1e-9 && abs(end.z - 0.03) < 1e-9 && abs(start.y - y) < 1e-9 && abs(end.y - y) < 1e-9
+            }?.selectionTarget())
+        }
+        var draft = makeDraft(.fillet, targets: [edges[0]])
+        draft.filletShape = .full
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.targets = edges
+        guard case .createBodyEdgeTreatment(_, _, .fullFillet) = try draft.command(in: document) else {
+            Issue.record("Expected a full fillet.")
+            return
+        }
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        // The top 10 mm of the 20 mm cross-section becomes a half disc of radius 10 mm.
+        let r = 0.01
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.03 - 0.02 * (2 * r * r - Double.pi * r * r / 2))) < 1e-11)
+    }
+
     @Test func aPatchSpansAClosedLoopOfCurves() throws {
         var document = DesignDocument.empty()
         // A 20 mm right triangle of three lines.

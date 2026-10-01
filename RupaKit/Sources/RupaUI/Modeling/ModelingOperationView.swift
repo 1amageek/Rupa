@@ -387,7 +387,12 @@ struct ModelingOperationView: View {
                 ForEach(ModelingOperationDraft.FilletShapeChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
-            lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+            if draft.filletShape == .full {
+                Text("Select the two edges on either side of a face: the round is tangent to it and to both faces beside it.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+            }
             if draft.filletShape.takesTension {
                 TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)
             }

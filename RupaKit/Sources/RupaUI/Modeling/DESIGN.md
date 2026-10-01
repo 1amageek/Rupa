@@ -240,7 +240,8 @@ and unsupported routes.
 Selected-edge Fillet, Chamfer and G2 Blend use the
 [Core topology editing](../../RupaCore/TopologyEditing/DESIGN.md) contract,
 not extrusion-profile corner rewriting. They require one generated CAD edge
-and an amount above modeling tolerance. The kernel's unsupported geometry is
+and an amount above modeling tolerance, except Fillet's Full shape, which takes
+the two edges on either side of a face and no amount (`fullFillet(across:)`). The kernel's unsupported geometry is
 reported by Preview without publication. Subdivision counts are display
 quality, so these forms do not expose them as shape parameters. Existing
 profile-corner manipulation remains a distinct source-editing operation.
