@@ -385,6 +385,19 @@ struct ModelingOperationDraftTests {
             .totals.solidVolumeCubicMeters
         let h = 0.002
         #expect(abs(roundedVolume - 2 * h * (2 * h * 0.14 - 4 * h * h + Double.pi * h * h)) < 1e-12)
+
+        // Simplify asks for the flat sides as trimmed planes.
+        draft.sweepCorners = .mitre
+        draft.sweepSimplify = true
+        guard case .createSweep(_, _, _, _, _, let simplified, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(simplified.simplify)
+        let flat = CADDocumentStore(document: document)
+        _ = try flat.apply(draft.command(in: document))
+        #expect(abs(try MeasurementService().measure(document: flat.document, ruler: .standard(for: .meter))
+            .totals.solidVolumeCubicMeters - 0.004 * 0.004 * 0.14) < 1e-12)
     }
 
     @Test func anEdgeOfABodyExtrudesIntoASheet() throws {
@@ -509,6 +522,8 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(sections.map { $0.continuity?.source } == boxes)
+        guard case .createLoft(_, _, _, let loftOptions, _) = try draft.command(in: document) else { return }
+        #expect(loftOptions.simplify)
         #expect(sections.map { $0.continuity?.order } == [.tangent, .curvature])
         #expect(sections.allSatisfy { $0.continuity?.tension == 1.2 })
         let store = CADDocumentStore(document: document)
@@ -1023,6 +1038,8 @@ struct ModelingOperationDraftTests {
         let guideNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(guide) })
         var draft = makeDraft(.loft, targets: targets + [.init(sceneNodeID: guideNode.id)])
         draft.isSurfaceCreation = true
+        // The guided sides are read in their tensor charts, so they stay B-spline patches.
+        draft.loftSimplify = false
         draft.loftGuideNodeIDs.insert(guideNode.id)
         draft.targets.insert(draft.targets.removeLast(), at: 0)
         let command = try draft.command(in: document)

@@ -230,41 +230,33 @@ import SwiftCAD
     #expect(abs(volume - 0.002 * area) < 1e-13)
 }
 
-@Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {
+@Test func createSweepSimplifiesItsFlatSidesIntoPlanes() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
-        name: "Unsupported Sweep Profile",
+        name: "Simplified Sweep Profile",
         plane: .xy,
         width: .length(4.0, .millimeter),
         height: .length(2.0, .millimeter)
     )
+    // A 20 mm line up the Z axis (sketch x is world z on the ZX plane).
     let pathID = try document.createLineSketch(
-        name: "Unsupported Sweep Path",
-        plane: .xy,
-        start: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        ),
-        end: SketchPoint(
-            x: .length(20.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        )
+        name: "Simplified Sweep Path",
+        plane: .zx,
+        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+        end: SketchPoint(x: .length(20.0, .millimeter), y: .length(0.0, .millimeter))
     )
-    let originalOrder = document.cadDocument.designGraph.order
-
-    do {
-        _ = try document.createSweep(
-            name: "Simplified Sweep",
-            sections: [.profile(ProfileReference(featureID: profileID))],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(simplify: true)
-        )
-        Issue.record("Sweep command must reject unsupported simplify output.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("simplify"))
-    }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
+    _ = try document.createSweep(
+        name: "Simplified Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(simplify: true)
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    #expect(evaluated.brep.faces.count == 6)
+    #expect(evaluated.brep.faces.values.allSatisfy { face in
+        if case .plane = evaluated.brep.geometry.surfaces[face.surfaceID] { return true }
+        return false
+    })
 }
 
 @Test func createSweepAcceptsCurvedPathParallelAlignmentThroughEvaluationGate() throws {

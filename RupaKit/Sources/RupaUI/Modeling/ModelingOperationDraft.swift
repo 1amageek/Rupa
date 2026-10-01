@@ -157,6 +157,10 @@ struct ModelingOperationDraft: Equatable {
     var sheet = false
     var isSurfaceCreation = false
     var smooth = false
+    /// Simplify: flat faces of a sweep or loft are trimmed planes. Plasticity leaves it off for
+    /// Sweep and on for Loft.
+    var sweepSimplify = false
+    var loftSimplify = true
     var loftDefaultTension = "1"
     /// How a Loft meets the face beside an edge selected as its first or last section.
     enum LoftContinuityChoice: String, CaseIterable, Identifiable {
@@ -597,6 +601,7 @@ struct ModelingOperationDraft: Equatable {
             options.resultKind = createsSheet ? .sheet : .solid
             options.alignment = sweepAlignment.alignment
             options.cornerStyle = sweepCorners.style
+            options.simplify = sweepSimplify
             // The allowance bounds whichever approximation the sweep needs: a twist, or a Normal
             // sweep along a curved path. A twist cannot go without it.
             let twists = degrees != 0 || doubleHelical
@@ -706,7 +711,8 @@ struct ModelingOperationDraft: Equatable {
             }
             let options = LoftOptions(resultKind: createsSheet ? .sheet : .solid,
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
-                smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"))
+                smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"),
+                simplify: loftSimplify)
             try LoftFeature(sections: sections, guides: guides, options: options).validate()
             return .createLoft(name: name, sections: sections, guides: guides, options: options, edgeCurves: edgeCurves)
         case .shell:

@@ -329,6 +329,7 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
+            Toggle("Simplify", isOn: $draft.sweepSimplify)
             if !draft.isSurfaceCreation {
                 Picker("Boolean", selection: $draft.solidBoolean) {
                     ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
@@ -356,6 +357,7 @@ struct ModelingOperationView: View {
             .disabled(!draft.smooth).contentShape(Rectangle())
             .help("Positive dimensionless scale inherited by sections with blank tension. Applies to smooth connectors.")
             Toggle("Closed section loop", isOn: $draft.closesSectionLoop)
+            Toggle("Simplify", isOn: $draft.loftSimplify)
             Picker("Start continuity", selection: $draft.loftStartContinuity) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }
