@@ -827,9 +827,22 @@ struct ModelingOperationDraftTests {
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
-        // Each half's radius runs linearly between 2 and 5 mm.
+        // The radius runs along the natural cubic spline through 2, 5 and 2 mm: its second
+        // derivative halfway M = 6(a − 2b + a)/h²/4, none at the ends; (1 − π/4)∫r² by Gauss.
         let (a, b, s) = (0.002, 0.005, 0.02)
-        let removed = 2 * (1 - Double.pi / 4) * (a * a + a * b + b * b) / 3 * s / 2
+        let h = s / 2
+        let m = 6 * (2 * a - 2 * b) / (h * h) / 4
+        func radius(_ x: Double) -> Double {
+            // The half from the start; the other mirrors it.
+            m * x * x * x / (6 * h) + (a / h) * (h - x) + (b / h - m * h / 6) * x
+        }
+        let nodes = [-0.861136311594053, -0.339981043584856, 0.339981043584856, 0.861136311594053]
+        let weights = [0.347854845137454, 0.652145154862546, 0.652145154862546, 0.347854845137454]
+        let half = zip(nodes, weights).reduce(0.0) { sum, pair in
+            let r = radius(h / 2 * (1 + pair.0))
+            return sum + pair.1 * r * r * h / 2
+        }
+        let removed = (1 - Double.pi / 4) * 2 * half
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (s * s * s - removed)) < 1e-11)
         draft.filletVariablePoints = "0.5"
         #expect(throws: EditorError.self) { try draft.command(in: document) }
