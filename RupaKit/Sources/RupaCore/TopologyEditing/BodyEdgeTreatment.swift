@@ -16,6 +16,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     /// A fillet of `shape` (tension where it takes one) varying from `radius` at the edge's start to
     /// `endRadius` at its end.
     case variableFillet(radius: CADExpression, endRadius: CADExpression, shape: FilletShape, tension: Double?)
+    /// A constant fillet of `shape` (tension where it takes one) over the stretch of the edge
+    /// between its `limits`, the edge left sharp beyond them.
+    case limitedFillet(distance: CADExpression, shape: FilletShape, tension: Double?, limits: EdgeBlendLimits)
     /// `treatment` of the target edge and of `more` edges of the same body, which must not meet it
     /// or each other at a corner.
     case several(BodyEdgeTreatment, more: [SelectionTarget])
@@ -64,6 +67,14 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
             }
             guard try document.resolvedPositiveLengthValue(endRadius, owner: "Fillet end radius") > document.modelingSettings.tolerance.distance else {
                 throw EditorError(code: .commandInvalid, message: "Fillet end radius must exceed modeling tolerance.")
+            }
+            operation = .fillet(fillet)
+        case .limitedFillet(let distance, let shape, let tension, let limits):
+            amount = distance
+            let fillet = FilletFeature(target: .init(featureID: sourceID), edges: [reference], radius: distance,
+                                       shape: shape, tension: tension, limits: limits)
+            do { try fillet.validate() } catch {
+                throw EditorError(code: .commandInvalid, message: "The fillet is invalid: \(error).")
             }
             operation = .fillet(fillet)
         case .several:

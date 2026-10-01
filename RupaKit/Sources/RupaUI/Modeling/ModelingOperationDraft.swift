@@ -308,6 +308,9 @@ struct ModelingOperationDraft: Equatable {
     var chamferFlipped = false
     /// A variable fillet's radius at the edge's end; blank for a constant one.
     var filletEndRadius = ""
+    /// A fillet's limit points as fractions of the edge from its start; both blank for the whole edge.
+    var filletLimitStart = ""
+    var filletLimitEnd = ""
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -987,6 +990,20 @@ struct ModelingOperationDraft: Equatable {
                 label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", in: document)
             let treatment: BodyEdgeTreatment
             switch kind {
+            case .fillet where filletLimitStart.trimmingCharacters(in: .whitespaces).isEmpty == false
+                || filletLimitEnd.trimmingCharacters(in: .whitespaces).isEmpty == false:
+                let text = filletTension.trimmingCharacters(in: .whitespaces)
+                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                func fraction(_ value: String, blank: Double, label: String) throws -> Double {
+                    let trimmed = value.trimmingCharacters(in: .whitespaces)
+                    return trimmed.isEmpty ? blank : try number(trimmed, label: label)
+                }
+                let limits = EdgeBlendLimits(start: try fraction(filletLimitStart, blank: 0, label: "Limit start"),
+                                             end: try fraction(filletLimitEnd, blank: 1, label: "Limit end"))
+                do { try limits.validate() } catch {
+                    throw invalid("Limits lie within the edge, 0 ≤ start < end ≤ 1, and limit it somewhere.")
+                }
+                treatment = .limitedFillet(distance: amount, shape: filletShape.shape, tension: tension, limits: limits)
             case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false:
                 guard edges.count == 1 else { throw invalid("A variable fillet rounds one edge.") }
                 let text = filletTension.trimmingCharacters(in: .whitespaces)

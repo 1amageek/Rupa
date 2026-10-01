@@ -775,6 +775,37 @@ struct ModelingOperationDraftTests {
         }
     }
 
+    @Test func limitPointsRoundOnlyTheirStretchOfTheEdge() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "3 mm"
+        draft.filletLimitStart = "0.25"
+        draft.filletLimitEnd = "0.75"
+        guard case .createBodyEdgeTreatment(_, _, .limitedFillet(_, .round, nil, let limits)) = try draft.command(in: document) else {
+            Issue.record("Expected a limited fillet.")
+            return
+        }
+        #expect(limits == EdgeBlendLimits(start: 0.25, end: 0.75))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let r = 0.003
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - r * r * (1 - Double.pi / 4) * 0.01)) < 1e-11)
+        draft.filletLimitStart = "0.8"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
