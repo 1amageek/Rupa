@@ -626,6 +626,42 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 2 * (r * r - Double.pi * r * r / 4) * 0.02)) < 1e-11)
     }
 
+    @Test func twoEdgesMeetingAtACornerRoundIntoAMitre() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        // The top edges along X at y = 0 and along Y at x = 0: they meet at the corner (0, 0, 20 mm).
+        let edges = try [true, false].map { alongX in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                let (a, b) = alongX ? (start.y, end.y) : (start.x, end.x)
+                return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(a) < 1e-9 && abs(b) < 1e-9
+            }?.selectionTarget())
+        }
+        let (alongX, alongY) = (edges[0], edges[1])
+        var draft = makeDraft(.fillet, targets: [alongX, alongY])
+        draft.distance = "3 mm"
+        guard case .createBodyEdgeTreatment(_, _, .several(.fillet, let more)) = try draft.command(in: document) else {
+            Issue.record("Expected a fillet of two edges.")
+            return
+        }
+        #expect(more.count == 1)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        let r = 0.003
+        // Each round removes its cross-section along its 20 mm edge, the mitre giving back the
+        // corner the two would both remove.
+        let expected = 0.02 * 0.02 * 0.02 - r * r * (1 - Double.pi / 4) * 0.04 + r * r * r * (5.0 / 3 - Double.pi / 2)
+        #expect(measurement.counts.solids == 1)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - expected) < 1e-11)
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
