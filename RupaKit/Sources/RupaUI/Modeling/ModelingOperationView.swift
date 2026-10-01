@@ -387,7 +387,7 @@ struct ModelingOperationView: View {
                 TextField("Tension", text: $draft.squareTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
             }
-            Text("Select four sides meeting end to end: edges of bodies or curves. G1 and G2 apply along edges, on one side or two opposite ones: exactly beside planar faces, within the angle allowance beside curved ones (G1).")
+            Text("Select four sides meeting end to end: edges of bodies or curves. G1 applies along any edges (G2 along one side or two opposite ones): exactly beside planar faces, within the angle allowance beside curved ones.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

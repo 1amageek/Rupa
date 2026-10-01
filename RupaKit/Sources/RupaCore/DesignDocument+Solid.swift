@@ -653,9 +653,7 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .loft(loft),
-            inputs: sections.flatMap(\.inputs) + guides.map { guide in
-                FeatureInput(featureID: guide.featureID, role: .guide)
-            },
+            inputs: loft.inputs,
             outputs: [FeatureOutput(role: options.resultKind.featureOutputRole)]
         )
 
