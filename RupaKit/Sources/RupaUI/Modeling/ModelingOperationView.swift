@@ -506,7 +506,7 @@ struct ModelingOperationView: View {
                     if draft.xnurbsFlatness == (quad ? "0.95" : "1.00") { draft.xnurbsFlatness = quad ? "1.00" : "0.95" }
                 }
                 .help("Two to four boundaries make Square's untrimmed sheet; otherwise one sheet trimmed by the closed boundary.")
-            TextField("Flatness (0–1]", text: $draft.xnurbsFlatness)
+            TextField("Flatness [0–1]", text: $draft.xnurbsFlatness)
             TextField("Tension", text: $draft.xnurbsTension)
             if draft.xnurbsContinuity != .g0 || draft.xnurbsEdgeContinuity.values.contains(where: { $0 != .g0 }) {
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
@@ -553,7 +553,7 @@ struct ModelingOperationView: View {
                 TextField("Spans U", text: $draft.squareUSpans)
                 TextField("Spans V", text: $draft.squareVSpans)
             }
-            TextField("Flatness (0–1]", text: $draft.squareFlatness)
+            TextField("Flatness [0–1]", text: $draft.squareFlatness)
             TextField("Scale (curvature combs)", value: Binding(get: { combScale }, set: { if $0.isFinite, $0 > 0 { combScale = $0 } }),
                       format: .number)
                 .help("The length of the surface analysis's curvature combs, relative to their automatic length.")
