@@ -473,12 +473,13 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .activateTrimCommand)
 }
 
-@Test func workspaceKeyboardRouterBridgesTwoSelectedCurveEndsWithL() {
+@Test func workspaceKeyboardRouterLoftsWithL() {
+    // Plasticity's L is Loft; the view bridges two selected curve ends or vertices instead.
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()
-    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == nil)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == .loftSelection)
     context.hasBridgeableSelection = true
-    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == .bridgeSelection)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == .loftSelection)
     context.isSelectToolActive = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "l"), context: context) == nil)
 }

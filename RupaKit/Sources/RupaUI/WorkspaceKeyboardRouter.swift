@@ -200,8 +200,11 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case activateSlideCommand
     /// T: Trim removes each clicked curve segment until Escape.
     case activateTrimCommand
-    /// L: Bridge Vertex joins the two selected curve ends (or curves).
+    /// Bridge Vertex joins the two selected curve ends (or curves).
     case bridgeSelection
+    /// L: Loft over the selected sections, as Plasticity's L; two selected curve ends or vertices
+    /// bridge instead (Plasticity's Loft of two vertices is Bridge Vertex).
+    case loftSelection
     /// B: Fillet's dialog on the selected sketch curves or curve ends.
     case beginFillet
     /// D while Fillet runs: type its distance.
@@ -1011,7 +1014,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "q": return context.hasBodyObjectSelection ? .beginBoolean : nil
         case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
-        case "l": return context.hasBridgeableSelection ? .bridgeSelection : nil
+        case "l": return .loftSelection
         case "b": return context.selectedSketchTargetCount > 0 ? .beginFillet : nil
         case "j": return context.selectedSketchTargetCount >= 2 || context.selectedSheetObjectCount >= 2 ? .join : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil

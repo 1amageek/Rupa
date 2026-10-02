@@ -6932,6 +6932,23 @@ private struct ProjectMainViewContent: View {
         case .cancelBridgeTension:
             bridgeTensionInput = nil
             return .handled
+        case .loftSelection:
+            // Two curve ends or vertices bridge; anything else lofts the selection in order.
+            let targets = snapshot.selection.selectedTargets
+            let ends = targets.count == 2 && targets.allSatisfy { target in
+                switch target.component {
+                case .vertex: return true
+                case .sketchEntity(let id): return id.sketchPointHandleReference != nil
+                default: return false
+                }
+            }
+            if ends, let bridgeAction {
+                bridgeAction()
+                return .handled
+            }
+            beginModelingOperation(.loft)
+            modelingDraft?.targets = targets
+            return .handled
         case .bridgeSelection:
             guard let bridgeAction else {
                 reportToolStatus("Bridge: select two sketch curves or two curve ends.", severity: .warning)
