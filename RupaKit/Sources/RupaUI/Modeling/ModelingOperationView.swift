@@ -186,7 +186,7 @@ struct ModelingOperationView: View {
             case .extrude:
                 return "Select one profile or curve. Extrude translates its boundary into a sheet and preserves the source. Choose Vector to specify the direction; source-normal directions require a planar section."
             case .loft:
-                return "Select profiles or curves in section order and mark any guide curves below. At least two sections are required. Loft creates an uncapped sheet and preserves the sources. Mixed profile/curve sections must each have one closed boundary; open curves must be paired with open curves."
+                return "Select profiles or curves in section order and mark any guide curves below. At least two sections are required, or two vertices or curve ends to bridge. Closed profiles, regions and faces loft into a solid; curves and edges into a sheet. The sources are kept. Mixed profile/curve sections must each have one closed boundary; open curves must be paired with open curves."
             case .sweep:
                 return "Select a profile or curve section first, optional guides next, and a separate curve path last. Sweep creates a sheet, not a capped solid."
             default: break
