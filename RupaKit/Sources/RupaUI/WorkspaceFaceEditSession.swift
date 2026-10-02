@@ -25,7 +25,9 @@ struct WorkspaceFaceEditSession: Equatable {
     let instance = WorkspaceDialogInstance()
 
     enum Kind: Equatable {
-        case push(faces: [SelectionTarget])
+        /// Push Face: the faces pushed by the Distance, or, once a face is clicked in the dialog
+        /// (Plasticity's dependant offset), put onto that face.
+        case push(faces: [SelectionTarget], onto: SelectionTarget? = nil)
         /// Draft Face: the faces to draft and the reference face whose plane they turn about,
         /// each picked while the dialog runs.
         case draft(faces: [SelectionTarget], neutral: SelectionTarget?)
@@ -41,8 +43,9 @@ struct WorkspaceFaceEditSession: Equatable {
     }
 
     private(set) var kind: Kind
-    /// Push Face's distance, in meters.
-    var distanceMeters = 0.001
+    /// Push Face's and Extend Sheet's distance, in meters; Push Face opens at 0 as Plasticity's
+    /// does, set by the face's arrow or the field.
+    var distanceMeters = 0.0
     /// Push Face's adjacent angle in degrees; zero leaves the faces beside unturned.
     var adjacentAngleDegrees = 0.0
     /// Draft Face's angle in degrees, opening at 0 as Plasticity's does; OK needs one set.
@@ -121,16 +124,17 @@ struct WorkspaceFaceEditSession: Equatable {
         }
     }
 
-    /// Whether clicks on faces go to the dialog: Draft Face's reference and faces, Match Face's
-    /// reference.
+    /// Whether clicks on faces go to the dialog: Push Face's face to push onto, Draft Face's
+    /// reference and faces, Match Face's reference.
     var takesFacePicks: Bool {
         switch kind {
-        case .draft, .match: true
-        case .push, .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace: false
+        case .push, .draft, .match: true
+        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace: false
         }
     }
 
-    /// A clicked face: Draft Face takes it as the reference while it has none, then adds it to
+    /// A clicked face: Push Face pushes its faces onto it instead of by the Distance (a pushed
+    /// face itself is ignored); Draft Face takes it as the reference while it has none, then adds it to
     /// the drafted faces, Control-click (`toggles`) taking a drafted face back off; Match Face
     /// takes it as the reference, Control-click adding or taking off a face to match instead.
     mutating func pick(face: SelectionTarget, toggles: Bool) {
@@ -153,9 +157,21 @@ struct WorkspaceFaceEditSession: Equatable {
             } else {
                 kind = .match(faces: faces.filter { $0 != face }, reference: face)
             }
-        case .push, .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
+        case let .push(faces, _):
+            guard faces.contains(face) == false else { return }
+            kind = .push(faces: faces, onto: face)
+            distanceMeters = 0
+        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
             return
         }
+    }
+
+    /// Push Face's distance from the face's arrow, which pushes by the distance again rather than
+    /// onto a clicked face.
+    mutating func setPushDistance(_ meters: Double) {
+        guard case let .push(faces, _) = kind else { return }
+        kind = .push(faces: faces)
+        distanceMeters = meters
     }
 
     /// What OK still needs, as the status bar says it; nil once the command can run.
@@ -170,7 +186,10 @@ struct WorkspaceFaceEditSession: Equatable {
             if reference == nil { return "Match Face: click the face to match onto." }
             if faces.isEmpty { return "Match Face: Control-click the faces to match." }
             return nil
-        case .push, .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
+        case let .push(_, onto):
+            return onto == nil && distanceMeters == 0
+                ? "Push Face: drag the face's arrow or set the Distance; click a face to push onto it." : nil
+        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
             return nil
         }
     }
@@ -233,7 +252,10 @@ struct WorkspaceFaceEditSession: Equatable {
 
     private func command() -> EditorCommand? {
         switch kind {
-        case let .push(faces):
+        case let .push(faces, onto):
+            if let onto {
+                return .matchFaces(targets: faces, reference: onto, front: false, grow: grow)
+            }
             return .pushFaces(
                 targets: faces, distance: .length(distanceMeters, .meter),
                 adjacentAngle: adjacentAngleDegrees == 0 ? nil : .angle(adjacentAngleDegrees, .degree), grow: grow

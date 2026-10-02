@@ -85,7 +85,10 @@ enum WorkspaceViewportAffordance: CaseIterable, Sendable {
         switch self {
         case .slotWidth:
             return .freestyleOffset
-        case .objectSelection, .objectPlacement, .objectHandles, .faceOffset, .edgeTreatment,
+        case .faceOffset:
+            // Push Face's arrow sets its dialog's Distance.
+            return .faceEdit
+        case .objectSelection, .objectPlacement, .objectHandles, .edgeTreatment,
              .boundarySurface, .bodyVertexEditing, .regionOffset, .edgeOffset,
              .sketchEntityEditing, .featureParameters, .constructionPlane:
             return nil

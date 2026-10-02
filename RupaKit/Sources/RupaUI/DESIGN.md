@@ -908,7 +908,9 @@ and the faces after it are drafted, Control-click taking one back off; Match Fac
 selected faces (Option-W) and its reference is the face clicked in the dialog, Control-click
 adding or taking off a face to match. OK reports what is still to pick or set. Return, right-click or OK applies as one source command, a refused one
 leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
-and a face drag push through the same `pushFaces`. The palette's Remove Fillets From Shell
+push through the same `pushFaces`. A face's arrow sets Push Face's Distance (which opens at 0),
+opening the dialog on the selected faces when none runs, and previews it; a face clicked in Push
+Face's dialog is Plasticity's dependant offset, the faces put onto it (`matchFaces`). The palette's Remove Fillets From Shell
 opens the same dialog on one selected solid, with its Max Radius and the Convexity Tab steps;
 Hollow on the selected faces or one solid, with its Thickness; and Thicken (alias Thicken Face)
 on one sheet or the selected faces, with its Front and Back, which S locks together. The tool

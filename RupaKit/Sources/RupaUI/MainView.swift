@@ -205,6 +205,8 @@ private struct ProjectMainViewContent: View {
     @State private var deformSession: WorkspaceDeformSession?
     @State private var imprintSession: WorkspaceImprintSession?
     @State private var faceEditSession: WorkspaceFaceEditSession?
+    /// Set when a face's arrow changed Push Face's Distance, so the change previews.
+    @State private var previewsFaceEditAfterChange = false
     /// Control held over a previewed face edit (Align's Ctrl Show original): the original shows.
     @State private var showsOriginalOverPreview = false
     /// Whether the modeling preview shows the face edit's result, so a change to the edit drops it.
@@ -2468,6 +2470,12 @@ private struct ProjectMainViewContent: View {
             slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)
         }
         .onChange(of: faceEditSession) { old, new in
+            // A face's arrow set Push Face's Distance: the dialog previews it at once.
+            if previewsFaceEditAfterChange {
+                previewsFaceEditAfterChange = false
+                previewFaceEdit()
+                return
+            }
             // The face edit changed or ended: its preview no longer shows it. Options that only
             // change what is drawn (Align's Analysis) keep it.
             guard previewsFaceEdit, old?.commands() != new?.commands() else { return }
@@ -6706,7 +6714,7 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .push(faces: faces))
-            reportToolStatus("Push Face: set the distance, Tab steps Grow; OK, Return or right-click pushes the faces.")
+            reportToolStatus("Push Face: drag the face's arrow or set the Distance, or click a face to push onto it; Tab steps Grow; OK, Return or right-click pushes.")
             return .handled
         case .beginDraftFace:
             // The reference comes first, as Plasticity picks it: the first selected face, the
@@ -8199,18 +8207,22 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// A face's arrow sets Push Face's Distance, as Plasticity's yellow dot does: in the running
+    /// Push Face dialog, else in one it opens on the selected faces; OK applies it.
     private func handleViewportFaceDrag(_ target: ViewportFaceDragTarget) {
         guard viewportPointerOwner.allows(.faceOffset) else {
             return
         }
-        submitSource(
-            .pushFaces(
-                targets: [target.target],
-                distance: .length(target.distance, .meter),
-                adjacentAngle: nil,
-                grow: .moving
-            )
-        )
+        if case .push = faceEditSession?.kind {
+            faceEditSession?.setPushDistance(target.distance)
+        } else {
+            var faces = selectedBodyFaceTargets
+            if faces.contains(target.target) == false { faces = [target.target] }
+            var edit = WorkspaceFaceEditSession(kind: .push(faces: faces))
+            edit.setPushDistance(target.distance)
+            faceEditSession = edit
+        }
+        previewsFaceEditAfterChange = true
     }
 
     private func handleViewportEdgeChamferDrag(_ target: ViewportEdgeChamferDragTarget) {

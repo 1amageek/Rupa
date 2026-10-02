@@ -3,8 +3,9 @@ import RupaCore
 import SwiftCAD
 @testable import RupaUI
 
-/// Draft Face and Match Face take their reference and faces as clicks while the dialog runs, as
-/// Plasticity's do: Draft Face's reference first, Match Face's reference in the dialog.
+/// Push Face, Draft Face and Match Face take faces as clicks while the dialog runs, as
+/// Plasticity's do: Push Face's face to push onto, Draft Face's reference first, Match Face's
+/// reference in the dialog.
 @Suite("Face edit session picking")
 struct WorkspaceFaceEditSessionPickTests {
     @Test func draftFacePicksTheReferenceFirstThenTheFaces() throws {
@@ -51,5 +52,29 @@ struct WorkspaceFaceEditSessionPickTests {
             return
         }
         #expect(targets == [faces[0]] && reference == faces[2])
+    }
+
+    @Test func pushFacePushesOntoAClickedFaceAndBackByItsArrow() throws {
+        let faces = (0..<2).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .push(faces: [faces[0]]))
+        // The Distance opens at 0, so nothing is pushed until it is set or a face is clicked.
+        #expect(session.distanceMeters == 0 && session.commands().isEmpty && session.missingInput != nil)
+        // The pushed face itself is not a face to push onto.
+        session.pick(face: faces[0], toggles: false)
+        #expect(session.kind == .push(faces: [faces[0]]))
+        // A clicked face is the dependant offset: the face goes onto it.
+        session.pick(face: faces[1], toggles: false)
+        guard case let .matchFaces(targets, reference, _, _)? = session.commands().first else {
+            Issue.record("Expected the face matched onto the clicked face.")
+            return
+        }
+        #expect(targets == [faces[0]] && reference == faces[1])
+        // The face's arrow pushes it by a distance again.
+        session.setPushDistance(0.002)
+        guard case let .pushFaces(pushed, distance, _, _)? = session.commands().first else {
+            Issue.record("Expected a push.")
+            return
+        }
+        #expect(pushed == [faces[0]] && distance == .length(0.002, .meter))
     }
 }

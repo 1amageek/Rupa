@@ -15,8 +15,12 @@ struct WorkspaceFaceEditDialogView: View {
 
     var body: some View {
         switch dialog.kind {
-        case .push:
-            lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.distance")
+        case let .push(_, onto):
+            if onto == nil {
+                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.distance")
+            } else {
+                pickedLabel("Onto face", picked: true, identifier: "WorkspaceFaceEdit.ontoPicked")
+            }
             TextField("Angle Adjacent", value: $dialog.adjacentAngleDegrees, format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.adjacentAngle")
