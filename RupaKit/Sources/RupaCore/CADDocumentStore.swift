@@ -2100,9 +2100,10 @@ public final class CADDocumentStore {
                         targets: targets, front: front, back: back, objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
-                case .extendSheet(let targets, let distance, let shape, let modifies):
+                case .extendSheet(let targets, let distance, let shape, let modifies, let limit, let limitMode):
                     try updatedDocument.extendSheet(
-                        targets: targets, distance: distance, shape: shape, modifies: modifies, objectRegistry: objectRegistry,
+                        targets: targets, distance: distance, shape: shape, modifies: modifies, limit: limit, limitMode: limitMode,
+                        objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
                 case .rebuildFaces(let targets, let method, let extendU, let extendV, let shrinks):

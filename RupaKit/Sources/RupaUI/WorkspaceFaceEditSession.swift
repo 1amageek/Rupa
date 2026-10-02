@@ -22,7 +22,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case removeFillets(object: SceneNodeID)
         case hollow(targets: [SelectionTarget])
         case thicken(targets: [SelectionTarget])
-        case extendSheet(edges: [SelectionTarget])
+        case extendSheet(edges: [SelectionTarget], limit: SelectionTarget? = nil)
         case alignSurface(edge: SelectionTarget, reference: SelectionTarget)
         case rebuildFace(faces: [SelectionTarget])
     }
@@ -49,6 +49,8 @@ struct WorkspaceFaceEditSession: Equatable {
     var locksThicknesses = false
     /// Extend Sheet's shape, which Tab steps, and whether the extensions join the sheet.
     var extensionShape: SheetExtensionShape = .natural
+    /// How an extension runs on to the limit's object, when one is selected.
+    var limitMode: SheetExtensionLimit.Mode = .minimal
     var modifies = true
     /// Align Surface's continuity, which Tab steps, the tension across the edge and the further
     /// control rows the change fades over.
@@ -145,8 +147,9 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .match(faces, reference):
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
-        case let .extendSheet(edges):
-            return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies)
+        case let .extendSheet(edges, limit):
+            return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies,
+                                limit: limit, limitMode: limitMode)
         case let .rebuildFace(faces):
             return .rebuildFaces(
                 targets: faces,

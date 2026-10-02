@@ -26,8 +26,16 @@ struct WorkspaceFaceEditDialogView: View {
         case .match:
             Toggle("Front", isOn: $dialog.front)
                 .accessibilityIdentifier("WorkspaceFaceEdit.front")
-        case .extendSheet:
-            lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.extendDistance")
+        case let .extendSheet(_, limit):
+            if limit == nil {
+                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.extendDistance")
+            } else {
+                Picker("Limit", selection: $dialog.limitMode) {
+                    ForEach(SheetExtensionLimit.Mode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                }
+                .fixedSize()
+                .accessibilityIdentifier("WorkspaceFaceEdit.limitMode")
+            }
             Picker("Shape", selection: $dialog.extensionShape) {
                 ForEach(SheetExtensionShape.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }

@@ -267,7 +267,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case removeRedundantTopology(targets: [SceneNodeID])
     case hollow(targets: [SelectionTarget], thickness: CADExpression)
     case thicken(targets: [SelectionTarget], front: CADExpression, back: CADExpression)
-    case extendSheet(targets: [SelectionTarget], distance: CADExpression, shape: SheetExtensionShape = .natural, modifies: Bool = true)
+    case extendSheet(targets: [SelectionTarget], distance: CADExpression, shape: SheetExtensionShape = .natural, modifies: Bool = true,
+                     limit: SelectionTarget? = nil, limitMode: SheetExtensionLimit.Mode = .minimal)
     case rebuildFaces(targets: [SelectionTarget], method: FaceRebuildMethod, extendU: Double = 0, extendV: Double = 0, shrinks: Bool = false)
     case unwrapFace(target: SelectionTarget)
     /// Extrude on planar faces of one object: each face its own extrusion, along its own normal

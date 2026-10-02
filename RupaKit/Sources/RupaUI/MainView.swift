@@ -6713,8 +6713,13 @@ private struct ProjectMainViewContent: View {
                 guard case .edge = target.component, let node = nodes[target.sceneNodeID] else { return false }
                 return node.reference?.kind == .body && node.object?.geometryRole == .surface
             }
-            if sheetEdges.isEmpty == false, sheetEdges.count == snapshot.selection.selectedTargets.count {
-                faceEditSession = WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges))
+            // Edges of a sheet, and optionally one other object the extension runs on to.
+            let others = snapshot.selection.selectedTargets.filter { target in
+                if case .edge = target.component { return false }
+                return true
+            }
+            if sheetEdges.isEmpty == false, sheetEdges.count + others.count == snapshot.selection.selectedTargets.count, others.count <= 1 {
+                faceEditSession = WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges, limit: others.first))
                 reportToolStatus("Extend Sheet: set the distance, Tab steps the shape; OK, Return or right-click extends the edges.")
                 return .handled
             }

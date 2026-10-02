@@ -155,6 +155,27 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func extendSheetRunsOnToAPlacedBox() throws {
+        let session = EditorSession()
+        _ = try session.execute(.createBSplineSurface(name: "Sheet", surface: .bilinearPatch(
+            bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+            topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0))))
+        let sheet = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body }).id
+        // A 100 mm box moved to x ∈ [150, 250] mm across the sheet's plane.
+        let object = try box(session, "Box")
+        _ = try session.execute(.setSceneNodeTransform(id: object, localTransform: try .translation(Vector3D(x: 0.2, y: 0.04, z: -0.05))))
+        let edge = try #require(try TopologySnapshotService().snapshot(document: session.document).entries.first {
+            $0.kind == .edge && $0.sceneNodeID == sheet.description && ($0.start?.x ?? 0) > 0.09 && ($0.end?.x ?? 0) > 0.09
+        }?.selectionTarget())
+        _ = try session.execute(.extendSheet(targets: [edge], distance: .length(0.01, .meter), shape: .natural, modifies: true,
+                                             limit: SelectionTarget(sceneNodeID: object), limitMode: .minimal))
+        #expect(session.evaluationStatus == .valid)
+        let reach = try TopologySnapshotService().snapshot(document: session.document).entries
+            .filter { $0.kind == .edge && $0.sceneNodeID == sheet.description }.compactMap { $0.end?.x }.max() ?? 0
+        #expect(abs(reach - 0.15) < 1e-9)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func extendSheetGrowsASheetInPlaceOrBesideIt() throws {
         for modifies in [true, false] {
             let session = EditorSession()

@@ -216,6 +216,8 @@ extension DesignDocument {
         distance: CADExpression,
         shape: SheetExtensionShape,
         modifies: Bool,
+        limit: SelectionTarget? = nil,
+        limitMode: SheetExtensionLimit.Mode = .minimal,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -233,8 +235,19 @@ extension DesignDocument {
             document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
         )
         let edges = try targets.map { try stableReference(of: $0, kind: .edge, in: topology, operationName: operationName) }
+        // Running on to another object's body, put in the sheet's frame where it is shown.
+        let sheetLimit = try limit.map { target -> SheetExtensionLimit in
+            let body = try offsetObject(for: [target], operationName: operationName)
+            guard body.nodeID != object.nodeID else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) runs on to another object than its sheet.")
+            }
+            let placement = try relativeRigidPlacement(
+                of: body.nodeID, inFrameOf: object.nodeID, owner: "The limit's object", relation: "the extended sheet")
+            return SheetExtensionLimit(body: body.featureID, mode: limitMode, placement: placement)
+        }
         let operation = FeatureOperation.sheetExtend(SheetExtendFeature(
-            target: PatternTargetReference(featureID: object.featureID), edges: edges, distance: distance, shape: shape, modifies: modifies
+            target: PatternTargetReference(featureID: object.featureID), edges: edges, distance: distance, shape: shape, modifies: modifies,
+            limit: sheetLimit
         ))
         if modifies {
             return try appendFeatureShownByObject(operation, name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry)
