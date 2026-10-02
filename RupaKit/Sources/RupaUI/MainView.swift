@@ -10648,6 +10648,14 @@ private struct ProjectMainViewContent: View {
         return {
             submitSource(.realizeComponentInstances(sceneNodeIDs: Array(ids))) { result in
                 guard result?.didMutate == true else { return }
+                // The copies stay selected, as Plasticity leaves them: the new nodes not inside
+                // another new node.
+                if let generated = result?.generatedIdentities.sceneNodeIDs,
+                   let metadata = workspace.view?.document.document.productMetadata {
+                    let inside = Set(generated.flatMap { metadata.sceneNodes[$0]?.childIDs ?? [] })
+                    let copies = generated.filter { inside.contains($0) == false && metadata.sceneNodes[$0] != nil }
+                    if copies.isEmpty == false { selectSceneNodes(copies) }
+                }
                 reportToolStatus("Realized \(ids.count == 1 ? "the instance" : "\(ids.count) instances") as independent copies.")
             }
         }
