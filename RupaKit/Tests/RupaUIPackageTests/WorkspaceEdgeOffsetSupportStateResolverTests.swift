@@ -2,7 +2,7 @@ import RupaCore
 import Testing
 @testable import RupaUI
 
-@Test func workspaceEdgeOffsetSupportStateResolverRequiresOneSelectedEdgeTarget() {
+@Test func workspaceEdgeOffsetSupportStateResolverResolvesAChainByItsFirstEdge() {
     let sceneNodeID = SceneNodeID()
     let firstTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
@@ -18,11 +18,11 @@ import Testing
         objectRegistry: .builtIn
     )
 
-    let resolution = resolver.resolution(for: [firstTarget, secondTarget])
-
-    #expect(resolution.status == .unavailable)
-    #expect(resolution.diagnosticMessage == "Offset Edge currently supports one selected edge.")
-    #expect(resolver.supportTitle(for: resolution) == "Missing")
+    // Several edges offset together over the first edge's support face, as Apply sends them.
+    #expect(resolver.resolution(for: [firstTarget, secondTarget]) == resolver.resolution(for: [firstTarget]))
+    let none = resolver.resolution(for: [])
+    #expect(none.status == .unavailable)
+    #expect(none.diagnosticMessage == "Offset Edge needs a selected edge.")
 }
 
 @Test func workspaceEdgeOffsetSupportStateResolverReportsUnsupportedForNonEdgeTarget() {

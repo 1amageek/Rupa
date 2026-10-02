@@ -5,10 +5,11 @@ struct WorkspaceEdgeOffsetSupportStateResolver {
     var selection: SelectionModel
     var objectRegistry: ObjectTypeRegistry
 
+    /// The support face the offset runs over: the first edge's, which every selected edge of the
+    /// chain is offset over together.
     func resolution(for targets: [SelectionTarget]) -> EdgeOffsetSupportFaceResolution {
-        guard targets.count == 1,
-              let target = targets.first else {
-            return .unavailable("Offset Edge currently supports one selected edge.")
+        guard let target = targets.first else {
+            return .unavailable("Offset Edge needs a selected edge.")
         }
         do {
             return try EdgeOffsetSupportFaceResolver().resolve(
