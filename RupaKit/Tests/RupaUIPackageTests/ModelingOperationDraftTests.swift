@@ -407,6 +407,13 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(chord.guideMethod == .chord)
+        // Curve keeps the section touching the guide, wherever on the section that is.
+        draft.sweepGuide = .curve
+        guard case .createSweep(_, _, _, _, _, let curve, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(curve.guideMethod == .curve)
         draft.sweepGuide = .point
 
         // Simplify asks for the flat sides as trimmed planes.

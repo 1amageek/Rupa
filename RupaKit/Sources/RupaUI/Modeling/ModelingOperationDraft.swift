@@ -322,15 +322,18 @@ struct ModelingOperationDraft: Equatable {
     }
     var sweepCorners = SweepCornerChoice.mitre
     /// How a sweep's guide steers the section: Point turns and scales it so its contact stays on
-    /// the guide, Chord only turns it toward the guide.
+    /// the guide, Chord only turns it toward the guide, Curve turns it, unscaled, so it keeps
+    /// touching the guide wherever on the section that is.
     enum SweepGuideChoice: String, CaseIterable, Identifiable {
         case point = "Point"
         case chord = "Chord"
+        case curve = "Curve"
         var id: Self { self }
         var method: SweepGuideMethod {
             switch self {
             case .point: .point
             case .chord: .chord
+            case .curve: .curve
             }
         }
     }
