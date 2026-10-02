@@ -6064,6 +6064,9 @@ private struct ProjectMainViewContent: View {
         if modelingDraft?.kind == .fillet, selectedTool == .select {
             return .pickingCommand(.filletEdit, hitPolicy: .all, scope: selectionScope, transforming: transforming)
         }
+        if modelingDraft?.kind == .loft, selectedTool == .select {
+            return .pickingCommand(.loftGuide, hitPolicy: .all, scope: selectionScope, transforming: transforming)
+        }
         if modelingDraft?.kind == .constrainedSurface {
             return .pickingCommand(.constrainedSurfacePoints, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
         }
@@ -6094,6 +6097,8 @@ private struct ProjectMainViewContent: View {
             pickFaceEditFace(at: target)
         case .filletEdit:
             pickFilletTarget(at: target)
+        case .loftGuide:
+            pickLoftGuide(at: target)
         case .freestyleOffset:
             pickFreestyleOffset(at: target)
         case .constrainedSurfacePoints:
@@ -10337,6 +10342,26 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Extend Sheet: the sheet's faces cannot be read: \(error.localizedDescription)", severity: .warning)
             return false
         }
+    }
+
+    /// A click while Loft's dialog runs: a body edge, else a curve's object, goes on or off its
+    /// guides.
+    private func pickLoftGuide(at target: ViewportCanvasTarget) {
+        guard let hit = target.hit else { return }
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .edge
+        if let edge = resolver.selectionTarget(for: hit), case .edge = edge.component {
+            modelingDraft?.toggleLoftGuide(edge)
+            return
+        }
+        resolver.selectionScope = .object
+        let role = { (id: SceneNodeID) in snapshot.document.document.productMetadata.sceneNodes[id]?.object?.geometryRole }
+        guard let object = resolver.selectionTarget(for: hit), case .object = object.component,
+              role(object.sceneNodeID) == .curve || role(object.sceneNodeID) == .sketchProfile else {
+            reportToolStatus("Loft: click a curve or an edge to use it as a guide.", severity: .warning)
+            return
+        }
+        modelingDraft?.toggleLoftGuide(object)
     }
 
     /// A click while Fillet's dialog runs: an edge goes on or off its edges; a round (a face on a

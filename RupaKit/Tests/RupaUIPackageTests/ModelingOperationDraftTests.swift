@@ -1060,6 +1060,19 @@ struct ModelingOperationDraftTests {
         #expect(draft.distance == "2.5 mm")
     }
 
+    @Test func loftClicksToggleGuides() throws {
+        let section = SelectionTarget(sceneNodeID: SceneNodeID())
+        let curve = SelectionTarget(sceneNodeID: SceneNodeID())
+        let edge = SelectionTarget(sceneNodeID: SceneNodeID(), component: .edge(SelectionComponentID(rawValue: "generatedTopology:edge/0")))
+        var draft = makeDraft(.loft, targets: [section])
+        draft.toggleLoftGuide(curve)
+        draft.toggleLoftGuide(edge)
+        #expect(draft.targets == [section, curve, edge] && draft.isLoftGuide(curve) && draft.isLoftGuide(edge))
+        #expect(draft.isLoftGuide(section) == false)
+        draft.toggleLoftGuide(curve)
+        #expect(draft.targets == [section, edge] && draft.isLoftGuide(curve) == false)
+    }
+
     @Test func fullIsOfferedOnlyForAPairOfEdges() throws {
         let node = SceneNodeID()
         let edges = (0..<2).map { index in

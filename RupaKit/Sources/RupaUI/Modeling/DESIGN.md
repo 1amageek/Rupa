@@ -381,6 +381,9 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   command): an edge goes on or off its edges, and a round (a face on a cylinder, read from
   Core's topology) gives its radius to the Distance, as Plasticity's Fillet edits its edges and
   copies a radius inside the command.
+- While Loft's dialog runs its clicks are Plasticity's "Select guides" slot (the `loftGuide`
+  picking command): a body edge, or a curve's object, becomes a guide (added to the operands when
+  new), and clicked again is dropped.
 - Preview is offered only while the draft names a command. The panel plans the
   draft it is showing against the document it is showing it for, and when that
   plan refuses it disables Preview and displays the reason the plan gave, so a

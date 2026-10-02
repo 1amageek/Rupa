@@ -463,6 +463,17 @@ struct ModelingOperationDraft: Equatable {
         if case .edge = target.component { return loftGuideEdges.contains(target) }
         return loftGuideNodeIDs.contains(target.sceneNodeID)
     }
+    /// Loft's click while its dialog runs, Plasticity's "Select guides" slot: the clicked curve or
+    /// body edge becomes a guide, added to the operands when new; clicked again it is dropped.
+    mutating func toggleLoftGuide(_ target: SelectionTarget) {
+        if isLoftGuide(target) {
+            targets.removeAll { $0 == target }
+            if case .edge = target.component { loftGuideEdges.remove(target) } else { loftGuideNodeIDs.remove(target.sceneNodeID) }
+            return
+        }
+        if targets.contains(target) == false { targets.append(target) }
+        if case .edge = target.component { loftGuideEdges.insert(target) } else { loftGuideNodeIDs.insert(target.sceneNodeID) }
+    }
     /// XNURBS: the operands that are guides (the rest frame it), the continuity edges take, and its
     /// options.
     var xnurbsGuideNodeIDs: Set<SceneNodeID> = []

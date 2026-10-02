@@ -15,6 +15,8 @@ enum WorkspaceViewportPickingCommand: Equatable, Sendable {
     case faceEdit
     /// Fillet's edges toggled, and a round's radius copied, by clicks while its dialog runs.
     case filletEdit
+    /// Loft's guides, curves or body edges, toggled by clicks while its dialog runs.
+    case loftGuide
     /// Freestyle Offset: a click sets the offset distance through the snapped point.
     case freestyleOffset
     /// A constrained-surface draft: a click appends a world point, under any tool.
