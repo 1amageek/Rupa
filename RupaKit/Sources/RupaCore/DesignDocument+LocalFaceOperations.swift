@@ -100,9 +100,10 @@ extension DesignDocument {
 }
 
 extension DesignDocument {
-    /// Hollow: a solid object emptied to walls `thickness` thick inside it, opening through the
-    /// chosen faces, or closed inside it when the object itself is chosen (Swift-CAD `shell`). The
-    /// object shows the result in its place.
+    /// Hollow: a solid object walled `thickness` thick — outside it when positive (the object
+    /// becomes the cavity), inside it when negative — opening through the chosen faces, or closed
+    /// when the object itself is chosen (Swift-CAD `shell`). The object shows the result in its
+    /// place.
     @discardableResult
     public mutating func hollow(
         name: String = "Hollow",
@@ -114,8 +115,8 @@ extension DesignDocument {
     ) throws -> FeatureID {
         let operationName = "Hollow"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
-        guard try resolvedLengthValue(thickness, owner: "\(operationName) thickness") > 0 else {
-            throw EditorError(code: .commandInvalid, message: "\(operationName) thickness must be positive.")
+        guard try resolvedLengthValue(thickness, owner: "\(operationName) thickness") != 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) thickness must not be zero.")
         }
         let object = try offsetObject(for: targets, operationName: operationName)
         guard productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .solid else {

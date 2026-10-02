@@ -131,7 +131,7 @@ struct WorkspaceFaceEditDialogView: View {
             Toggle("Shrink", isOn: $dialog.shrinks)
                 .accessibilityIdentifier("WorkspaceFaceEdit.shrinks")
         case .hollow:
-            lengthField("Thickness", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
+            lengthField("Thickness (+ outward, − inward)", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
         case .thicken:
             lengthField("Front", meters: $dialog.frontMeters, identifier: "WorkspaceFaceEdit.front")
             if dialog.locksThicknesses == false {

@@ -132,14 +132,22 @@ import Testing
         let opened = EditorSession()
         let box = try self.box(opened, "Box")
         let top = try face(of: box, in: opened, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
-        _ = try opened.execute(.hollow(targets: [top], thickness: .length(0.01, .meter)))
+        // Negative walls inside the solid.
+        _ = try opened.execute(.hollow(targets: [top], thickness: .length(-0.01, .meter)))
         #expect(abs(try volume(opened) - (0.001 - 0.08 * 0.08 * 0.09)) < 1e-12)
 
         let closed = EditorSession()
         let solid = try self.box(closed, "Box")
-        _ = try closed.execute(.hollow(targets: [SelectionTarget(sceneNodeID: solid)], thickness: .length(0.01, .meter)))
+        _ = try closed.execute(.hollow(targets: [SelectionTarget(sceneNodeID: solid)], thickness: .length(-0.01, .meter)))
         #expect(abs(try volume(closed) - (0.001 - 0.08 * 0.08 * 0.08)) < 1e-12)
         #expect(closed.evaluationStatus == .valid)
+
+        // Positive walls outside it, the box itself the cavity: 120 mm outside, closed.
+        let outside = EditorSession()
+        let walled = try self.box(outside, "Box")
+        _ = try outside.execute(.hollow(targets: [SelectionTarget(sceneNodeID: walled)], thickness: .length(0.01, .meter)))
+        #expect(abs(try volume(outside) - (0.12 * 0.12 * 0.12 - 0.001)) < 1e-12)
+        #expect(outside.evaluationStatus == .valid)
     }
 
     @Test(.timeLimit(.minutes(1)))
