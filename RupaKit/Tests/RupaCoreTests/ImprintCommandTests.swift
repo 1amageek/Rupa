@@ -108,18 +108,22 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func untrimMakesASheetBesideTheObject() throws {
+    func untrimMakesASheetBesideTheObjectAndOpensIt() throws {
         let session = EditorSession()
         let target = try box(session, "Target")
         _ = try session.execute(.setSceneNodeTransform(id: target, localTransform: try Transform3D.translation(Vector3D(x: 0.3, y: 0, z: 0))))
-        _ = try session.execute(.untrimFace(name: "Untrim", face: try top(of: target, in: session), keepsEdges: false))
-        let sheets = session.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body && $0.object?.geometryRole == .surface }
-        let sheet = try #require(sheets.first)
-        #expect(sheets.count == 1)
-        #expect(session.document.productMetadata.sceneNodes[target] != nil)
+        let topFace = try top(of: target, in: session)
+        let topCenter = try #require(try entries(.face, of: target, in: session).first { $0.selectionTarget() == topFace }?.center)
+        _ = try session.execute(.untrimFace(name: "Untrim", face: topFace, keepsEdges: false))
+        let sheet = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.id != target && $0.reference?.kind == .body && $0.object?.geometryRole == .surface
+        })
         #expect(try entries(.face, of: sheet.id, in: session).count == 1)
-        // Placed like the box, the sheet lies on its top.
-        let topCenter = try #require(try entries(.face, of: target, in: session).first { $0.selectionTarget() == (try top(of: target, in: session)) }?.center)
+        // The box loses its top, left open as a sheet of its other five faces.
+        #expect(session.document.productMetadata.sceneNodes[target]?.object?.geometryRole == .surface)
+        #expect(try entries(.face, of: target, in: session).count == 5)
+        #expect(session.evaluationStatus == .valid)
+        // Placed like the box, the sheet lies where its top was.
         let sheetCenter = try #require(try entries(.face, of: sheet.id, in: session).first?.center)
         #expect(abs(sheetCenter.x - topCenter.x) < 1e-9 && abs(sheetCenter.y - topCenter.y) < 1e-9 && abs(sheetCenter.z - topCenter.z) < 1e-9)
     }

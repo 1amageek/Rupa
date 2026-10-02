@@ -128,7 +128,8 @@ extension DesignDocument {
     }
 
     /// Untrim on a face: a sheet of the face's untrimmed surface (Swift-CAD `untrimFace`), keeping
-    /// the face's own edges on it when asked, as a new object beside the body's, placed like it.
+    /// the face's own edges on it when asked, as a new object beside the body's, placed like it;
+    /// the body loses the face, left open as Plasticity leaves it (Swift-CAD `faceDelete`).
     @discardableResult
     public mutating func untrimFace(
         name: String = "Untrim",
@@ -163,6 +164,16 @@ extension DesignDocument {
         try insertBooleanResultNode(
             name: "\(sourceName) \(trimmedName)", featureID: featureID, geometryRole: .surface,
             besideTargetNode: face.sceneNodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
+            objectRegistry: objectRegistry
+        )
+        // The body loses the face, left open without healing.
+        let opening = try FeatureNodeFactory.make(
+            operation: .faceDelete(FaceDeleteFeature(target: FaceDeleteTargetReference(featureID: targetFeatureID), faces: [reference], heals: false)),
+            id: FeatureID(), name: sourceName, in: cadDocument, tolerance: modelingSettings.tolerance
+        )
+        try appendTopologyEdit(
+            FeatureGraphTransaction(features: [opening], primaryFeatureID: opening.id),
+            replacing: SelectionTarget(sceneNodeID: face.sceneNodeID),
             objectRegistry: objectRegistry
         )
         try cadDocument.validate(tolerance: modelingSettings.tolerance)
