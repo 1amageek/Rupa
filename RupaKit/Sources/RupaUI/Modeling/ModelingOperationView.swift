@@ -439,7 +439,7 @@ struct ModelingOperationView: View {
             }
         case .fillet:
             Picker("Shape", selection: $draft.filletShape) {
-                ForEach(ModelingOperationDraft.FilletShapeChoice.offered) { Text($0.rawValue).tag($0) }
+                ForEach(draft.offeredFilletShapes) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
             if draft.filletShape == .full {

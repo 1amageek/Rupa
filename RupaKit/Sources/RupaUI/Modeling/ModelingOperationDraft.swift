@@ -378,6 +378,13 @@ struct ModelingOperationDraft: Equatable {
     }
     /// Plasticity's default: Conic at tension 0.5, which is the round of the distance's radius.
     var filletShape = FilletShapeChoice.conic
+    /// The shapes the dialog offers for its edges: Full only once two edges, the pair on either
+    /// side of a face, are its targets, as Plasticity's Shape row shows it.
+    var offeredFilletShapes: [FilletShapeChoice] {
+        let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
+        let pairs = edges.count == 2 && targets.count == 2
+        return FilletShapeChoice.offered.filter { $0 != .full || pairs || filletShape == .full }
+    }
     var filletTension = "0.5"
     /// The shape the kernel builds: a Conic at tension 0.5 (or blank) is the round itself, which
     /// takes the round's full route (curved edges, chains, corners).

@@ -1045,6 +1045,17 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - (1 - Double.pi / 4) * (r0 * r0 + r0 * r1 + r1 * r1) / 3 * 0.02)) < 1e-11)
     }
 
+    @Test func fullIsOfferedOnlyForAPairOfEdges() throws {
+        let node = SceneNodeID()
+        let edges = (0..<2).map { index in
+            SelectionTarget(sceneNodeID: node, component: .edge(SelectionComponentID(rawValue: "generatedTopology:edge/\(index)")))
+        }
+        var draft = makeDraft(.fillet, targets: [edges[0]])
+        #expect(draft.offeredFilletShapes == [.conic, .chordal, .curvature])
+        draft.targets = edges
+        #expect(draft.offeredFilletShapes == [.conic, .chordal, .curvature, .full])
+    }
+
     @Test func aConicFilletRoundsABoxEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
