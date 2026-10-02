@@ -54,8 +54,10 @@ struct WorkspaceFaceEditSession: Equatable {
     var neutralOffsetMeters = 0.0
     var front = false
     var grow: FaceEditGrow = .moving
-    /// Remove Fillets' largest radius, in meters; zero takes fillets of any radius.
+    /// Remove Fillets' largest radius, in meters, which applies only while `limitsRadius` is on
+    /// (Plasticity's Max radius checkbox, off by default: fillets of any radius).
     var maximumRadiusMeters = 0.0
+    var limitsRadius = false
     var convexity: FilletConvexity = .any
     /// Hollow's wall thickness, in meters.
     var wallThicknessMeters = 0.001
@@ -317,7 +319,7 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .removeFillets(object):
             return .removeFillets(
-                target: object, maximumRadius: maximumRadiusMeters > 0 ? .length(maximumRadiusMeters, .meter) : nil, convexity: convexity
+                target: object, maximumRadius: limitsRadius ? .length(maximumRadiusMeters, .meter) : nil, convexity: convexity
             )
         }
     }

@@ -149,7 +149,10 @@ struct WorkspaceFaceEditDialogView: View {
             Toggle("Lock", isOn: $dialog.locksThicknesses)
                 .accessibilityIdentifier("WorkspaceFaceEdit.lockThicknesses")
         case .removeFillets:
+            Toggle("Max Radius", isOn: $dialog.limitsRadius)
+                .accessibilityIdentifier("WorkspaceFaceEdit.limitsRadius")
             lengthField("Max Radius", meters: $dialog.maximumRadiusMeters, identifier: "WorkspaceFaceEdit.maximumRadius")
+                .disabled(dialog.limitsRadius == false)
             Picker("Convexity", selection: $dialog.convexity) {
                 ForEach(FilletConvexity.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }
