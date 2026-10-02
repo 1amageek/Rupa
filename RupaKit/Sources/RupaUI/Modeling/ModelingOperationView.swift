@@ -446,7 +446,13 @@ struct ModelingOperationView: View {
                 Text("Select the two edges on either side of a face: the round is tangent to it and to both faces beside it.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                lengthField(draft.effectiveFilletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+                // Plasticity's Distance: two fields, the second greyed and following the first.
+                HStack {
+                    lengthField("Distance", text: $draft.distance)
+                    TextField("Distance 2", text: .constant(draft.distance))
+                        .disabled(true)
+                        .accessibilityIdentifier("Modeling.fillet.secondDistance")
+                }
                 lengthField("End radius (variable; blank for constant)", text: $draft.filletEndRadius)
                 TextField("Variable points (fraction@radius, …)", text: $draft.filletVariablePoints)
                 TextField("Limit start (fraction of the edge; blank 0)", text: $draft.limitStart)

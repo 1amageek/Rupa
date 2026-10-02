@@ -1207,6 +1207,10 @@ as spheres elsewhere.
    | `profileEdgeChamfer`, `profileEdgeFillet` | two view plane points with horizontal screen travel | generated edge midpoint; inverse occurrence transform |
    | `rotate` | two world plane points | box centre; normal the rotation axis |
 
+   `profileEdgeFillet`'s distance is signed: dragged below zero it previews and
+   commits a chamfer of that distance instead, as Plasticity's Fillet turns
+   into Chamfer.
+
    The two-point routes take the displacement between the two answers and
    resolve it on the retained orthonormal world axes: `vertexMove` on all
    three and `profileCornerMove` on world `x` and `z`, the profile sketch plane.

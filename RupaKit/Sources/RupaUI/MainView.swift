@@ -8308,15 +8308,16 @@ private struct ProjectMainViewContent: View {
         )
     }
 
+    /// The fillet arrow's drag: a round of the dragged radius, or below zero a chamfer of that
+    /// distance, as Plasticity's Fillet turns into Chamfer.
     private func handleViewportEdgeFilletDrag(_ target: ViewportEdgeFilletDragTarget) {
         guard viewportPointerOwner.allows(.edgeTreatment) else {
             return
         }
         submitSource(
-            .createBodyEdgeTreatment(
-                name: "Fillet", target: target.target,
-                treatment: .fillet(radius: .length(target.radius, .meter))
-            )
+            target.radius > 0
+                ? .createBodyEdgeTreatment(name: "Fillet", target: target.target, treatment: .fillet(radius: .length(target.radius, .meter)))
+                : .createBodyEdgeTreatment(name: "Chamfer", target: target.target, treatment: .chamfer(distance: .length(-target.radius, .meter)))
         )
     }
 

@@ -4652,16 +4652,16 @@ public struct Viewport: View {
             )
             return true
         case .profileEdgeFillet(let selectionTarget, let edge):
+            // Below zero the fillet turns into a chamfer of that distance, as Plasticity's does.
             let radius = try edge.distance(from: dragState.startPoint, to: current, measure: measure)
-            guard radius > 1.0e-12 else {
+            guard abs(radius) > 1.0e-12 else {
                 clearDragPreviewDocument()
                 return true
             }
             updateEdgeTreatmentPreviewDocument(
-                request: .fillet(
-                    target: selectionTarget,
-                    radius: Double(radius)
-                )
+                request: radius > 0
+                    ? .fillet(target: selectionTarget, radius: Double(radius))
+                    : .chamfer(target: selectionTarget, distance: Double(-radius))
             )
             return true
         default:
@@ -5170,8 +5170,9 @@ public struct Viewport: View {
             return nil
         }
         let measure = try affordanceMeasure()
+        // Signed: below zero the drag chamfers the edge.
         let radius = try edge.distance(from: activeAffordanceDrag.startPoint, to: end, measure: measure)
-        guard radius > 1.0e-12 else {
+        guard abs(radius) > 1.0e-12 else {
             return nil
         }
         return (

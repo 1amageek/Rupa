@@ -3037,6 +3037,7 @@ public struct ViewportEdgeChamferDragTarget: Equatable, Sendable {
 
 public struct ViewportEdgeFilletDragTarget: Equatable, Sendable {
     public var target: SelectionTarget
+    /// The dragged radius, signed: below zero the drag chamfers the edge by its magnitude.
     public var radius: Double
 
     public init(
