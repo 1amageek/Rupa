@@ -21,6 +21,7 @@ struct ModelingOperationDraft: Equatable {
         case patch = "Patch"
         case bridge = "Boundary Bridge (G0)"
         case square = "Square"
+        case xnurbs = "XNURBS"
         case bridgeSurface = "Bridge Surface"
         case surfaceOffset = "Sheet Offset"
         case surfaceExtend = "Extend Trim"
@@ -32,10 +33,10 @@ struct ModelingOperationDraft: Equatable {
         /// Operations not already represented by a canvas placement tool: the primitives and Sweep
         /// have their own tools, and the surface-only creations open from the Surface tool.
         static var paletteOperations: [Self] {
-            allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface, .square, .bridgeSurface].contains($0) }
+            allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface, .square, .xnurbs, .bridgeSurface].contains($0) }
         }
 
-        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square, .bridgeSurface]
+        static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square, .xnurbs, .bridgeSurface]
 
         var systemImage: String {
             switch self {
@@ -55,6 +56,7 @@ struct ModelingOperationDraft: Equatable {
             case .patch: "square.dashed.inset.filled"
             case .bridge: "rectangle.split.2x1"
             case .square: "square.split.bottomrightquarter"
+            case .xnurbs: "pentagon"
             case .bridgeSurface: "point.topleft.down.to.point.bottomright.filled.curvepath"
             case .surfaceOffset: "square.3.layers.3d"
             case .surfaceExtend: "arrow.up.left.and.arrow.down.right"
@@ -395,6 +397,18 @@ struct ModelingOperationDraft: Equatable {
     var reverseSecondBoundary = false
     var loftSectionControls: [SceneNodeID: LoftSectionDraft] = [:]
     var loftGuideNodeIDs: Set<SceneNodeID> = []
+    /// XNURBS: the operands that are guides (the rest frame it), the continuity edges take, and its
+    /// options.
+    var xnurbsGuideNodeIDs: Set<SceneNodeID> = []
+    var xnurbsContinuity = LoftContinuityChoice.g0
+    var xnurbsQuadSided = false
+    var xnurbsFlatness = "0.95"
+    var xnurbsTension = "1"
+    var xnurbsBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
+    var xnurbsQuality = XNurbsFeature.Quality.auto
+    var xnurbsSatisfiesTolerances = true
+    var xnurbsPositionTolerance = "0.01 mm"
+    var xnurbsAngleTolerance = "0.1"
 
     var createsSheet: Bool { sheet || isSurfaceCreation }
 
@@ -440,7 +454,7 @@ struct ModelingOperationDraft: Equatable {
         switch kind {
         case .fillet, .chamfer, .g2Blend, .surfaceOffset, .shell, .thicken:
             WorkspaceInteractionScaleDefaults(ruler: ruler).operationStepMeters
-        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .bridgeSurface, .surfaceExtend:
+        case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .xnurbs, .bridgeSurface, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
     }
@@ -904,6 +918,54 @@ struct ModelingOperationDraft: Equatable {
             case .none, .both: nil
             }
             return .createBridgeSurface(name: name, bridge: bridge, wallByReach: wallByReach)
+        case .xnurbs:
+            // Boundaries: edges of bodies (their curves added with it, taking the continuity) or
+            // curves; guides: curves marked as such.
+            let boundaryTargets = targets.filter { !xnurbsGuideNodeIDs.contains($0.sceneNodeID) }
+            guard boundaryTargets.count >= 2 else { throw invalid("XNURBS takes two or more boundary edges or curves.") }
+            let tension = xnurbsContinuity == .g0 ? 1 : try number(xnurbsTension, label: "Tension")
+            guard tension.isFinite, tension > 0 else { throw invalid("Tension must be positive.") }
+            var edgeCurves: [EdgeCurveSource] = []
+            let boundaries = try boundaryTargets.map { target -> SquareSide in
+                switch target.component {
+                case .edge:
+                    let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                        for: target, operationName: "XNURBS", currentEvaluation: nil
+                    ))
+                    edgeCurves.append(curve)
+                    var continuity: SurfaceEdgeContinuity?
+                    if let order = xnurbsContinuity.order, let edge = curve.feature.edges.first {
+                        continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                                                           edge: edge, order: order, tension: tension,
+                                                           angularAllowance: try continuityAllowanceRadians(),
+                                                           curvatureAllowance: try curvatureAllowance(for: order))
+                    }
+                    return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
+                case .object:
+                    guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
+                        throw invalid("An XNURBS boundary is a curve or an edge of a body.")
+                    }
+                    return SquareSide(curve: curve)
+                default:
+                    throw invalid("An XNURBS boundary is a curve or an edge of a body.")
+                }
+            }
+            let guides = try targets.filter { xnurbsGuideNodeIDs.contains($0.sceneNodeID) }.map { target -> CurveSectionReference in
+                guard case .object = target.component, case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
+                    throw invalid("An XNURBS guide is a curve.")
+                }
+                return curve
+            }
+            let angle = try number(xnurbsAngleTolerance, label: "Angle tolerance")
+            let xnurbs = XNurbsFeature(
+                boundaries: boundaries, guides: guides, quadSided: xnurbsQuadSided,
+                flatness: try number(xnurbsFlatness, label: "Flatness"), boundaryFlow: xnurbsBoundaryFlow, quality: xnurbsQuality,
+                satisfiesTolerances: xnurbsSatisfiesTolerances,
+                positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
+                angleTolerance: angle * Double.pi / 180
+            )
+            do { try xnurbs.validate() } catch { throw invalid("The XNURBS is invalid: \(error).") }
+            return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)
         case .square:
             // Faces: Refit, each replaced by a Square sheet on its own edges at the Square's
             // continuity (Free has no meaning there, the edges staying shared).

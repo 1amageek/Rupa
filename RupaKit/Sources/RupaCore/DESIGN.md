@@ -596,7 +596,8 @@ Both are measured as their evaluated sheets.
 
 `createSquare` adds a native Square sheet framed by two to four side curves and fitted by its
 `SquareFitOptions` (edge curves it carries are added first), admitting a continuous side's body
-only where it was built; it is measured as its evaluated sheet.
+only where it was built; it is measured as its evaluated sheet. `createXNurbs` adds a native
+XNURBS sheet over its boundary curves and guides the same way.
 
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve

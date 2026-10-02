@@ -725,6 +725,62 @@ extension DesignDocument {
         return featureID
     }
 
+    /// Adds an XNURBS sheet over its boundary curves (and guides) as a sheet of its own; a
+    /// continuous boundary's edge body must be shown where it was built.
+    @discardableResult
+    public mutating func createXNurbs(
+        name: String,
+        xnurbs: XNurbsFeature,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "XNURBS")
+        do {
+            try xnurbs.validate()
+        } catch {
+            throw EditorError(code: .commandInvalid, message: "XNURBS command is invalid: \(error).")
+        }
+        for boundary in xnurbs.boundaries {
+            try requireSweepSourceCurveFeature(boundary.curve.featureID, owner: "XNURBS boundary")
+            if let continuity = boundary.continuity {
+                try requireSweepTargetBodyFeature(continuity.source, owner: "XNURBS continuity edge")
+            }
+        }
+        for guide in xnurbs.guides {
+            try requireSweepSourceCurveFeature(guide.featureID, owner: "XNURBS guide")
+        }
+        let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
+        for featureID in xnurbs.boundaries.compactMap(\.continuity?.source) {
+            guard let node = hierarchy.presentingSceneNodeID(for: featureID) else { continue }
+            guard try hierarchy.worldTransform(of: node) == .identity else {
+                throw EditorError(code: .commandInvalid,
+                    message: "An XNURBS's continuity edges must be shown where they were built; this one has been moved.")
+            }
+        }
+        let featureID = FeatureID()
+        let feature = FeatureNode(id: featureID, name: trimmedName, operation: .xnurbs(xnurbs),
+                                  inputs: xnurbs.inputs, outputs: [FeatureOutput(role: .sheet)])
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommit = false
+        defer {
+            if didCommit == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(featureID: featureID, documentID: cadDocument.id, sourceSection: nil, typeID: nil,
+                          geometryRole: .surface, objectRegistry: objectRegistry)
+        )
+        try cadDocument.validate(tolerance: modelingSettings.tolerance)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommit = true
+        return featureID
+    }
+
     @discardableResult
     public mutating func createLoft(
         name: String,

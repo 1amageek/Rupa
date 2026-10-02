@@ -767,6 +767,25 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Weight", value: WorkspaceInspectorNumberText.compact(options.weight)),
                 WorkspaceInspectorTextRow(title: "Boundary", value: options.boundaryFlow.rawValue.capitalized),
             ]
+        case .xnurbs(let xnurbs):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "XNURBS"),
+                WorkspaceInspectorTextRow(title: "Boundaries", value: "\(xnurbs.boundaries.count)"),
+                WorkspaceInspectorTextRow(title: "Guides", value: "\(xnurbs.guides.count)"),
+                WorkspaceInspectorTextRow(title: "Continuity", value: xnurbs.boundaries.map { side in
+                    switch side.continuity?.order {
+                    case nil: "G0"
+                    case .tangent?: "G1"
+                    case .curvature?: "G2"
+                    }
+                }.joined(separator: " · ")),
+                WorkspaceInspectorTextRow(title: "Quad Sided", value: xnurbs.quadSided ? "On" : "Off"),
+                WorkspaceInspectorTextRow(title: "Flatness", value: WorkspaceInspectorNumberText.compact(xnurbs.flatness)),
+                WorkspaceInspectorTextRow(title: "Quality", value: xnurbs.quality.rawValue.capitalized),
+                WorkspaceInspectorTextRow(title: "Tolerances", value: xnurbs.satisfiesTolerances
+                    ? "\(formatted(xnurbs.positionTolerance)) · \(WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: xnurbs.angleTolerance)))"
+                    : "Not enforced"),
+            ]
         case .edgeCurve(let edgeCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Edge Curves"),

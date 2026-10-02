@@ -440,6 +440,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// A Square framed by four side curves; `edgeCurves` are added first, without objects of
     /// their own, for sides along edges of bodies.
     case createSquare(name: String, sides: [SquareSide], options: SquareFitOptions = SquareFitOptions(), edgeCurves: [EdgeCurveSource] = [])
+    case createXNurbs(name: String, xnurbs: XNurbsFeature, edgeCurves: [EdgeCurveSource] = [])
     /// A Patch spanning curves joined end to end into one closed loop; `edgeCurves` are added
     /// first for edges among them.
     case createCurvePatch(name: String, curves: [CurveSectionReference], edgeCurves: [EdgeCurveSource] = [])
@@ -993,6 +994,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createPipes"
         case .createSquare:
             "createSquare"
+        case .createXNurbs:
+            "createXNurbs"
         case .createCurvePatch:
             "createCurvePatch"
         case .createBridgeSurface:
@@ -1271,6 +1274,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createSweep,
              .createPipes,
              .createSquare,
+             .createXNurbs,
              .createCurvePatch,
              .createBridgeSurface,
              .extrudeEdges,

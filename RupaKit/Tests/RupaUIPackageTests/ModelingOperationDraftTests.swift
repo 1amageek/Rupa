@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
@@ -1273,6 +1274,48 @@ struct ModelingOperationDraftTests {
         #expect(rows["Side 1"]?.hasPrefix("G0 ✓") == true && rows["Side 2"] != nil)
     }
 
+    @Test func xnurbsFillsAPentagonWithAGuideAndAQuadAsSquare() throws {
+        var document = DesignDocument.empty()
+        // A pentagon of lines in the XY plane and a short guide curve inside it.
+        let corners: [(Double, Double)] = (0..<5).map { k in
+            let angle = 2 * Double.pi * Double(k) / 5
+            return (0.01 * cos(angle), 0.01 * sin(angle))
+        }
+        let lines = try corners.indices.map { k in
+            let (a, b) = (corners[k], corners[(k + 1) % 5])
+            return try document.createLineSketch(name: "Side", plane: .xy,
+                start: SketchPoint(x: .length(a.0, .meter), y: .length(a.1, .meter)),
+                end: SketchPoint(x: .length(b.0, .meter), y: .length(b.1, .meter)))
+        }
+        let guide = try document.createLineSketch(name: "Guide", plane: .xy,
+            start: SketchPoint(x: .length(-0.002, .meter), y: .length(0, .meter)),
+            end: SketchPoint(x: .length(0.002, .meter), y: .length(0, .meter)))
+        let nodes = try (lines + [guide]).map { id in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(id) }) }
+        var draft = makeDraft(.xnurbs, targets: nodes.map { .init(sceneNodeID: $0.id) })
+        draft.xnurbsGuideNodeIDs = [nodes[5].id]
+        draft.xnurbsQuality = .high
+        guard case .createXNurbs(_, let xnurbs, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected an XNURBS command.")
+            return
+        }
+        #expect(xnurbs.boundaries.count == 5 && xnurbs.guides.count == 1 && edgeCurves.isEmpty && xnurbs.quality == .high)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.evaluationStatus == .valid)
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        // Quad sided over four of the sides is refused as not framing a quad; over four lines of a
+        // square it is Square's sheet.
+        draft.xnurbsQuadSided = true
+        draft.xnurbsGuideNodeIDs = []
+        draft.targets = nodes.prefix(4).map { .init(sceneNodeID: $0.id) }
+        guard case .createXNurbs(_, let quad, _) = try draft.command(in: document) else {
+            Issue.record("Expected an XNURBS command.")
+            return
+        }
+        #expect(quad.quadSided && quad.boundaries.count == 4)
+    }
+
     @Test func aSquareOverAFaceRefitsIt() throws {
         var document = DesignDocument.empty()
         let box = try document.createExtrudedRectangleFromCorners(
@@ -1430,7 +1473,6 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.bridge, targets: [edge])
 
         #expect(throws: EditorError.self) { try draft.command(in: document) }
-        #expect(ModelingOperationDraft.Kind.allCases.contains { $0.rawValue == "XNURBS" } == false)
         _ = try document.createBSplineSurface(name: "Second source", surface: .bilinearPatch(
             bottomLeft: Point3D(x: 0.2, y: 0, z: 0),
             bottomRight: Point3D(x: 0.3, y: 0, z: 0),

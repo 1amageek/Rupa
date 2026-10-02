@@ -261,6 +261,19 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .xnurbs(let xnurbs):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: xnurbs.boundaries.first?.curve.featureID,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
+                    surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .boolean(let boolean):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,

@@ -83,6 +83,13 @@ struct ModelingOperationView: View {
                                 )).contentShape(Rectangle())
                                 if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
                             }
+                            if draft.kind == .xnurbs {
+                                let id = draft.targets[index].sceneNodeID
+                                Toggle("Use as guide", isOn: Binding(
+                                    get: { draft.xnurbsGuideNodeIDs.contains(id) },
+                                    set: { if $0 { draft.xnurbsGuideNodeIDs.insert(id) } else { draft.xnurbsGuideNodeIDs.remove(id) } }
+                                )).contentShape(Rectangle())
+                            }
                             if draft.kind == .square, !draft.isFace(draft.targets[index]) {
                                 let target = draft.targets[index]
                                 Picker("Side continuity", selection: Binding(
@@ -461,6 +468,44 @@ struct ModelingOperationView: View {
                 lengthField("Curvature allowance radius beside curved sheets", text: $draft.curvatureAllowanceRadius)
             }
             Text("Two planar sheets meeting: the bridge meets each the width from where their planes meet. Curved or parallel sheets: the bridge spans their nearest boundary edges, G2 with both within the allowances, or chamfers across.")
+                .font(.caption).foregroundStyle(.secondary)
+        case .xnurbs:
+            Picker("Continuity", selection: $draft.xnurbsContinuity) {
+                ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .contentShape(Rectangle())
+            Toggle("Quad sided", isOn: $draft.xnurbsQuadSided)
+                .contentShape(Rectangle())
+                .help("Two to four boundaries make Square's untrimmed sheet; otherwise one sheet trimmed by the closed boundary.")
+            TextField("Flatness (0–1]", text: $draft.xnurbsFlatness)
+            if draft.xnurbsContinuity != .g0 {
+                TextField("Tension", text: $draft.xnurbsTension)
+                TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
+                if draft.xnurbsContinuity == .g2 {
+                    lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
+                }
+            }
+            Picker("Boundary", selection: $draft.xnurbsBoundaryFlow) {
+                Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)
+                Text("Normal").tag(SquareFitOptions.BoundaryFlow.normal)
+                Text("Next").tag(SquareFitOptions.BoundaryFlow.next)
+                Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
+            }
+            .contentShape(Rectangle())
+            .disabled(draft.xnurbsQuadSided == false)
+            Picker("Quality", selection: $draft.xnurbsQuality) {
+                Text("Auto").tag(XNurbsFeature.Quality.auto)
+                Text("High").tag(XNurbsFeature.Quality.high)
+                Text("Max").tag(XNurbsFeature.Quality.max)
+            }
+            .contentShape(Rectangle())
+            Toggle("Satisfy tolerances", isOn: $draft.xnurbsSatisfiesTolerances)
+                .contentShape(Rectangle())
+            if draft.xnurbsSatisfiesTolerances {
+                lengthField("Position tolerance", text: $draft.xnurbsPositionTolerance)
+                TextField("Angle tolerance (degrees)", text: $draft.xnurbsAngleTolerance)
+            }
+            Text("Select the boundary edges or curves framing the opening, and any open curves to guide it marked as guides. A closed boundary is filled by one sheet over its mean plane, trimmed by it, refined until within the tolerances when they are satisfied; Quad sided over two to four boundaries makes Square's untrimmed sheet.")
                 .font(.caption).foregroundStyle(.secondary)
         case .square:
             Picker("Continuity", selection: Binding(

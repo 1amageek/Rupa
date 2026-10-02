@@ -3044,6 +3044,21 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
+        case .createXNurbs:
+            func run() throws {
+                guard case .createXNurbs(let name, let xnurbs, let edgeCurves) = command else {
+                    throw EditorError(code: .commandInvalid, message: "Command dispatch expected createXNurbs.")
+                }
+                var updatedDocument = document
+                for edgeCurve in edgeCurves {
+                    try updatedDocument.addEdgeCurve(edgeCurve)
+                }
+                primaryFeatureID = try updatedDocument.createXNurbs(name: name, xnurbs: xnurbs, objectRegistry: objectRegistry)
+                document = updatedDocument
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
+            try run()
         case .createLoft:
             func run() throws {
                 guard case .createLoft(let name, let sections, let guides, let options, let edgeCurves) = command else {
