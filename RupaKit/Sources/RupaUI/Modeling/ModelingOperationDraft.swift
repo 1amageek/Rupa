@@ -417,6 +417,14 @@ struct ModelingOperationDraft: Equatable {
     var reverseSecondBoundary = false
     var loftSectionControls: [SceneNodeID: LoftSectionDraft] = [:]
     var loftGuideNodeIDs: Set<SceneNodeID> = []
+    /// Edges of bodies marked as Loft guides, each a guide along its curve (Plasticity guides any
+    /// combination of curves and edges).
+    var loftGuideEdges: Set<SelectionTarget> = []
+    /// Whether the operand `target` is a Loft guide: a guide curve source or a guide edge.
+    func isLoftGuide(_ target: SelectionTarget) -> Bool {
+        if case .edge = target.component { return loftGuideEdges.contains(target) }
+        return loftGuideNodeIDs.contains(target.sceneNodeID)
+    }
     /// XNURBS: the operands that are guides (the rest frame it), the continuity edges take, and its
     /// options.
     var xnurbsGuideNodeIDs: Set<SceneNodeID> = []
@@ -876,7 +884,7 @@ struct ModelingOperationDraft: Equatable {
             // A selected vertex of a body is the loft's apex, after its one section.
             let vertices = targets.filter { if case .vertex = $0.component { return true }; return false }
             let sectionTargets = targets.filter { target in
-                guard !loftGuideNodeIDs.contains(target.sceneNodeID), seenTargets.insert(target).inserted else { return false }
+                guard !isLoftGuide(target), seenTargets.insert(target).inserted else { return false }
                 switch target.component {
                 case .edge, .face: return true
                 case .vertex: return false
@@ -887,11 +895,20 @@ struct ModelingOperationDraft: Equatable {
             guard sectionTargets.count >= (vertices.isEmpty ? 2 : 1) else {
                 throw invalid(vertices.isEmpty ? "Select at least two ordered sections, separate from guides." : "Select a section to loft to the vertex.")
             }
-            let guides = zip(nodes, features).compactMap { node, feature in
+            // A selected edge of a body is a curve section or guide along it, its curve added with
+            // the loft.
+            var edgeCurves: [EdgeCurveSource] = []
+            var guides = zip(nodes, features).compactMap { node, feature in
                 loftGuideNodeIDs.contains(node.id) ? LoftGuideReference(featureID: feature) : nil
             }
-            // A selected edge of a body is a curve section along it, its curve added with the loft.
-            var edgeCurves: [EdgeCurveSource] = []
+            for target in targets where loftGuideEdges.contains(target) {
+                guard case .edge = target.component else { continue }
+                let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                    for: target, operationName: "Loft", currentEvaluation: nil
+                ))
+                edgeCurves.append(curve)
+                guides.append(LoftGuideReference(featureID: curve.id))
+            }
             // A G1 or G2 end is continuous with the face beside the edge selected there, with its
             // own tension.
             func endTension(_ text: String, _ choice: LoftContinuityChoice, label: String) throws -> Double {
@@ -1286,8 +1303,8 @@ struct ModelingOperationDraft: Equatable {
         let role: String
         switch kind {
         case .loft:
-            let isGuide = loftGuideNodeIDs.contains(targets[index].sceneNodeID)
-            let ordinal = targets.prefix(index + 1).filter { loftGuideNodeIDs.contains($0.sceneNodeID) == isGuide }.count
+            let isGuide = isLoftGuide(targets[index])
+            let ordinal = targets.prefix(index + 1).filter { isLoftGuide($0) == isGuide }.count
             role = "\(isGuide ? "Guide" : "Section") \(ordinal)"
         case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
         case .pipe:

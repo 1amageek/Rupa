@@ -2093,6 +2093,45 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func anEdgeGuidesALoftAlongItsCurve() throws {
+        // The front face's top and bottom edges as sections and its left edge, joining their
+        // starts, as a guide: every edge becomes a curve of the loft, the guide among its guides,
+        // and the loft spans the front face.
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        func edge(_ test: (Point3D, Point3D) -> Bool) throws -> SelectionTarget {
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return test(Point3D(x: start.x, y: start.y, z: start.z), Point3D(x: end.x, y: end.y, z: end.z))
+            }?.selectionTarget())
+        }
+        let top = try edge { abs($0.y) < 1e-9 && abs($1.y) < 1e-9 && abs($0.z - 0.02) < 1e-9 && abs($1.z - 0.02) < 1e-9 }
+        let bottom = try edge { abs($0.y) < 1e-9 && abs($1.y) < 1e-9 && abs($0.z) < 1e-9 && abs($1.z) < 1e-9 }
+        let side = try edge { abs($0.x) < 1e-9 && abs($1.x) < 1e-9 && abs($0.y) < 1e-9 && abs($1.y) < 1e-9 }
+        var draft = makeDraft(.loft, targets: [bottom, top, side])
+        draft.loftStartContinuity = .g0
+        draft.loftEndContinuity = .g0
+        draft.loftGuideEdges.insert(side)
+        guard case .createLoft(_, let sections, let guides, _, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected a Loft command.")
+            return
+        }
+        #expect(sections.count == 2 && guides.count == 1 && edgeCurves.count == 3)
+        #expect(guides.first.map { guide in edgeCurves.contains { $0.id == guide.featureID } } == true)
+        #expect(draft.operandTitle(at: 2, in: document).hasPrefix("Guide 1"))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.evaluationStatus == .valid)
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.02 * 0.02) < 1e-9)
+    }
+
     @Test func loftCurveControlsFollowOperandsAndBuildRestrictedGeometry() throws {
         var document = DesignDocument.empty()
         var targets: [SelectionTarget] = []

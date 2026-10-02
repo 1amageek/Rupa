@@ -76,12 +76,20 @@ struct ModelingOperationView: View {
                                     .accessibilityLabel("Remove operand")
                             }
                             if draft.kind == .loft {
-                                let id = draft.targets[index].sceneNodeID
-                                Toggle("Use as guide curve", isOn: Binding(
-                                    get: { draft.loftGuideNodeIDs.contains(id) },
-                                    set: { if $0 { draft.loftGuideNodeIDs.insert(id) } else { draft.loftGuideNodeIDs.remove(id) } }
-                                )).contentShape(Rectangle())
-                                if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
+                                let target = draft.targets[index]
+                                let id = target.sceneNodeID
+                                if case .edge = target.component {
+                                    Toggle("Use as guide edge", isOn: Binding(
+                                        get: { draft.loftGuideEdges.contains(target) },
+                                        set: { if $0 { draft.loftGuideEdges.insert(target) } else { draft.loftGuideEdges.remove(target) } }
+                                    )).contentShape(Rectangle())
+                                } else {
+                                    Toggle("Use as guide curve", isOn: Binding(
+                                        get: { draft.loftGuideNodeIDs.contains(id) },
+                                        set: { if $0 { draft.loftGuideNodeIDs.insert(id) } else { draft.loftGuideNodeIDs.remove(id) } }
+                                    )).contentShape(Rectangle())
+                                    if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
+                                }
                             }
                             if draft.kind == .xnurbs {
                                 let target = draft.targets[index]
