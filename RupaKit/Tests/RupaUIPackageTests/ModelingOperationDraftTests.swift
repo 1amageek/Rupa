@@ -1316,6 +1316,27 @@ struct ModelingOperationDraftTests {
         #expect(quad.quadSided && quad.boundaries.count == 4)
     }
 
+    @Test func aLineExtrudedWithAThicknessMakesASolidWall() throws {
+        var document = DesignDocument.empty()
+        let line = try document.createLineSketch(name: "Line", plane: .xy,
+            start: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            end: SketchPoint(x: .length(0.02, .meter), y: .length(0, .meter)))
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) })
+        var draft = makeDraft(.extrude, targets: [.init(sceneNodeID: node.id)])
+        draft.sheet = true
+        draft.distance = "10 mm"
+        draft.wallThickness = "2 mm"
+        guard case .createExtrusion(_, let extrusion) = try draft.command(in: document) else {
+            Issue.record("Expected a thin extrusion.")
+            return
+        }
+        #expect(extrusion.resultKind == .solid && extrusion.thickness != nil)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.02 * 0.002 * 0.01) < 1e-12)
+    }
+
     @Test func aSquareOverAFaceRefitsIt() throws {
         var document = DesignDocument.empty()
         let box = try document.createExtrudedRectangleFromCorners(

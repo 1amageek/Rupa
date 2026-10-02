@@ -595,8 +595,13 @@ struct ModelingOperationDraft: Equatable {
                     : "Select exactly one section source.")
             }
             let section = try sectionReference(for: node.id, in: document)
+            // A curve extruded with a thickness makes a solid wall whatever the Sheet output says.
+            var thinCurve = false
+            if kind == .extrude, case .curve = section, wallThickness.trimmingCharacters(in: .whitespaces).isEmpty == false {
+                thinCurve = true
+            }
             // A revolved curve may close into a solid along its axis; the kernel checks its ends.
-            guard createsSheet || section.isProfile || kind == .revolve else {
+            guard createsSheet || section.isProfile || kind == .revolve || thinCurve else {
                 throw invalid("A selected curve requires Sheet output.")
             }
             if kind == .extrude {
@@ -613,7 +618,8 @@ struct ModelingOperationDraft: Equatable {
                     distance: .length(try length(distance, label: "End position"), .meter),
                     startDistance: extrusionDirection == .symmetric ? nil
                         : .length(try length(startDistance, label: "Start position"), .meter),
-                    direction: direction, resultKind: createsSheet ? .sheet : .solid)
+                    direction: direction, resultKind: createsSheet && !thinCurve ? .sheet : .solid,
+                    thickness: thinCurve ? .length(try length(wallThickness, label: "Thickness"), .meter) : nil)
                 _ = try extrusion.resolvedAxialRange(tolerance: document.modelingSettings.tolerance) {
                     try document.cadDocument.parameters.resolvedValue(for: $0)
                 }
@@ -623,7 +629,7 @@ struct ModelingOperationDraft: Equatable {
                 }
                 let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
                     ? nil : try length(wallThickness, label: "Thickness")
-                if thickness != nil, createsSheet {
+                if thickness != nil, createsSheet, thinCurve == false {
                     throw invalid("A thin extrusion makes a solid wall; turn Sheet output off.")
                 }
                 guard combines || draft != 0 || thickness != nil else {
