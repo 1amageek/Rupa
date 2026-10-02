@@ -62,16 +62,18 @@ struct WorkspaceFaceEditSession: Equatable {
     var modifies = true
     /// Align Surface's continuity, which Tab steps, the tension across the edge and the further
     /// control rows the change fades over.
-    var continuity: SurfaceContinuityLevel = .tangentPlane
-    var tension = 1.0
+    /// Plasticity's defaults: G0, Tension 0.5 as the dialog shows it (`DialogTensionScale`),
+    /// influence 0, Boundary Adjacent.
+    var continuity: SurfaceContinuityLevel = .positional
+    var tension = DialogTensionScale.neutral
     var blendRows = 0
     /// Align Surface's input shape influence on the blended rows, its partial start and end along
     /// the edge, and, when `refitsLayout`, the degrees and spans the sheet is refitted to first.
-    var inputShapeInfluence = 1.0
+    var inputShapeInfluence = 0.0
     var partialStart = 0.0
     var partialEnd = 0.0
     /// Align Surface's Boundary: the cross-edge flow along a G1 or G2 edge.
-    var boundaryFlow = SquareFitOptions.BoundaryFlow.next
+    var boundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
     /// Each aligned pair's own continuity, by its index, overriding `continuity`.
     var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
     /// Align Surface's Analysis while the dialog is open: the continuity checked along the aligned
@@ -161,7 +163,7 @@ struct WorkspaceFaceEditSession: Equatable {
 
     private func alignCommand(_ pair: AlignPair, index: Int) -> EditorCommand {
         .alignSurface(
-            targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: tension, blendRows: blendRows,
+            targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: DialogTensionScale.kernelScale(tension), blendRows: blendRows,
             inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
             layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
         )

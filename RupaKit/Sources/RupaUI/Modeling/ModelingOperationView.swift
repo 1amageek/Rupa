@@ -483,6 +483,11 @@ struct ModelingOperationView: View {
             .contentShape(Rectangle())
             Toggle("Quad sided", isOn: $draft.xnurbsQuadSided)
                 .contentShape(Rectangle())
+                // Plasticity moves Flatness to 1.00 with Quad sided on and back to 0.95 off,
+                // unless it was edited.
+                .onChange(of: draft.xnurbsQuadSided) { _, quad in
+                    if draft.xnurbsFlatness == (quad ? "0.95" : "1.00") { draft.xnurbsFlatness = quad ? "1.00" : "0.95" }
+                }
                 .help("Two to four boundaries make Square's untrimmed sheet; otherwise one sheet trimmed by the closed boundary.")
             TextField("Flatness (0–1]", text: $draft.xnurbsFlatness)
             if draft.xnurbsContinuity != .g0 {

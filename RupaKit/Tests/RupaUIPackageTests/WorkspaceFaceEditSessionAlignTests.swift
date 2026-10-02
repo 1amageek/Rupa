@@ -27,4 +27,23 @@ struct WorkspaceFaceEditSessionAlignTests {
         session.stepGrow()
         #expect(session.pairContinuity.isEmpty && session.continuity == .curvature)
     }
+
+    @Test func theDialogOpensOnPlasticitysDefaults() throws {
+        // G0, Tension 0.50 (the kernel's neutral scale 1), influence 0, Boundary Adjacent.
+        let targets = (0..<2).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [.init(edge: targets[0], reference: targets[1])]))
+        #expect(session.continuity == .positional && session.tension == 0.5)
+        #expect(session.inputShapeInfluence == 0 && session.boundaryFlow == .adjacent)
+        guard case let .alignSurface(_, _, neutral, _, _, _, _, _, _) = session.commands()[0] else {
+            Issue.record("Expected an alignment.")
+            return
+        }
+        #expect(neutral == 1)
+        // The shown tension is 4^(t − 0.5) on the kernel's scale: 0 halves it, 1 doubles it.
+        session.tension = 0
+        guard case let .alignSurface(_, _, flat, _, _, _, _, _, _) = session.commands()[0] else { return }
+        session.tension = 1
+        guard case let .alignSurface(_, _, full, _, _, _, _, _, _) = session.commands()[0] else { return }
+        #expect(flat == 0.5 && full == 2)
+    }
 }

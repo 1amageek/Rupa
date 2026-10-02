@@ -634,6 +634,16 @@ struct ModelingOperationDraftTests {
         #expect(mixed.map { $0.continuity?.order } == [.tangent, nil])
     }
 
+    @Test func surfaceDialogsOpenOnPlasticitysDefaults() throws {
+        let xnurbs = makeDraft(.xnurbs, targets: [])
+        #expect(xnurbs.xnurbsTension == "0.5" && xnurbs.xnurbsFlatness == "0.95")
+        #expect(makeDraft(.square, targets: []).squareTension == "0.5")
+        let constrained = makeDraft(.constrainedSurface, targets: [])
+        #expect(constrained.pointTolerance == "0.01 mm" && constrained.angularTolerance == "5")
+        #expect(constrained.pointOptimization == .performance)
+        #expect(DialogTensionScale.kernelScale(0.5) == 1 && DialogTensionScale.kernelScale(0) == 0.5)
+    }
+
     @Test func loftDefaultsFollowPlasticity() throws {
         // Smooth connectors and G1 at both ends by default; each end its own tension; curves loft
         // into a sheet without Sheet output.

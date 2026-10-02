@@ -69,9 +69,11 @@ struct ModelingOperationDraft: Equatable {
     var constrainedPoints: [ConstrainedSurfaceFeature.PointConstraint] = []
     var constrainedFeatureID: FeatureID?
     var constrainedSceneNodeID: SceneNodeID?
-    var pointTolerance = "0.0001 m"
-    var angularTolerance = "1"
-    var pointOptimization = ConstrainedSurfaceFeature.Optimization.smoothness
+    /// Constrained Surface's tolerances and optimization, Plasticity's defaults (0.00100 cm, 5°,
+    /// Performance).
+    var pointTolerance = "0.01 mm"
+    var angularTolerance = "5"
+    var pointOptimization = ConstrainedSurfaceFeature.Optimization.performance
 
     mutating func appendCoordinatePoint() throws {
         constrainedPoints.append(.init(position: Point3D(
@@ -219,7 +221,8 @@ struct ModelingOperationDraft: Equatable {
     /// Every side's continuity unless the side has its own in `squareSideContinuity`.
     var squareContinuity = SquareContinuityChoice.g0
     var squareSideContinuity: [SelectionTarget: SquareContinuityChoice] = [:]
-    var squareTension = "1"
+    /// Square's Tension as the dialog shows it (0.5 neutral, `DialogTensionScale`).
+    var squareTension = "0.5"
     var squareUDegree = "3"
     var squareVDegree = "3"
     var squareUSpans = "3"
@@ -418,7 +421,8 @@ struct ModelingOperationDraft: Equatable {
     var xnurbsContinuity = LoftContinuityChoice.g0
     var xnurbsQuadSided = false
     var xnurbsFlatness = "0.95"
-    var xnurbsTension = "1"
+    /// XNURBS's Tension as the dialog shows it (0.5 neutral, `DialogTensionScale`).
+    var xnurbsTension = "0.5"
     var xnurbsBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
     var xnurbsQuality = XNurbsFeature.Quality.auto
     var xnurbsSatisfiesTolerances = true
@@ -958,8 +962,7 @@ struct ModelingOperationDraft: Equatable {
             // curves; guides: curves marked as such.
             let boundaryTargets = targets.filter { !xnurbsGuideNodeIDs.contains($0.sceneNodeID) }
             guard boundaryTargets.count >= 2 else { throw invalid("XNURBS takes two or more boundary edges or curves.") }
-            let tension = xnurbsContinuity == .g0 ? 1 : try number(xnurbsTension, label: "Tension")
-            guard tension.isFinite, tension > 0 else { throw invalid("Tension must be positive.") }
+            let tension = xnurbsContinuity == .g0 ? 1 : DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
             var edgeCurves: [EdgeCurveSource] = []
             let boundaries = try boundaryTargets.map { target -> SquareSide in
                 switch target.component {
@@ -1022,8 +1025,7 @@ struct ModelingOperationDraft: Equatable {
                 throw invalid("Square takes two to four sides: edges of bodies or curves.")
             }
             let continuous = targets.contains { squareContinuity(of: $0).order != nil }
-            let tension = continuous ? try number(squareTension, label: "Tension") : 1
-            guard tension.isFinite, tension > 0 else { throw invalid("Tension must be positive.") }
+            let tension = continuous ? DialogTensionScale.kernelScale(try number(squareTension, label: "Tension")) : 1
             let options = try squareFitOptions()
             var edgeCurves: [EdgeCurveSource] = []
             let sides = try targets.map { target -> SquareSide in
