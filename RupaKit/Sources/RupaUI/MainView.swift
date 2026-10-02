@@ -6268,6 +6268,7 @@ private struct ProjectMainViewContent: View {
             hasBodyObjectSelection: !selectedBodyObjectIDs.isEmpty,
             selectedSheetObjectCount: selectedSheetObjectTargets.count,
             hasBodyFaceSelection: !selectedBodyFaceTargets.isEmpty,
+            hasBodyEdgeSelection: !selectedBodyEdgeTargets.isEmpty,
             isFilletSessionActive: filletSession != nil,
             isRebuildSessionActive: rebuildSession != nil,
             isDeformSessionActive: deformSession != nil,
@@ -6579,6 +6580,12 @@ private struct ProjectMainViewContent: View {
             beginCurvePickCommand(.trim)
             return .handled
         case .beginFillet:
+            // Edges of bodies: Fillet Shell's dialog on them, as Plasticity's Fillet dispatches.
+            let edges = selectedBodyEdgeTargets
+            if edges.isEmpty == false, selectedSketchTargets.isEmpty {
+                beginEdgeTreatment(.fillet, targets: edges, meters: defaultEdgeFilletRadiusMeters)
+                return .handled
+            }
             guard let fillet = WorkspaceFilletSession(
                 selectedSketchTargets: selectedSketchTargets, treatment: sketchCornerTreatment
             ) else {
@@ -9185,6 +9192,14 @@ private struct ProjectMainViewContent: View {
     }
 
     /// The selected faces of body objects, which Unjoin separates.
+    private var selectedBodyEdgeTargets: [SelectionTarget] {
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        return snapshot.selection.selectedTargets.filter { target in
+            guard case .edge = target.component else { return false }
+            return nodes[target.sceneNodeID]?.reference?.kind == .body
+        }
+    }
+
     private var selectedBodyFaceTargets: [SelectionTarget] {
         let nodes = snapshot.document.document.productMetadata.sceneNodes
         return snapshot.selection.selectedTargets.filter { target in

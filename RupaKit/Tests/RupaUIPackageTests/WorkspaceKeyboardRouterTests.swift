@@ -491,6 +491,10 @@ private func keyboardContext(
         router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
     }
     #expect(action("b") == nil)
+    // Edges of bodies take B to Fillet Shell, as Plasticity's Fillet dispatches.
+    context.hasBodyEdgeSelection = true
+    #expect(action("b") == .beginFillet)
+    context.hasBodyEdgeSelection = false
     context.selectedSketchTargetCount = 1
     #expect(action("b") == .beginFillet)
     #expect(action("j") == nil)

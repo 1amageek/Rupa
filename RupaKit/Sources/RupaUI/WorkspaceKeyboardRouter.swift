@@ -381,6 +381,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var selectedSheetObjectCount: Int = 0
     /// Whether the selection holds faces of bodies, which Option-J separates.
     var hasBodyFaceSelection: Bool = false
+    /// Whether the selection holds edges of bodies, which B fillets.
+    var hasBodyEdgeSelection: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletSessionActive: Bool = false
     /// Whether Rebuild Curve's dialog runs.
@@ -1015,7 +1017,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
         case "l": return .loftSelection
-        case "b": return context.selectedSketchTargetCount > 0 ? .beginFillet : nil
+        case "b": return context.selectedSketchTargetCount > 0 || context.hasBodyEdgeSelection ? .beginFillet : nil
         case "j": return context.selectedSketchTargetCount >= 2 || context.selectedSheetObjectCount >= 2 ? .join : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil
         default: return nil
