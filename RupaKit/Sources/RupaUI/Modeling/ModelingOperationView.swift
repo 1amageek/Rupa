@@ -363,7 +363,7 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
-            .help("With a guide selected between the section and the path: Point keeps the section's contact on a straight guide, Chord only turns the section toward a straight guide, Curve turns the section, unscaled, so it keeps touching a guide curve wherever on the section that is (both within the allowance).")
+            .help("With a guide selected between the section and the path: Point keeps the section's contact on the guide, turning and scaling it; Chord only turns the section toward the guide; Curve turns the section, unscaled, so it keeps touching the guide wherever on the section that is. Along a curved path all three follow a guide curve within the allowance.")
             if !draft.isSurfaceCreation {
                 Picker("Boolean", selection: $draft.solidBoolean) {
                     ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in
