@@ -27,6 +27,12 @@ final class WorkspaceDocumentAnalysisCache {
         var frameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     }
 
+    struct EdgeContinuityKey: Equatable {
+        var generation: DocumentGeneration
+        var featureID: FeatureID
+        var displayUnit: LengthDisplayUnit
+    }
+
     struct SectionAnalysisKey: Equatable {
         var generation: DocumentGeneration
         var displayUnit: LengthDisplayUnit
@@ -38,6 +44,8 @@ final class WorkspaceDocumentAnalysisCache {
     let surfaceSourceSummary = MemoizedResults<SurfaceSourceSummaryKey, SurfaceSourceSummaryResult, any Error>()
     /// The command's section and the selected construction plane's section can show together.
     let sectionAnalysis = MemoizedResults<SectionAnalysisKey, SectionAnalysisResult, any Error>(capacity: 2)
+    /// A Square's or an Align Surface's measured edge continuity, read by the inspector.
+    let edgeContinuity = MemoizedResults<EdgeContinuityKey, [WorkspaceInspectorTextRow], Never>(capacity: 4)
     /// Every shared definition's selection, read by each sidebar row and the inspector.
     let sharedDefinitions = MemoizedResults<
         DocumentGeneration, [ComponentDefinitionID: Result<SharedDefinitionSelection, any Error>], any Error

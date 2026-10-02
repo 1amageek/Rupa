@@ -43,12 +43,24 @@ struct WorkspaceFaceEditDialogView: View {
             .accessibilityIdentifier("WorkspaceFaceEdit.extensionShape")
             Toggle("Modify", isOn: $dialog.modifies)
                 .accessibilityIdentifier("WorkspaceFaceEdit.modifies")
-        case .alignSurface:
-            Picker("Continuity", selection: $dialog.continuity) {
+        case let .alignSurface(pairs):
+            Picker("Continuity", selection: Binding(get: { dialog.continuity }, set: { dialog.continuity = $0; dialog.pairContinuity = [:] })) {
                 ForEach(SurfaceContinuityLevel.allCases, id: \.self) { Text("G\($0.rawValue)").tag($0) }
             }
             .fixedSize()
             .accessibilityIdentifier("WorkspaceFaceEdit.continuity")
+            if pairs.count > 1 {
+                ForEach(pairs.indices, id: \.self) { index in
+                    Picker("Edge \(index + 1)", selection: Binding(
+                        get: { dialog.pairContinuity[index] ?? dialog.continuity },
+                        set: { dialog.pairContinuity[index] = $0 }
+                    )) {
+                        ForEach(SurfaceContinuityLevel.allCases, id: \.self) { Text("G\($0.rawValue)").tag($0) }
+                    }
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                }
+            }
             TextField("Tension", value: $dialog.tension, format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.tension")
@@ -164,7 +176,8 @@ struct WorkspaceFaceEditDialogView: View {
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .draft(faces: [face], neutral: face))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .match(faces: [face], reference: face))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .removeFillets(object: SceneNodeID()))), displayUnit: .millimeter)
-        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .alignSurface(edge: face, reference: face))), displayUnit: .millimeter)
+        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .alignSurface(pairs: [.init(edge: face, reference: face)]))),
+                                    displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .rebuildFace(faces: [face]))), displayUnit: .millimeter)
     }
     .padding()

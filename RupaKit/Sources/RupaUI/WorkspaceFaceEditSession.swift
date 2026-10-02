@@ -12,6 +12,12 @@ import SwiftCAD
 /// Rebuild Face's method (the faces refitted to a Degree and Spans layout or within a Tolerance,
 /// extended past them and shrunk to them); OK, Return or right-click applies; Escape ends it without a change.
 struct WorkspaceFaceEditSession: Equatable {
+    /// An edge of a sheet and the reference edge it is aligned to.
+    struct AlignPair: Equatable {
+        var edge: SelectionTarget
+        var reference: SelectionTarget
+    }
+
     /// This dialog, apart from the one the command starts next (`WorkspaceDialogSubmissions`).
     let instance = WorkspaceDialogInstance()
 
@@ -23,7 +29,8 @@ struct WorkspaceFaceEditSession: Equatable {
         case hollow(targets: [SelectionTarget])
         case thicken(targets: [SelectionTarget])
         case extendSheet(edges: [SelectionTarget], limit: SelectionTarget? = nil)
-        case alignSurface(edge: SelectionTarget, reference: SelectionTarget)
+        /// Align Surface: each pair's sheet edge made to follow its reference edge.
+        case alignSurface(pairs: [AlignPair])
         case rebuildFace(faces: [SelectionTarget])
     }
 
@@ -64,6 +71,8 @@ struct WorkspaceFaceEditSession: Equatable {
     var partialEnd = 0.0
     /// Align Surface's Boundary: the cross-edge flow along a G1 or G2 edge.
     var boundaryFlow = SquareFitOptions.BoundaryFlow.next
+    /// Each aligned pair's own continuity, by its index, overriding `continuity`.
+    var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
     /// Rebuild Face's method, which Tab steps: the explicit `layout`, a tolerance in meters, or
@@ -117,6 +126,7 @@ struct WorkspaceFaceEditSession: Equatable {
         if case .alignSurface = kind {
             let all = SurfaceContinuityLevel.allCases
             continuity = all[((all.firstIndex(of: continuity) ?? 0) + 1) % all.count]
+            pairContinuity = [:]
             return
         }
         if case .extendSheet = kind {
@@ -135,6 +145,22 @@ struct WorkspaceFaceEditSession: Equatable {
     }
 
     /// The command OK submits.
+    /// The commands the dialog applies together: one per aligned pair, otherwise its one command.
+    func commands() -> [EditorCommand] {
+        if case let .alignSurface(pairs) = kind {
+            return pairs.indices.map { alignCommand(pairs[$0], index: $0) }
+        }
+        return [command()]
+    }
+
+    private func alignCommand(_ pair: AlignPair, index: Int) -> EditorCommand {
+        .alignSurface(
+            targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: tension, blendRows: blendRows,
+            inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
+            layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
+        )
+    }
+
     func command() -> EditorCommand {
         switch kind {
         case let .push(faces):
@@ -160,12 +186,9 @@ struct WorkspaceFaceEditSession: Equatable {
                 extendU: rebuildMethod == .nominal ? 0 : extendU, extendV: rebuildMethod == .nominal ? 0 : extendV,
                 shrinks: rebuildMethod == .nominal || shrinks
             )
-        case let .alignSurface(edge, reference):
-            return .alignSurface(
-                targets: [edge, reference], continuity: continuity, tension: tension, blendRows: blendRows,
-                inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
-                layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
-            )
+        case let .alignSurface(pairs):
+            // The first pair's; `commands()` gives every pair's.
+            return alignCommand(pairs[0], index: 0)
         case let .hollow(targets):
             return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))
         case let .thicken(targets):

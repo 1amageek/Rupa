@@ -6737,9 +6737,14 @@ private struct ProjectMainViewContent: View {
                 guard case .edge = target.component, let node = nodes[target.sceneNodeID] else { return false }
                 return node.reference?.kind == .body
             }
-            if edges.count == 2, selected.count == 2, nodes[edges[0].sceneNodeID]?.object?.geometryRole == .surface {
-                faceEditSession = WorkspaceFaceEditSession(kind: .alignSurface(edge: edges[0], reference: edges[1]))
-                reportToolStatus("Align Surface: the first edge follows the last; Tab steps the continuity; OK, Return or right-click aligns.")
+            // Pairs in selection order: a sheet's edge, then the edge it follows; several pairs align at once.
+            if edges.count >= 2, edges.count % 2 == 0, selected.count == edges.count,
+               stride(from: 0, to: edges.count, by: 2).allSatisfy({ nodes[edges[$0].sceneNodeID]?.object?.geometryRole == .surface }) {
+                let pairs = stride(from: 0, to: edges.count, by: 2).map {
+                    WorkspaceFaceEditSession.AlignPair(edge: edges[$0], reference: edges[$0 + 1])
+                }
+                faceEditSession = WorkspaceFaceEditSession(kind: .alignSurface(pairs: pairs))
+                reportToolStatus("Align Surface: each sheet edge follows the edge selected after it; Tab steps the continuity; OK, Return or right-click aligns.")
                 return .handled
             }
             if let alignVertexAction {
@@ -10147,7 +10152,7 @@ private struct ProjectMainViewContent: View {
     /// Applies the running face operation as one step; it stays for another try when Core refuses.
     private func confirmFaceEdit() {
         guard let edit = faceEditSession else { return }
-        submitDialogCommand([edit.command()], name: edit.title, instance: edit.instance,
+        submitDialogCommand(edit.commands(), name: edit.title, instance: edit.instance,
                             running: { faceEditSession?.instance }, end: { faceEditSession = nil },
                             done: { reportToolStatus("\(edit.title) applied.") })
     }
@@ -11687,7 +11692,9 @@ private struct ProjectMainViewContent: View {
             objectRegistry: objectRegistry,
             selectedTargetSummary: selectedTargetSummary,
             selectedTargetCount: selectedTargetCount,
-            evaluatedDocument: snapshot.cadInteraction?.evaluatedDocument
+            evaluatedDocument: snapshot.cadInteraction?.evaluatedDocument,
+            analysisCache: documentAnalysisCache,
+            documentGeneration: snapshot.documentGeneration
         )
         .state(for: nodes)
     }

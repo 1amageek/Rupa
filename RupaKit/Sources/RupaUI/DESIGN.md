@@ -911,9 +911,12 @@ on one sheet or the selected faces, with its Front and Back, which S locks toget
 palette's Thicken takes Front and Back as well. The palette's Extend dispatches by selection:
 open edges of a sheet open Extend Sheet's dialog (Distance, the Shape Tab steps, Modify); one
 sketch curve extends through Extend Curve's natural shape. The palette's Align dispatches by
-selection too: an edge of a sheet and then a reference edge open Align Surface's dialog
-(Continuity, which Tab steps, Tension, Blend rows with their Influence, Partial Start and End,
-and Degree/Spans refitting the sheet first); curve ends align through Align Vertex. Rebuild
+selection too: an edge of a sheet and then a reference edge — or several such pairs, in selection
+order — open Align Surface's dialog (Continuity, which Tab steps for every pair, each pair's own
+continuity when there are several, Tension, Blend rows with their Influence, Partial Start and
+End, Boundary flow, and Degree/Spans refitting the sheet first), applied as one alignment per pair;
+an aligned sheet's inspector shows its Analysis (G0 distance, G1 angle, G2 curvature difference),
+measured once per document generation; curve ends align through Align Vertex. Rebuild
 dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
 Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays
 the one selected face flat as a new sheet object.

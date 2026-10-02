@@ -10,6 +10,9 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     var selectedTargetCount: Int
     /// The current evaluation, for measured rows such as a Square's Analysis; nil when stale.
     var evaluatedDocument: EvaluatedDocument? = nil
+    /// Remembers measured rows per document generation, so the inspector measures once.
+    var analysisCache: WorkspaceDocumentAnalysisCache? = nil
+    var documentGeneration: DocumentGeneration? = nil
 
     func state(for nodes: [SceneNode]) -> WorkspaceObjectOverviewInspectorState {
         WorkspaceObjectOverviewInspectorState(
@@ -171,8 +174,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             )
         ]
         rows += operationRows(for: feature.operation)
-        if case .squareSurface = feature.operation {
-            rows += squareAnalysisRows(for: feature.id)
+        switch feature.operation {
+        case .squareSurface: rows += cachedAnalysisRows(for: feature.id) { squareAnalysisRows(for: feature.id) }
+        case .surfaceAlign: rows += cachedAnalysisRows(for: feature.id) { alignAnalysisRows(for: feature.id) }
+        default: break
         }
         rows.append(
             WorkspaceInspectorTextRow(
@@ -974,6 +979,40 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         return "x \(x), y \(y), z \(z)"
     }
 
+    /// `make`'s rows, measured once per document generation when a cache is given.
+    private func cachedAnalysisRows(for featureID: FeatureID, make: () -> [WorkspaceInspectorTextRow]) -> [WorkspaceInspectorTextRow] {
+        guard let analysisCache, let documentGeneration, evaluatedDocument != nil else { return make() }
+        return analysisCache.edgeContinuity.value(
+            for: .init(generation: documentGeneration, featureID: featureID, displayUnit: displayUnit), make: make
+        )
+    }
+
+    /// An Align Surface's Analysis: its edge's G0 distance and, at G1 or G2, its angle and
+    /// curvature difference against the reference.
+    private func alignAnalysisRows(for featureID: FeatureID) -> [WorkspaceInspectorTextRow] {
+        guard let evaluatedDocument else {
+            return [WorkspaceInspectorTextRow(title: "Analysis", value: "Waiting for evaluation")]
+        }
+        do {
+            let side = try SurfaceAlignAnalyzer().analyze(featureID, in: evaluatedDocument)
+            return [WorkspaceInspectorTextRow(title: "Analysis", value: analysisText(side))]
+        } catch {
+            return [WorkspaceInspectorTextRow(title: "Analysis", value: "Unavailable: \(error)")]
+        }
+    }
+
+    private func analysisText(_ side: SquareSideAnalysis) -> String {
+        func mark(_ value: Double, _ limit: Double?) -> String { value <= (limit ?? 0) ? "✓" : "⚠" }
+        var parts = ["G0 \(mark(side.position, side.positionLimit)) \(formatted(side.position))"]
+        if let angle = side.angle {
+            parts.append("G1 \(mark(angle, side.angleLimit)) \(WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: angle)))")
+        }
+        if let curvature = side.curvature {
+            parts.append("G2 \(mark(curvature, side.curvatureLimit)) \(WorkspaceInspectorNumberText.compact(curvature)) /m")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     /// A Square's Analysis, one row per side: its G0 distance and, beside a face, its G1 angle
     /// and G2 curvature difference, each marked within (✓) or beyond (⚠) its limit.
     private func squareAnalysisRows(for featureID: FeatureID) -> [WorkspaceInspectorTextRow] {
@@ -982,15 +1021,7 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         }
         do {
             return try SquareSideAnalyzer().analyze(featureID, in: evaluatedDocument).map { side in
-                func mark(_ value: Double, _ limit: Double?) -> String { value <= (limit ?? 0) ? "✓" : "⚠" }
-                var parts = ["G0 \(mark(side.position, side.positionLimit)) \(formatted(side.position))"]
-                if let angle = side.angle {
-                    parts.append("G1 \(mark(angle, side.angleLimit)) \(WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: angle)))")
-                }
-                if let curvature = side.curvature {
-                    parts.append("G2 \(mark(curvature, side.curvatureLimit)) \(WorkspaceInspectorNumberText.compact(curvature)) /m")
-                }
-                return WorkspaceInspectorTextRow(title: "Side \(side.side + 1)", value: parts.joined(separator: " · "))
+                WorkspaceInspectorTextRow(title: "Side \(side.side + 1)", value: analysisText(side))
             }
         } catch {
             return [WorkspaceInspectorTextRow(title: "Analysis", value: "Unavailable: \(error)")]
