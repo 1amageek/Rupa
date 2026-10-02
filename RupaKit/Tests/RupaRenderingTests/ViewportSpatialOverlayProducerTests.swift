@@ -817,6 +817,22 @@ func semanticProducerIgnoresUnselectedAnalysisSamples() throws {
 }
 
 @Test
+func curvatureCombsLengthenByTheirScale() throws {
+    func extent(_ scale: Double) throws -> Double {
+        let input = try ViewportSpatialOverlayProducer.makeInput(
+            from: makeAnalysisBudgetSnapshot(curvatureCount: 1, combScale: scale), renderOrigin: .origin,
+            retainedSurfaceByteCount: 0, topologyRevision: 12
+        )
+        let positions = input.meshes.filter { $0.family == .analysis }.flatMap(\.value.positions)
+        let xs = positions.map(\.x), ys = positions.map(\.y), zs = positions.map(\.z)
+        return [xs, ys, zs].map { ($0.max() ?? 0) - ($0.min() ?? 0) }.max() ?? 0
+    }
+    let single = try extent(1), double = try extent(2)
+    #expect(single > 0)
+    #expect(double > 1.5 * single)
+}
+
+@Test
 func semanticAnalysisBuilderPropagatesMidBuildCancellation() async throws {
     let source = try #require(makeAnalysisBudgetSnapshot(curvatureCount: 100).analysisSource)
     let result = try await Task.detached { () throws -> (Bool, Int) in
@@ -1013,7 +1029,8 @@ private func makePatternBudgetSnapshot(
 
 private func makeAnalysisBudgetSnapshot(
     curvatureCount: Int,
-    includesLargeUnselectedFace: Bool = false
+    includesLargeUnselectedFace: Bool = false,
+    combScale: Double = 1
 ) -> ViewportSpatialOverlaySemanticSnapshot {
     let featureID = FeatureID()
     let rootSceneNodeID = SceneNodeID()
@@ -1107,7 +1124,8 @@ private func makeAnalysisBudgetSnapshot(
             options: .init(
                 showsCurvatureCombs: true,
                 showsPrincipalDirections: false,
-                showsTrimBoundaries: false
+                showsTrimBoundaries: false,
+                combScale: combScale
             )
         ),
         editedBodies: [:],

@@ -343,7 +343,9 @@ Main-actor capture does not call
 section-analysis overlay build, hatch conversion, or their output sorting and
 array traversal. The existing producer worker invokes those pure builders once
 for a changed source/overlay identity before it emits the complete batch; it
-does not add another authority, cache, or worker lane.
+does not add another authority, cache, or worker lane. Surface-analysis curvature
+combs are scaled so the longest tooth is a sixth of the view's diagonal, times
+the display options' positive `combScale` (Square's Scale).
 The original pure builder algorithms are shared with a nonescaping `rethrows`
 checkpoint `(items, positions, visits)`. Legacy nonthrowing wrappers supply an
 explicit no-op checkpoint; the native worker supplies cooperative cancellation

@@ -15,7 +15,7 @@ struct ModelingOperationViewContractTests {
         ]
         for (kind, expected) in cases {
             let draft = ModelingOperationDraft(kind: kind, selection: .init(), ruler: .standard(for: .millimeter))
-            let panel = ModelingOperationView(draft: .constant(draft), document: document,
+            let panel = ModelingOperationView(draft: .constant(draft), combScale: .constant(1), document: document,
                 isBusy: false, hasMatchingPreview: false, errorMessage: nil,
                 onUseSelection: { calls += 1 }, onPreview: { calls += 1 },
                 onApply: { calls += 1 }, onCancel: { calls += 1 })

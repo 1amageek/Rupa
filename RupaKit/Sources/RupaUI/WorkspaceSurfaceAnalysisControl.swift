@@ -18,6 +18,13 @@ struct WorkspaceSurfaceAnalysisControl: View {
                     densityButton(density)
                 }
             }
+            if options.showsCurvatureCombs {
+                TextField("Comb scale", value: Binding(get: { options.combScale },
+                                                       set: { if $0.isFinite, $0 > 0 { options.combScale = $0 } }),
+                          format: .number)
+                    .font(.caption)
+                    .help("The curvature combs' length relative to their automatic length.")
+            }
         }
     }
 

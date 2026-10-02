@@ -389,6 +389,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let principalDirectionItems: [PrincipalDirectionItem]
         let boundaryItems: [BoundaryItem]
         let continuityItems: [ContinuityItem]
+        /// The curvature combs' length relative to their automatic one.
+        var combScale: Double = 1
     }
 
     struct Section: Sendable {
@@ -1226,11 +1228,15 @@ enum ViewportSpatialOverlayProducer {
                 requiresCurvatureContinuitySolve: item.requiresCurvatureContinuitySolve
             ))
         }
+        guard source.options.combScale.isFinite, source.options.combScale > 0 else {
+            throw RealityViewportSpatialBatch.invalid("Surface-analysis comb scale must be positive.")
+        }
         return .init(
             items: items,
             principalDirectionItems: principalDirectionItems,
             boundaryItems: boundaryItems,
-            continuityItems: continuityItems
+            continuityItems: continuityItems,
+            combScale: source.options.combScale
         )
     }
 
@@ -1365,7 +1371,7 @@ enum ViewportSpatialOverlayProducer {
             throw RealityViewportSpatialBatch.invalid("Surface-analysis curvature is not finite.")
         }
         if maximumNormalCurvature > 1.0e-12 {
-            let scale = diagonal * 0.16 / maximumNormalCurvature
+            let scale = diagonal * 0.16 / maximumNormalCurvature * analysis.combScale
             for item in analysis.items {
                 try Task.checkCancellation()
                 let end = offset(

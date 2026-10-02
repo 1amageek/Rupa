@@ -5,6 +5,8 @@ import SwiftCAD
 struct ModelingOperationView: View {
     @State private var pointEntryError: String?
     @Binding var draft: ModelingOperationDraft
+    /// The surface analysis's curvature-comb length (Square's Scale).
+    @Binding var combScale: Double
     let document: DesignDocument
     let isBusy: Bool
     let hasMatchingPreview: Bool
@@ -478,6 +480,9 @@ struct ModelingOperationView: View {
                 TextField("Spans V", text: $draft.squareVSpans)
             }
             TextField("Flatness (0–1]", text: $draft.squareFlatness)
+            TextField("Scale (curvature combs)", value: Binding(get: { combScale }, set: { if $0.isFinite, $0 > 0 { combScale = $0 } }),
+                      format: .number)
+                .help("The length of the surface analysis's curvature combs, relative to their automatic length.")
             TextField("Weight", text: $draft.squareWeight)
             Picker("Boundary", selection: $draft.squareBoundaryFlow) {
                 Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)

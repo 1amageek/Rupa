@@ -2008,6 +2008,7 @@ private struct ProjectMainViewContent: View {
             if let draft = modelingDraft {
                 ModelingOperationView(
                     draft: Binding(get: { modelingDraft ?? draft }, set: { modelingDraft = $0 }),
+                    combScale: $surfaceAnalysisOptions.combScale,
                     document: snapshot.document.document,
                     isBusy: modelingPreview.isBusy,
                     hasMatchingPreview: modelingPreview.phase == .ready,
