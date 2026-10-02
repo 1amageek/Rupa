@@ -455,7 +455,9 @@ struct ModelingOperationView: View {
                 Toggle("Tangent edges", isOn: $draft.tangentEdges)
             }
             if draft.filletShape.takesTension {
-                TextField(draft.filletShape == .conic ? "Tension (0–1; 0.5 is the round)" : "Tension (blank 1)", text: $draft.filletTension)
+                TextField(draft.filletShape == .curvature ? "Tension (blank 1)"
+                          : draft.filletShape == .conic ? "Tension (0–1; 0.5 is the round)" : "Tension (0–1; 0.5 is the chordal arc)",
+                          text: $draft.filletTension)
             }
         case .chamfer:
             lengthField("Distance", text: $draft.distance)

@@ -368,7 +368,7 @@ struct ModelingOperationDraft: Equatable {
             case .full: .full
             }
         }
-        var takesTension: Bool { self == .conic || self == .curvature }
+        var takesTension: Bool { self == .conic || self == .chordal || self == .curvature }
         /// The shapes Plasticity's dialog offers: no Round, Conic at 0.5 being one.
         static let offered: [FilletShapeChoice] = [.conic, .chordal, .curvature, .full]
     }
