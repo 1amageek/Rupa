@@ -833,3 +833,10 @@ private func keyboardContext(
     context.isFilletDialogActive = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .toggleFilletTangentEdges)
 }
+
+@Test func workspaceKeyboardRouterCyclesLoftContinuityOnTab() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isLoftDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .cycleLoftContinuity)
+}

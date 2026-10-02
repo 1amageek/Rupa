@@ -263,6 +263,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleIsoparamSubdivide
     /// T while Fillet's dialog runs: Tangent edges on or off.
     case toggleFilletTangentEdges
+    /// Tab while Loft's dialog runs: both ends' continuity steps.
+    case cycleLoftContinuity
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -403,6 +405,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isFaceEditSessionActive: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletDialogActive: Bool = false
+    /// Whether Loft's dialog runs.
+    var isLoftDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -504,6 +508,10 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isEscape { return .cancelImprint }
             if input.isTab { return .toggleImprintOption }
             if input.characters.lowercased() == "s" { return .toggleIsoparamSubdivide }
+        }
+        if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.isTab {
+            return .cycleLoftContinuity
         }
         if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "t" {

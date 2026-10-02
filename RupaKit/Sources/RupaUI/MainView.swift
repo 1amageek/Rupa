@@ -6355,6 +6355,7 @@ private struct ProjectMainViewContent: View {
             isImprintSessionActive: imprintSession != nil,
             isFaceEditSessionActive: faceEditSession != nil,
             isFilletDialogActive: modelingDraft?.kind == .fillet,
+            isLoftDialogActive: modelingDraft?.kind == .loft,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6798,6 +6799,10 @@ private struct ProjectMainViewContent: View {
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
+            return .handled
+        case .cycleLoftContinuity:
+            modelingDraft?.cycleLoftContinuity()
+            reportToolStatus("Loft: continuity \(modelingDraft?.loftStartContinuity.rawValue ?? "").")
             return .handled
         case .toggleFilletTangentEdges:
             modelingDraft?.tangentEdges.toggle()

@@ -202,6 +202,13 @@ struct ModelingOperationDraft: Equatable {
     /// Plasticity labels both edges; ends that are not edges of a body take none.
     var loftStartContinuity = LoftContinuityChoice.g1
     var loftEndContinuity = LoftContinuityChoice.g1
+    /// Tab while Loft's dialog runs: both ends step to the next continuity, G0, G1, G2 and round.
+    mutating func cycleLoftContinuity() {
+        let all = LoftContinuityChoice.allCases
+        let next = all[((all.firstIndex(of: loftStartContinuity) ?? 0) + 1) % all.count]
+        loftStartContinuity = next
+        loftEndContinuity = next
+    }
     /// The cross-boundary scale of each G1 or G2 end, times the distance between the end sections.
     var loftStartTension = "1"
     var loftEndTension = "1"
