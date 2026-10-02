@@ -27,7 +27,8 @@ struct WorkspaceBooleanSession: Equatable {
     var targetMaterial: BooleanMaterial = .default
     var toolMaterial: BooleanMaterial = .default
 
-    init(selectedBodies: [SceneNodeID], operation: BooleanOperation = .union) {
+    /// Opens on Difference, as Plasticity's Boolean dialog does.
+    init(selectedBodies: [SceneNodeID], operation: BooleanOperation = .difference) {
         switch selectedBodies.count {
         case 0:
             targets = []

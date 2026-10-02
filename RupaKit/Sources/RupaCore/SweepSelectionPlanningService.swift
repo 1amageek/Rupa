@@ -1,6 +1,10 @@
 import SwiftCAD
 
 public struct SweepSelectionPlanningService: Sendable {
+    /// The positional allowance a sweep is built within where it needs one (a twist, a Normal
+    /// sweep along a curve, a Chord or Curve guide) and none is given: Plasticity asks for none.
+    public static let defaultApproximationAllowance = CADExpression.length(0.000_001, .meter)
+
     private let document: DesignDocument
     private let selection: SelectionModel
 
@@ -44,6 +48,9 @@ public struct SweepSelectionPlanningService: Sendable {
             )
         }
         var resolvedOptions = options
+        if resolvedOptions.approximationTolerance == nil {
+            resolvedOptions.approximationTolerance = Self.defaultApproximationAllowance
+        }
         if section.isClosedRegion == false {
             resolvedOptions.resultKind = .sheet
         }

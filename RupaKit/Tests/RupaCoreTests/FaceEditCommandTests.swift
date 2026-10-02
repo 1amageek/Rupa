@@ -339,5 +339,16 @@ import Testing
         #expect(grown.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }.count == 1)
         // Each face grows as it was selected, not as the other's growth left it.
         #expect(abs(try volume(grown) - 0.002) < 1e-12)
+
+        // Direct has no one direction for faces facing different ways (Plasticity: "Can't
+        // determine swept geometry"); nothing is built.
+        let direct = EditorSession()
+        let cube = try box(direct, "Box")
+        let up = try face(of: cube, in: direct, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        let out = try face(of: cube, in: direct, normal: Vector3D(x: 1, y: 0, z: 0)) { $0.x }
+        #expect(throws: EditorError.self) {
+            _ = try direct.execute(.extrudeFaces(targets: [up, out], distance: .length(0.05, .meter), individual: false, operation: .union))
+        }
+        #expect(abs(try volume(direct) - 0.001) < 1e-12)
     }
 }

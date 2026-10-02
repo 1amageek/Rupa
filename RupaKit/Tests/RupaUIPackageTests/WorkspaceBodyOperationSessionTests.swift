@@ -36,7 +36,7 @@ import Testing
         let one = WorkspaceBooleanSession(selectedBodies: [first])
         #expect(one.targets == [first] && one.tools.isEmpty && one.picking == .tools && !one.canApply)
         var two = WorkspaceBooleanSession(selectedBodies: [first, second])
-        #expect(two.targets == [first] && two.tools == [second] && two.canApply && two.operation == .union)
+        #expect(two.targets == [first] && two.tools == [second] && two.canApply && two.operation == .difference)
         // A body clicked into the other list leaves the one it was in.
         two.picking = .targets
         two.toggle(second)

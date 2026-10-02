@@ -270,7 +270,7 @@ struct ModelingOperationView: View {
                     Toggle("Individual", isOn: $draft.extrudesIndividually)
                         .accessibilityIdentifier("Modeling.extrudeFacesIndividually")
                 }
-                if draft.solidBoolean != .newBody {
+                if draft.solidBoolean.combines || (draft.extrudesFaces && draft.solidBoolean == .automatic) {
                     Toggle("Keep Tools", isOn: $draft.keepsTools)
                     Text(draft.extrudesFaces
                         ? "Faces combine with the body they lie on."
@@ -308,7 +308,7 @@ struct ModelingOperationView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                if draft.solidBoolean != .newBody {
+                if draft.solidBoolean.combines {
                     Toggle("Keep Tools", isOn: $draft.keepsTools)
                     Text("Select the section first, then the bodies to combine with.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -334,7 +334,7 @@ struct ModelingOperationView: View {
                 }
             }
             .contentShape(Rectangle())
-            if draft.solidBoolean != .newBody {
+            if draft.solidBoolean.combines {
                 Toggle("Keep Tools", isOn: $draft.keepsTools)
             }
             Text(draft.pipeCustomProfile
@@ -371,7 +371,7 @@ struct ModelingOperationView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                if draft.solidBoolean != .newBody {
+                if draft.solidBoolean.combines {
                     Toggle("Keep Tools", isOn: $draft.keepsTools)
                     Text("Select the section and path first, then the bodies to combine with; a face combines with its own body.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -379,8 +379,10 @@ struct ModelingOperationView: View {
             }
             TextField("Twist angle (degrees)", text: $draft.twistAngle)
             Toggle("Reverse twist at midpoint (double helix)", isOn: $draft.doubleHelical)
+            TextField("Scale", text: $draft.sweepEndScale)
+            TextField("Distance (0–1)", text: $draft.sweepDistance)
             lengthField("Positional approximation allowance", text: $draft.approximationTolerance)
-            Text("Twisted sweeps take no guides. For double helix, the angle is reached at the midpoint and returns to zero at the end. A twisted sweep, and a Normal sweep along a curved path, need the allowance. The allowance is a shape error bound, not display quality or manufacturing tolerance.")
+            Text("Scale sizes the end section against the start; Distance cuts the sweep to that fraction of the path. Twisted sweeps take no guides. For double helix, the angle is reached at the midpoint and returns to zero at the end. A twisted sweep, a Normal sweep along a curved path and Chord or Curve guides are built within the allowance, 0.001 mm when blank: a shape error bound, not display quality or manufacturing tolerance.")
                 .font(.caption).foregroundStyle(.secondary)
         case .loft:
             if !draft.isSurfaceCreation { Toggle("Sheet output", isOn: $draft.sheet) }

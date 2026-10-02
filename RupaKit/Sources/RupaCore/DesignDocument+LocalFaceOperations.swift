@@ -551,6 +551,19 @@ extension DesignDocument {
                 throw EditorError(code: .commandInvalid, message: "\(operationName) needs the first face's normal.")
             }
             let world = Vector3D(x: normal.x, y: normal.y, z: normal.z)
+            // Faces facing different ways have no one direction to run along (Plasticity: "Can't
+            // determine swept geometry"); Individual runs each along its own.
+            let unit = try world.normalized(tolerance: modelingSettings.tolerance.distance)
+            for target in targets.dropFirst() {
+                guard let other = topology.entries.first(where: { $0.selectionTarget() == target })?.surfaceNormal else {
+                    throw EditorError(code: .commandInvalid, message: "\(operationName) needs each face's normal.")
+                }
+                let otherUnit = try Vector3D(x: other.x, y: other.y, z: other.z).normalized(tolerance: modelingSettings.tolerance.distance)
+                guard unit.cross(otherUnit).length <= modelingSettings.tolerance.angle, unit.dot(otherUnit) > 0 else {
+                    throw EditorError(code: .commandInvalid,
+                                      message: "\(operationName) cannot run faces facing different ways along one direction; turn Individual on.")
+                }
+            }
             let local = try SceneNodeHierarchy(metadata: productMetadata).worldTransform(of: object.nodeID).inverseApplyingLinearPart(to: world)
             direction = .vector(try local.normalized(tolerance: modelingSettings.tolerance.distance))
         }

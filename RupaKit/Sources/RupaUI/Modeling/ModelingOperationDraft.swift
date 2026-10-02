@@ -129,17 +129,22 @@ struct ModelingOperationDraft: Equatable {
     }
     var extrusionDirection = ExtrusionDirectionChoice.normal
     /// How an extrusion combines with the bodies selected after its section: a new body, or a
-    /// Boolean with them, keeping the extruded tool when `keepsTools`.
+    /// Boolean with them, keeping the extruded tool when `keepsTools`. Automatic joins an
+    /// extruded face to its own body (Union outward, Difference inward) and leaves any other
+    /// extrusion a new body.
     enum SolidBooleanChoice: String, CaseIterable, Identifiable {
+        case automatic = "Automatic"
         case newBody = "New Body"
         case union = "Union"
         case difference = "Difference"
         case intersect = "Intersect"
         case slice = "Slice"
         var id: Self { self }
+        /// Whether the result is combined with bodies by an explicit Boolean.
+        var combines: Bool { operation != .newBody }
         var operation: SolidOperation {
             switch self {
-            case .newBody: .newBody
+            case .automatic, .newBody: .newBody
             case .union: .union
             case .difference: .difference
             case .intersect: .intersect
@@ -148,7 +153,7 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     /// How an extrusion or a revolve combines with the bodies selected after its section.
-    var solidBoolean = SolidBooleanChoice.newBody
+    var solidBoolean = SolidBooleanChoice.automatic
     /// The extrusion's draft in degrees: positive narrows the section along the extrusion.
     var draftDegrees = "0"
     /// A thin extrusion's wall thickness, empty for a whole section.
@@ -399,6 +404,9 @@ struct ModelingOperationDraft: Equatable {
     /// The positional allowance a pipe along a curved path is built within.
     var pipeAllowance = "0.001 mm"
     var approximationTolerance = ""
+    /// A sweep's end-section scale and the fraction of its path it runs along.
+    var sweepEndScale = "1"
+    var sweepDistance = "1"
     /// Thicken's back thickness; the distance field is its front.
     var thickenBack = "0"
     var reverseSecondBoundary = false
@@ -531,12 +539,15 @@ struct ModelingOperationDraft: Equatable {
             guard draft.isFinite, abs(draft) < 90 else { throw invalid("Degrees must be under 90.") }
             let thickness = wallThickness.trimmingCharacters(in: .whitespaces).isEmpty
                 ? nil : try length(wallThickness, label: "Thickness")
+            let end = try length(distance, label: "End position")
+            // Automatic joins the extrusion to the faces' body: Union outward, Difference inward.
+            let operation: SolidOperation = solidBoolean == .automatic ? (end >= 0 ? .union : .difference) : solidBoolean.operation
             return .extrudeFaces(
                 targets: targets,
-                distance: .length(try length(distance, label: "End position"), .meter),
+                distance: .length(end, .meter),
                 startDistance: .length(try length(startDistance, label: "Start position"), .meter),
                 individual: extrudesIndividually,
-                operation: solidBoolean.operation,
+                operation: operation,
                 keepTools: keepsTools,
                 draftAngle: draft == 0 ? nil : .angle(draft, .degree),
                 thickness: thickness.map { .length($0, .meter) }
@@ -595,7 +606,7 @@ struct ModelingOperationDraft: Equatable {
             }
             // A Boolean extrusion or revolve takes the section first and the bodies it combines
             // with after it.
-            let combines = solidBoolean != .newBody
+            let combines = solidBoolean.combines
             guard let node = nodes.first, combines ? features.count >= 2 : features.count == 1 else {
                 throw invalid(combines
                     ? "Select the section first, then the bodies to combine it with."
@@ -724,7 +735,7 @@ struct ModelingOperationDraft: Equatable {
             let edgeOwners = Set(pathTargets.filter { $0.component != .object }.map(\.sceneNodeID))
             var paths = zip(nodes, features).filter { !edgeOwners.contains($0.0.id) && $0.0.id != profileNode }.map(\.1)
             var bodies: [SweepTargetReference] = []
-            if solidBoolean != .newBody {
+            if solidBoolean.combines {
                 // The bodies to combine with come after the curves, or a pipe along an edge
                 // combines with the edge's own body.
                 while paths.count > (edgeCurves.isEmpty ? 1 : 0), let node = nodes.last(where: { $0.object?.sourceFeatureID == paths.last }),
@@ -752,7 +763,7 @@ struct ModelingOperationDraft: Equatable {
                 PipeFeature(
                     path: SweepPathReference(featureID: path),
                     diameter: profile == nil ? .length(0, .meter) : nil, profile: profile, thickness: thickness, vertexCount: Int(vertices),
-                    booleanOperation: operation, targets: bodies, keepTools: solidBoolean != .newBody && keepsTools,
+                    booleanOperation: operation, targets: bodies, keepTools: solidBoolean.combines && keepsTools,
                     approximationTolerance: .length(0, .meter)
                 )
             }
@@ -782,14 +793,22 @@ struct ModelingOperationDraft: Equatable {
             options.cornerStyle = sweepCorners.style
             options.simplify = sweepSimplify
             options.guideMethod = sweepGuide.method
-            // The allowance bounds whichever approximation the sweep needs: a twist, or a Normal
-            // sweep along a curved path. A twist cannot go without it.
+            // The allowance bounds whichever approximation the sweep needs (a twist, a Normal sweep
+            // along a curved path, a Chord or Curve guide); left blank, the planner's default.
             let twists = degrees != 0 || doubleHelical
-            if twists || !approximationTolerance.trimmingCharacters(in: .whitespaces).isEmpty {
+            if !approximationTolerance.trimmingCharacters(in: .whitespaces).isEmpty {
                 let allowance = try length(approximationTolerance, label: "Positional approximation allowance")
                 guard allowance > 0 else { throw invalid("Positional approximation allowance must be positive.") }
                 options.approximationTolerance = .length(allowance, .meter)
             }
+            // Scale: the end section's size against the start's; Distance: the fraction of the
+            // path the sweep runs along.
+            let endScale = try number(sweepEndScale, label: "Scale")
+            guard endScale.isFinite, endScale > 0 else { throw invalid("Scale must be positive.") }
+            options.endScale = .constant(.scalar(endScale))
+            let distance = try number(sweepDistance, label: "Distance")
+            guard distance.isFinite, distance > 0, distance <= 1 else { throw invalid("Distance must be in 0 < d ≤ 1.") }
+            options.distanceFraction = .constant(.scalar(distance))
             if twists {
                 if doubleHelical {
                     options.twistLaw = [
@@ -813,7 +832,7 @@ struct ModelingOperationDraft: Equatable {
                 sources.remove(at: edgeIndex)
             }
             var bodies: [SweepTargetReference] = []
-            if solidBoolean != .newBody {
+            if solidBoolean.combines {
                 guard let operation = SweepBooleanOperation(rawValue: solidBoolean.operation.rawValue), !createsSheet else {
                     throw invalid("A Boolean sweep makes a solid; turn Sheet output off.")
                 }

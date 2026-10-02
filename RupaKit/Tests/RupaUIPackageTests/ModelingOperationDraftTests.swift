@@ -158,14 +158,23 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.sweep, targets: [profile.target, .init(sceneNodeID: node.id)])
         draft.doubleHelical = true
         draft.twistAngle = "30"
-        #expect(throws: EditorError.self) { try draft.command(in: document) }
-        draft.approximationTolerance = "0.001 mm"
+        // A blank allowance takes the planner's default, as Plasticity asks for none.
+        guard case .createSweep(_, _, _, _, _, let defaulted, _) = try draft.command(in: document) else {
+            Issue.record("Expected native Sweep source intent.")
+            return
+        }
+        #expect(defaulted.approximationTolerance == SweepSelectionPlanningService.defaultApproximationAllowance)
+        draft.approximationTolerance = "0.002 mm"
+        // Scale sizes the end section; Distance cuts the sweep to that fraction of its path.
+        draft.sweepEndScale = "1.8"
+        draft.sweepDistance = "0.5"
         guard case .createSweep(_, _, _, _, _, let options, _) = try draft.command(in: document) else {
             Issue.record("Expected native Sweep source intent.")
             return
         }
+        #expect(options.endScale == .constant(.scalar(1.8)) && options.distanceFraction == .constant(.scalar(0.5)))
         #expect(options.twistAngle == .angle(0, .degree))
-        #expect(options.approximationTolerance == .length(0.000001, .meter))
+        #expect(options.approximationTolerance == .length(0.000002, .meter))
         #expect(options.twistLaw == [
             .init(position: 0, angle: .angle(0, .degree)),
             .init(position: 0.5, angle: .angle(30, .degree)),
@@ -191,6 +200,9 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(options.alignment == .normal && options.approximationTolerance == .length(1e-7, .meter))
+        draft.sweepDistance = "0"
+        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        draft.sweepDistance = "1"
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         #expect(store.evaluationStatus == .valid)
@@ -210,17 +222,11 @@ struct ModelingOperationDraftTests {
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         let exact = Double.pi * 0.003 * 0.003 * length
         #expect(abs(measurement.totals.solidVolumeCubicMeters - exact) <= 2 * Double.pi * 0.003 * length * 1e-7 + 1e-12)
-        // Without the allowance the curved Normal sweep is refused; Parallel keeps the section's
-        // orientation instead.
+        // Left blank, the allowance is the planner's default and the curved Normal sweep builds.
         draft.approximationTolerance = ""
-        let refused = CADDocumentStore(document: document)
-        #expect(throws: EditorError.self) { _ = try refused.apply(draft.command(in: document)) }
-        draft.sweepAlignment = .parallel
-        guard case .createSweep(_, _, _, _, _, let parallel, _) = try draft.command(in: document) else {
-            Issue.record("Expected native Sweep source intent.")
-            return
-        }
-        #expect(parallel.alignment == .parallel && parallel.approximationTolerance == nil)
+        let defaulted = CADDocumentStore(document: document)
+        _ = try defaulted.apply(draft.command(in: document))
+        #expect(defaulted.evaluationStatus == .valid)
     }
 
     @Test func aFaceSweepsIntoABlockOrGrowsItsBody() throws {
@@ -1688,6 +1694,26 @@ struct ModelingOperationDraftTests {
         draft.distance = "5 mm"
         draft.startDistance = "0"
         draft.extrudesIndividually = true
+        // Automatic by default: outward joins the faces' body (Union), inward cuts it.
+        #expect(draft.solidBoolean == .automatic)
+        guard case .extrudeFaces(_, _, _, _, let outward, _, _, _) = try draft.command(in: .empty()) else {
+            Issue.record("Faces extrude through extrudeFaces.")
+            return
+        }
+        #expect(outward == .union)
+        draft.distance = "-5 mm"
+        guard case .extrudeFaces(_, _, _, _, let inward, _, _, _) = try draft.command(in: .empty()) else {
+            Issue.record("Faces extrude through extrudeFaces.")
+            return
+        }
+        #expect(inward == .difference)
+        draft.solidBoolean = .newBody
+        guard case .extrudeFaces(_, _, _, _, let separate, _, _, _) = try draft.command(in: .empty()) else {
+            Issue.record("Faces extrude through extrudeFaces.")
+            return
+        }
+        #expect(separate == .newBody)
+        draft.distance = "5 mm"
         draft.solidBoolean = .union
         #expect(draft.extrudesFaces)
         guard case .extrudeFaces(let targets, let distance, _, let individual, let operation, _, _, _) = try draft.command(in: .empty()) else {
