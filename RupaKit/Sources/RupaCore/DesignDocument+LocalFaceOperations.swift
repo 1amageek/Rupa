@@ -293,6 +293,7 @@ extension DesignDocument {
         partialStart: Double = 0,
         partialEnd: Double = 0,
         layout: SurfaceControlLayout? = nil,
+        boundaryFlow: SquareFitOptions.BoundaryFlow = .next,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -342,7 +343,8 @@ extension DesignDocument {
                 target: PatternTargetReference(featureID: object.featureID), targetEdge: targetEdge,
                 reference: PatternTargetReference(featureID: source.featureID), referenceEdge: referenceEdge,
                 referencePlacement: placement, continuity: continuity, tension: tension, blendRows: blendRows,
-                inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd, layout: layout
+                inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd, layout: layout,
+                boundaryFlow: boundaryFlow
             )),
             name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry
         )

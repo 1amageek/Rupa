@@ -2121,10 +2121,12 @@ public final class CADDocumentStore {
                     try updatedDocument.unwrapFace(
                         target: target, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
-                case .alignSurface(let targets, let continuity, let tension, let blendRows, let influence, let partialStart, let partialEnd, let layout):
+                case .alignSurface(let targets, let continuity, let tension, let blendRows, let influence, let partialStart, let partialEnd, let layout,
+                                   let boundaryFlow):
                     try updatedDocument.alignSurface(
                         targets: targets, continuity: continuity, tension: tension, blendRows: blendRows,
                         inputShapeInfluence: influence, partialStart: partialStart, partialEnd: partialEnd, layout: layout,
+                        boundaryFlow: boundaryFlow,
                         objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )

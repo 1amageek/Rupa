@@ -62,6 +62,8 @@ struct WorkspaceFaceEditSession: Equatable {
     var inputShapeInfluence = 1.0
     var partialStart = 0.0
     var partialEnd = 0.0
+    /// Align Surface's Boundary: the cross-edge flow along a G1 or G2 edge.
+    var boundaryFlow = SquareFitOptions.BoundaryFlow.next
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
     /// Rebuild Face's method, which Tab steps: the explicit `layout`, a tolerance in meters, or
@@ -162,7 +164,7 @@ struct WorkspaceFaceEditSession: Equatable {
             return .alignSurface(
                 targets: [edge, reference], continuity: continuity, tension: tension, blendRows: blendRows,
                 inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
-                layout: refitsLayout ? layout : nil
+                layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
             )
         case let .hollow(targets):
             return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))

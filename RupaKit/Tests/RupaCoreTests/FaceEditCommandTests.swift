@@ -216,7 +216,8 @@ import Testing
         }
         let edge = try #require(try edges(atX: 0.12).first { $0.sceneNodeID == flat.description }?.selectionTarget())
         let reference = try #require(try edges(atX: 0.1).first { $0.sceneNodeID == arch.description }?.selectionTarget())
-        _ = try session.execute(.alignSurface(targets: [edge, reference], continuity: .tangentPlane, tension: 1, blendRows: 1))
+        _ = try session.execute(.alignSurface(targets: [edge, reference], continuity: .curvature, tension: 1, blendRows: 1,
+                                              boundaryFlow: .normal))
         #expect(session.evaluationStatus == .valid)
         // The flat sheet's edge now lies on the arch's, and the sheet is still one object.
         #expect(try edges(atX: 0.12).isEmpty)

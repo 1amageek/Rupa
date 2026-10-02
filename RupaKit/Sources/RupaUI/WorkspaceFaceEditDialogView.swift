@@ -66,6 +66,16 @@ struct WorkspaceFaceEditDialogView: View {
             TextField("Partial End", value: $dialog.partialEnd, format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.partialEnd")
+            Picker("Boundary", selection: $dialog.boundaryFlow) {
+                Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)
+                Text("Normal").tag(SquareFitOptions.BoundaryFlow.normal)
+                Text("Next").tag(SquareFitOptions.BoundaryFlow.next)
+                Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
+            .help("The cross-edge flow at G1 and G2: Next follows the reference; Normal meets the edge square; Natural keeps the sheet's own; Adjacent follows its side edges. Flows other than Next raise the degree along the edge.")
+            .accessibilityIdentifier("WorkspaceFaceEdit.boundaryFlow")
             Toggle("Degree/Spans", isOn: $dialog.refitsLayout)
                 .accessibilityIdentifier("WorkspaceFaceEdit.refitsLayout")
             if dialog.refitsLayout {
