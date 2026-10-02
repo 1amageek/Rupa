@@ -6791,7 +6791,9 @@ private struct ProjectMainViewContent: View {
                 return true
             }
             if sheetEdges.isEmpty == false, sheetEdges.count + others.count == snapshot.selection.selectedTargets.count, others.count <= 1 {
-                faceEditSession = WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges, limit: others.first))
+                faceEditSession = extendsPlanarSheet(sheetEdges)
+                    ? WorkspaceFaceEditSession(extendingPlanarSheetEdges: sheetEdges, limit: others.first)
+                    : WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges, limit: others.first))
                 reportToolStatus("Extend Sheet: set the distance, Tab steps the shape; OK, Return or right-click extends the edges.")
                 return .handled
             }
@@ -10252,6 +10254,22 @@ private struct ProjectMainViewContent: View {
         submitDialogCommand([imprint.command()], name: imprint.title, instance: imprint.instance,
                             running: { imprintSession?.instance }, end: { imprintSession = nil },
                             done: { reportToolStatus("\(imprint.title) applied.") })
+    }
+
+    /// Whether every face of the sheets the edges belong to is planar, read from Core's topology.
+    private func extendsPlanarSheet(_ edges: [SelectionTarget]) -> Bool {
+        let sheets = Set(edges.map(\.sceneNodeID.description))
+        do {
+            let topology = try TopologySnapshotService().snapshot(
+                document: snapshot.document.document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            let faces = topology.entries.filter { $0.kind == .face && $0.sceneNodeID.map(sheets.contains) == true }
+            return faces.isEmpty == false && faces.allSatisfy { $0.surfaceKind == "plane" }
+        } catch {
+            reportToolStatus("Extend Sheet: the sheet's faces cannot be read: \(error.localizedDescription)", severity: .warning)
+            return false
+        }
     }
 
     /// A face clicked while Draft Face or Match Face runs: its reference or one of its faces.

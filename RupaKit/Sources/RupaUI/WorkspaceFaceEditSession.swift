@@ -64,8 +64,12 @@ struct WorkspaceFaceEditSession: Equatable {
     var frontMeters = 0.001
     var backMeters = 0.0
     var locksThicknesses = false
-    /// Extend Sheet's shape, which Tab steps, and whether the extensions join the sheet.
+    /// Extend Sheet's shape, which Tab steps through `extensionShapes`, and whether the
+    /// extensions join the sheet (not offered while Natural extends the surface itself).
     var extensionShape: SheetExtensionShape = .natural
+    /// Whether Extend Sheet extends a planar sheet, which Plasticity offers Linear, Soft and
+    /// Reflective, opening on Linear; a curved sheet adds Natural and opens on it.
+    private(set) var extendsPlanarSheet = false
     /// How an extension runs on to the limit's object, when one is selected.
     var limitMode: SheetExtensionLimit.Mode = .minimal
     var modifies = true
@@ -123,6 +127,21 @@ struct WorkspaceFaceEditSession: Equatable {
         case .rebuildFace: "Rebuild Face"
         }
     }
+
+    /// Extend Sheet on a planar sheet: its shapes without Natural, opening on Linear.
+    init(extendingPlanarSheetEdges edges: [SelectionTarget], limit: SelectionTarget?) {
+        self.init(kind: .extendSheet(edges: edges, limit: limit))
+        extendsPlanarSheet = true
+        extensionShape = .linear
+    }
+
+    /// The shapes Extend Sheet offers for its sheet.
+    var extensionShapes: [SheetExtensionShape] {
+        extendsPlanarSheet ? SheetExtensionShape.allCases.filter { $0 != .natural } : SheetExtensionShape.allCases
+    }
+
+    /// Whether the dialog offers Modify: not while Natural extends the surface itself.
+    var offersModify: Bool { extensionShape != .natural }
 
     /// Whether clicks on faces go to the dialog: Push Face's face to push onto, Draft Face's
     /// reference and faces, Match Face's reference.
@@ -189,7 +208,9 @@ struct WorkspaceFaceEditSession: Equatable {
         case let .push(_, onto):
             return onto == nil && distanceMeters == 0
                 ? "Push Face: drag the face's arrow or set the Distance; click a face to push onto it." : nil
-        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
+        case let .extendSheet(_, limit):
+            return limit == nil && distanceMeters == 0 ? "Extend Sheet: set the Distance." : nil
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace:
             return nil
         }
     }
@@ -217,7 +238,7 @@ struct WorkspaceFaceEditSession: Equatable {
             return
         }
         if case .extendSheet = kind {
-            let all = SheetExtensionShape.allCases
+            let all = extensionShapes
             extensionShape = all[((all.firstIndex(of: extensionShape) ?? 0) + 1) % all.count]
             return
         }
@@ -270,7 +291,7 @@ struct WorkspaceFaceEditSession: Equatable {
             guard let reference else { return nil }
             return .matchFaces(targets: faces, reference: reference, front: front, grow: grow)
         case let .extendSheet(edges, limit):
-            return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: modifies,
+            return .extendSheet(targets: edges, distance: .length(distanceMeters, .meter), shape: extensionShape, modifies: !offersModify || modifies,
                                 limit: limit, limitMode: limitMode)
         case let .rebuildFace(faces):
             return .rebuildFaces(

@@ -46,12 +46,14 @@ struct WorkspaceFaceEditDialogView: View {
                 .accessibilityIdentifier("WorkspaceFaceEdit.limitMode")
             }
             Picker("Shape", selection: $dialog.extensionShape) {
-                ForEach(SheetExtensionShape.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                ForEach(dialog.extensionShapes, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }
             .fixedSize()
             .accessibilityIdentifier("WorkspaceFaceEdit.extensionShape")
-            Toggle("Modify", isOn: $dialog.modifies)
-                .accessibilityIdentifier("WorkspaceFaceEdit.modifies")
+            if dialog.offersModify {
+                Toggle("Modify", isOn: $dialog.modifies)
+                    .accessibilityIdentifier("WorkspaceFaceEdit.modifies")
+            }
         case let .alignSurface(pairs):
             Picker("Continuity", selection: Binding(get: { dialog.continuity }, set: { dialog.continuity = $0; dialog.pairContinuity = [:] })) {
                 ForEach(SurfaceContinuityLevel.allCases, id: \.self) { Text("G\($0.rawValue)").tag($0) }
