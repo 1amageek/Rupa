@@ -270,8 +270,8 @@ selects a different surface algorithm. Patch's operand kind does: curve sources 
 among them) make it span closed curves (`createCurvePatch`), one edge of an opening fills that
 opening (`createSurfaceFill`). The boundary affordance opens this same
 Surface Creation panel with Boundary Bridge selected; its operation picker also
-offers Patch explicitly. The obsolete XNURBS draft has been removed. Its future solver
-must own G1/G2, boundary flow, guides, quality and precision before admission.
+offers Patch explicitly. XNURBS is its own operation (`createXNurbs`), owning G1/G2, boundary
+flow, guides, quality and its tolerances in the kernel's XNURBS feature.
 Preview/Apply/Cancel retain the ordinary Workspace path without a global mode.
 
 Shell uses the same topology-edit and Workspace lifecycle: one selected generated
