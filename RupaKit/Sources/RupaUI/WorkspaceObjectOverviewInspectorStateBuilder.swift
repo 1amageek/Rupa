@@ -1,5 +1,6 @@
 import Foundation
 import RupaCore
+import SwiftCAD
 
 struct WorkspaceObjectOverviewInspectorStateBuilder {
     var document: DesignDocument
@@ -7,6 +8,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     var objectRegistry: ObjectTypeRegistry
     var selectedTargetSummary: String
     var selectedTargetCount: Int
+    /// The current evaluation, for measured rows such as a Square's Analysis; nil when stale.
+    var evaluatedDocument: EvaluatedDocument? = nil
 
     func state(for nodes: [SceneNode]) -> WorkspaceObjectOverviewInspectorState {
         WorkspaceObjectOverviewInspectorState(
@@ -168,6 +171,9 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             )
         ]
         rows += operationRows(for: feature.operation)
+        if case .squareSurface = feature.operation {
+            rows += squareAnalysisRows(for: feature.id)
+        }
         rows.append(
             WorkspaceInspectorTextRow(
                 title: "Inputs",
@@ -741,16 +747,23 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Curves", value: "\(patch.curves.count)"),
             ]
         case .squareSurface(let square):
+            let options = square.options
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Square"),
                 WorkspaceInspectorTextRow(title: "Sides", value: "\(square.sides.count)"),
                 WorkspaceInspectorTextRow(title: "Continuity", value: square.sides.map { side in
+                    if side.isFree { return "Free" }
                     switch side.continuity?.order {
-                    case nil: "G0"
-                    case .tangent?: "G1"
-                    case .curvature?: "G2"
+                    case nil: return "G0"
+                    case .tangent?: return "G1"
+                    case .curvature?: return "G2"
                     }
                 }.joined(separator: " · ")),
+                WorkspaceInspectorTextRow(title: "Degree", value: "\(options.uDegree) × \(options.vDegree)"),
+                WorkspaceInspectorTextRow(title: "Spans", value: "\(options.uSpans) × \(options.vSpans)"),
+                WorkspaceInspectorTextRow(title: "Flatness", value: WorkspaceInspectorNumberText.compact(options.flatness)),
+                WorkspaceInspectorTextRow(title: "Weight", value: WorkspaceInspectorNumberText.compact(options.weight)),
+                WorkspaceInspectorTextRow(title: "Boundary", value: options.boundaryFlow.rawValue.capitalized),
             ]
         case .edgeCurve(let edgeCurve):
             return [
@@ -938,6 +951,29 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         let y = vector.y.formatted(.number.precision(.fractionLength(0...3)))
         let z = vector.z.formatted(.number.precision(.fractionLength(0...3)))
         return "x \(x), y \(y), z \(z)"
+    }
+
+    /// A Square's Analysis, one row per side: its G0 distance and, beside a face, its G1 angle
+    /// and G2 curvature difference, each marked within (✓) or beyond (⚠) its limit.
+    private func squareAnalysisRows(for featureID: FeatureID) -> [WorkspaceInspectorTextRow] {
+        guard let evaluatedDocument else {
+            return [WorkspaceInspectorTextRow(title: "Analysis", value: "Waiting for evaluation")]
+        }
+        do {
+            return try SquareSideAnalyzer().analyze(featureID, in: evaluatedDocument).map { side in
+                func mark(_ value: Double, _ limit: Double?) -> String { value <= (limit ?? 0) ? "✓" : "⚠" }
+                var parts = ["G0 \(mark(side.position, side.positionLimit)) \(formatted(side.position))"]
+                if let angle = side.angle {
+                    parts.append("G1 \(mark(angle, side.angleLimit)) \(WorkspaceInspectorNumberText.formattedDegrees(WorkspaceInspectorNumberText.degrees(fromRadians: angle)))")
+                }
+                if let curvature = side.curvature {
+                    parts.append("G2 \(mark(curvature, side.curvatureLimit)) \(WorkspaceInspectorNumberText.compact(curvature)) /m")
+                }
+                return WorkspaceInspectorTextRow(title: "Side \(side.side + 1)", value: parts.joined(separator: " · "))
+            }
+        } catch {
+            return [WorkspaceInspectorTextRow(title: "Analysis", value: "Unavailable: \(error)")]
+        }
     }
 
     private func formatted(_ meters: Double) -> String {

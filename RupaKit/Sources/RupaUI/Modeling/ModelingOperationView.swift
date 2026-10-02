@@ -1,5 +1,6 @@
 import SwiftUI
 import RupaCore
+import SwiftCAD
 
 struct ModelingOperationView: View {
     @State private var pointEntryError: String?
@@ -79,6 +80,18 @@ struct ModelingOperationView: View {
                                     set: { if $0 { draft.loftGuideNodeIDs.insert(id) } else { draft.loftGuideNodeIDs.remove(id) } }
                                 )).contentShape(Rectangle())
                                 if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
+                            }
+                            if draft.kind == .square {
+                                let target = draft.targets[index]
+                                Picker("Side continuity", selection: Binding(
+                                    get: { draft.squareContinuity(of: target) },
+                                    set: { draft.squareSideContinuity[target] = $0 }
+                                )) {
+                                    ForEach(ModelingOperationDraft.SquareContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+                                }
+                                .pickerStyle(.segmented)
+                                .contentShape(Rectangle())
+                                .help("Free follows the side loosely by the Weight; G1 and G2 meet the face beside an edge.")
                             }
                         }
                         Button("Use Current Selection", action: onUseSelection)
@@ -448,18 +461,40 @@ struct ModelingOperationView: View {
             Text("Two planar sheets meeting: the bridge meets each the width from where their planes meet. Curved or parallel sheets: the bridge spans their nearest boundary edges, G2 with both within the allowances, or chamfers across.")
                 .font(.caption).foregroundStyle(.secondary)
         case .square:
-            Picker("Continuity", selection: $draft.squareContinuity) {
-                ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            Picker("Continuity", selection: Binding(
+                get: { draft.squareContinuity },
+                set: { draft.squareContinuity = $0; draft.squareSideContinuity = [:] }
+            )) {
+                ForEach(ModelingOperationDraft.SquareContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
-            if draft.squareContinuity != .g0 {
+            .help("Every side's continuity; each side's own picker overrides it.")
+            HStack {
+                TextField("Degree U", text: $draft.squareUDegree)
+                TextField("Degree V", text: $draft.squareVDegree)
+            }
+            HStack {
+                TextField("Spans U", text: $draft.squareUSpans)
+                TextField("Spans V", text: $draft.squareVSpans)
+            }
+            TextField("Flatness (0–1]", text: $draft.squareFlatness)
+            TextField("Weight", text: $draft.squareWeight)
+            Picker("Boundary", selection: $draft.squareBoundaryFlow) {
+                Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)
+                Text("Normal").tag(SquareFitOptions.BoundaryFlow.normal)
+                Text("Next").tag(SquareFitOptions.BoundaryFlow.next)
+                Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
+            }
+            .contentShape(Rectangle())
+            .help("Natural: no flow. Normal: the cross flow perpendicular to each side. Next: perpendicular within the frame's mean plane. Adjacent: following the neighbouring sides.")
+            if draft.targets.contains(where: { draft.squareContinuity(of: $0).order != nil }) {
                 TextField("Tension", text: $draft.squareTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
-                if draft.squareContinuity == .g2 {
+                if draft.targets.contains(where: { draft.squareContinuity(of: $0) == .g2 }) {
                     lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
                 }
             }
-            Text("Select four sides meeting end to end: edges of bodies or curves. G1 and G2 apply along any edges: exactly beside planar faces, within the allowances beside curved ones.")
+            Text("Select two to four sides: edges of bodies or curves. Four meeting end to end frame the sheet; three are closed by a straight side; two at a corner are completed by their copies; two apart are ruled between. Degree and Spans are the least the sheet takes; its other control points are as fair as Flatness asks, Free sides and the Boundary flow weighted by Weight. The sheet's Analysis is shown in its inspector.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

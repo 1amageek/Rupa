@@ -594,9 +594,9 @@ built, resolving Short or Long (`wallByReach`) against the evaluated sheets into
 through `SheetBridgeWallReach` so the feature names the wall it trims, whose object it takes away; `createCurvePatch` adds a Patch spanning closed curves (edge curves it carries added first).
 Both are measured as their evaluated sheets.
 
-`createSquare` adds a native Square sheet framed by four side curves (edge curves it carries are
-added first), admitting a continuous side's body only where it was built; it is measured as its
-evaluated sheet.
+`createSquare` adds a native Square sheet framed by two to four side curves and fitted by its
+`SquareFitOptions` (edge curves it carries are added first), admitting a continuous side's body
+only where it was built; it is measured as its evaluated sheet.
 
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve

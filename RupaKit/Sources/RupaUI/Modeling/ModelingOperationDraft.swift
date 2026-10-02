@@ -189,8 +189,58 @@ struct ModelingOperationDraft: Equatable {
     /// The cross-boundary scale of a G1 or G2 end, times the distance between the end sections.
     var loftEdgeTension = "1"
     /// How a Square meets the faces beside the edges among its sides, and their tension.
-    var squareContinuity = LoftContinuityChoice.g0
+    /// How a Square side meets what is beside it: Free (followed loosely), G0, or G1/G2 with the
+    /// face beside an edge (a curve's side takes G0 for those).
+    enum SquareContinuityChoice: String, CaseIterable, Identifiable {
+        case free = "Free"
+        case g0 = "G0"
+        case g1 = "G1"
+        case g2 = "G2"
+        var id: Self { self }
+        var order: SurfaceEdgeContinuity.Order? {
+            switch self {
+            case .free, .g0: nil
+            case .g1: .tangent
+            case .g2: .curvature
+            }
+        }
+    }
+    /// Every side's continuity unless the side has its own in `squareSideContinuity`.
+    var squareContinuity = SquareContinuityChoice.g0
+    var squareSideContinuity: [SelectionTarget: SquareContinuityChoice] = [:]
     var squareTension = "1"
+    var squareUDegree = "3"
+    var squareVDegree = "3"
+    var squareUSpans = "3"
+    var squareVSpans = "3"
+    var squareFlatness = "1"
+    var squareWeight = "1"
+    var squareBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
+
+    /// The continuity a Square side takes: its own, else the Square's.
+    func squareContinuity(of target: SelectionTarget) -> SquareContinuityChoice {
+        squareSideContinuity[target] ?? squareContinuity
+    }
+
+    /// The Square's fit options from the form.
+    func squareFitOptions() throws -> SquareFitOptions {
+        func count(_ text: String, _ label: String) throws -> Int {
+            guard let value = Int(text.trimmingCharacters(in: .whitespaces)) else {
+                throw EditorError(code: .commandInvalid, message: "\(label) must be a whole number.")
+            }
+            return value
+        }
+        let options = SquareFitOptions(
+            uDegree: try count(squareUDegree, "Degree U"), vDegree: try count(squareVDegree, "Degree V"),
+            uSpans: try count(squareUSpans, "Spans U"), vSpans: try count(squareVSpans, "Spans V"),
+            flatness: try number(squareFlatness, label: "Flatness"), weight: try number(squareWeight, label: "Weight"),
+            boundaryFlow: squareBoundaryFlow
+        )
+        do { try options.validate() } catch {
+            throw EditorError(code: .commandInvalid, message: "The Square's options are invalid: \(error).")
+        }
+        return options
+    }
     /// The angle (degrees) a G1 surface may stray from a curved face's normals beside an edge; a
     /// planar face is met exactly.
     var continuityAllowance = "0.1"
@@ -849,13 +899,19 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBridgeSurface(name: name, bridge: bridge, wallByReach: wallByReach)
         case .square:
-            // Four sides in any order: edges of bodies (their curves added with the Square), which
-            // take the continuity, or whole curve sources.
-            guard targets.count == 4 else { throw invalid("Square takes four sides: edges of bodies or curves meeting end to end.") }
-            let tension = squareContinuity == .g0 ? 1 : try number(squareTension, label: "Tension")
+            // Two to four sides in any order: edges of bodies (their curves added with the
+            // Square), which take G1 or G2, or whole curve sources; each side Free, G0 or its edge's
+            // continuity.
+            guard (2...4).contains(targets.count) else {
+                throw invalid("Square takes two to four sides: edges of bodies or curves.")
+            }
+            let continuous = targets.contains { squareContinuity(of: $0).order != nil }
+            let tension = continuous ? try number(squareTension, label: "Tension") : 1
             guard tension.isFinite, tension > 0 else { throw invalid("Tension must be positive.") }
+            let options = try squareFitOptions()
             var edgeCurves: [EdgeCurveSource] = []
             let sides = try targets.map { target -> SquareSide in
+                let choice = squareContinuity(of: target)
                 switch target.component {
                 case .edge:
                     let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
@@ -863,24 +919,24 @@ struct ModelingOperationDraft: Equatable {
                     ))
                     edgeCurves.append(curve)
                     var continuity: SurfaceEdgeContinuity?
-                    if let order = squareContinuity.order, let edge = curve.feature.edges.first {
+                    if let order = choice.order, let edge = curve.feature.edges.first {
                         continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
                                                            edge: edge, order: order, tension: tension,
                                                            angularAllowance: try continuityAllowanceRadians(),
                                                            curvatureAllowance: try curvatureAllowance(for: order))
                     }
-                    return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
+                    return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity, isFree: choice == .free)
                 case .object:
                     guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
                         throw invalid("A Square's side is an open curve or an edge of a body.")
                     }
-                    return SquareSide(curve: curve)
+                    return SquareSide(curve: curve, isFree: choice == .free)
                 default:
                     throw invalid("A Square's side is an open curve or an edge of a body.")
                 }
             }
-            do { try SquareSurfaceFeature(sides: sides).validate() } catch { throw invalid("The Square is invalid: \(error).") }
-            return .createSquare(name: name, sides: sides, edgeCurves: edgeCurves)
+            do { try SquareSurfaceFeature(sides: sides, options: options).validate() } catch { throw invalid("The Square is invalid: \(error).") }
+            return .createSquare(name: name, sides: sides, options: options, edgeCurves: edgeCurves)
         case .shell:
             guard targets.count == 1, case .face(let component) = targets[0].component,
                   component.generatedTopologySubshapeID != nil,

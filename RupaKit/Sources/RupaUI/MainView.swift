@@ -11685,7 +11685,8 @@ private struct ProjectMainViewContent: View {
             displayUnit: snapshot.workspaceState.displayUnit,
             objectRegistry: objectRegistry,
             selectedTargetSummary: selectedTargetSummary,
-            selectedTargetCount: selectedTargetCount
+            selectedTargetCount: selectedTargetCount,
+            evaluatedDocument: snapshot.cadInteraction?.evaluatedDocument
         )
         .state(for: nodes)
     }

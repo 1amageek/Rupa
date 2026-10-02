@@ -3031,14 +3031,14 @@ public final class CADDocumentStore {
             try run()
         case .createSquare:
             func run() throws {
-                guard case .createSquare(let name, let sides, let edgeCurves) = command else {
+                guard case .createSquare(let name, let sides, let options, let edgeCurves) = command else {
                     throw EditorError(code: .commandInvalid, message: "Command dispatch expected createSquare.")
                 }
                 var updatedDocument = document
                 for edgeCurve in edgeCurves {
                     try updatedDocument.addEdgeCurve(edgeCurve)
                 }
-                primaryFeatureID = try updatedDocument.createSquare(name: name, sides: sides, objectRegistry: objectRegistry)
+                primaryFeatureID = try updatedDocument.createSquare(name: name, sides: sides, options: options, objectRegistry: objectRegistry)
                 document = updatedDocument
                 try commitMutation()
                 evaluateCurrentDocument()

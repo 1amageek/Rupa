@@ -670,16 +670,17 @@ extension DesignDocument {
         return featureID
     }
 
-    /// Adds a Square framed by four side curves as a sheet of its own; a continuous side's edge
-    /// body must be shown where it was built.
+    /// Adds a Square framed by two to four side curves, fitted by `options`, as a sheet of its
+    /// own; a continuous side's edge body must be shown where it was built.
     @discardableResult
     public mutating func createSquare(
         name: String,
         sides: [SquareSide],
+        options: SquareFitOptions = SquareFitOptions(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Square")
-        let square = SquareSurfaceFeature(sides: sides)
+        let square = SquareSurfaceFeature(sides: sides, options: options)
         do {
             try square.validate()
         } catch {

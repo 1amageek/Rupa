@@ -1219,7 +1219,7 @@ struct ModelingOperationDraftTests {
         let nodes = try lines.map { line in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) }) }
         // Selected out of boundary order.
         let draft = makeDraft(.square, targets: [nodes[0], nodes[2], nodes[1], nodes[3]].map { .init(sceneNodeID: $0.id) })
-        guard case .createSquare(_, let sides, let edgeCurves) = try draft.command(in: document) else {
+        guard case .createSquare(_, let sides, _, let edgeCurves) = try draft.command(in: document) else {
             Issue.record("Expected a Square command.")
             return
         }
@@ -1229,6 +1229,48 @@ struct ModelingOperationDraftTests {
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(measurement.counts.sheets == 1)
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.0004) < 1e-12)
+    }
+
+    @Test func twoCurvesFrameASquareWithItsOptionsAndAFreeSide() throws {
+        var document = DesignDocument.empty()
+        // Two lines apart, 20 mm by 20 mm.
+        let lines = try [(0.0, 0.0, 0.02, 0.0), (0.0, 0.02, 0.02, 0.02)].map { x0, y0, x1, y1 in
+            try document.createLineSketch(name: "Side", plane: .xy,
+                start: SketchPoint(x: .length(x0, .meter), y: .length(y0, .meter)),
+                end: SketchPoint(x: .length(x1, .meter), y: .length(y1, .meter)))
+        }
+        let nodes = try lines.map { line in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) }) }
+        let targets = nodes.map { SelectionTarget(sceneNodeID: $0.id) }
+        var draft = makeDraft(.square, targets: targets)
+        draft.squareUDegree = "4"
+        draft.squareVSpans = "2"
+        draft.squareFlatness = "0.9"
+        draft.squareBoundaryFlow = .natural
+        draft.squareSideContinuity[targets[1]] = .free
+        guard case .createSquare(_, let sides, let options, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Square command.")
+            return
+        }
+        #expect(sides.map(\.isFree) == [false, true])
+        #expect(options == SquareFitOptions(uDegree: 4, vDegree: 3, uSpans: 3, vSpans: 2, flatness: 0.9, weight: 1, boundaryFlow: .natural))
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        // The inspector shows the options and each side's Analysis.
+        let squareNode = try #require(store.document.productMetadata.sceneNodes.values.first { node in
+            guard let featureID = node.reference?.featureID, let feature = store.document.cadDocument.designGraph.nodes[featureID],
+                  case .squareSurface = feature.operation else { return false }
+            return true
+        })
+        let evaluated = try #require(store.currentEvaluation?.evaluatedDocument)
+        let state = WorkspaceObjectOverviewInspectorStateBuilder(
+            document: store.document, displayUnit: .millimeter, objectRegistry: .builtIn,
+            selectedTargetSummary: "", selectedTargetCount: 1, evaluatedDocument: evaluated
+        ).state(for: [squareNode])
+        let rows = Dictionary(state.referenceSection.rows.map { ($0.title, $0.value) }, uniquingKeysWith: { first, _ in first })
+        #expect(rows["Continuity"] == "G0 · Free" && rows["Degree"] == "4 × 3" && rows["Boundary"] == "Natural")
+        #expect(rows["Side 1"]?.hasPrefix("G0 ✓") == true && rows["Side 2"] != nil)
     }
 
     @Test func aSquareBetweenEdgesOfTwoBoxesIsTangentToTheirFaces() throws {
@@ -1260,7 +1302,7 @@ struct ModelingOperationDraftTests {
         let railNodes = try rails.map { rail in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(rail) }) }
         var draft = makeDraft(.square, targets: [edges[0], .init(sceneNodeID: railNodes[1].id), edges[1], .init(sceneNodeID: railNodes[0].id)])
         draft.squareContinuity = .g1
-        guard case .createSquare(_, let sides, let edgeCurves) = try draft.command(in: document) else {
+        guard case .createSquare(_, let sides, _, let edgeCurves) = try draft.command(in: document) else {
             Issue.record("Expected a Square command.")
             return
         }

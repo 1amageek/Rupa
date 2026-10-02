@@ -439,7 +439,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createPipes(name: String, sources: [PipeFeature], edgeCurves: [EdgeCurveSource] = [])
     /// A Square framed by four side curves; `edgeCurves` are added first, without objects of
     /// their own, for sides along edges of bodies.
-    case createSquare(name: String, sides: [SquareSide], edgeCurves: [EdgeCurveSource] = [])
+    case createSquare(name: String, sides: [SquareSide], options: SquareFitOptions = SquareFitOptions(), edgeCurves: [EdgeCurveSource] = [])
     /// A Patch spanning curves joined end to end into one closed loop; `edgeCurves` are added
     /// first for edges among them.
     case createCurvePatch(name: String, curves: [CurveSectionReference], edgeCurves: [EdgeCurveSource] = [])
