@@ -8223,11 +8223,16 @@ private struct ProjectMainViewContent: View {
               edgeOffsetCommandState.isActive else {
             return
         }
-        edgeOffsetDistanceMeters = max(target.distance, 1.0e-9)
+        // The drag's sign picks the side, as Plasticity's drag does; every selected edge goes with
+        // the dragged one, and S (Lock distances) offsets both ways.
+        guard abs(target.distance) > 1.0e-9 else { return }
+        edgeOffsetDistanceMeters = target.distance
+        let selectedEdges = snapshot.selection.selectedTargets.filter { if case .edge = $0.component { return true } else { return false } }
         offsetSelectedEdges(
-            [target.target],
+            selectedEdges.contains(target.target) ? selectedEdges : [target.target],
             by: edgeOffsetDistanceMeters,
-            gapFill: edgeOffsetGapFill
+            gapFill: edgeOffsetGapFill,
+            isSymmetric: edgeOffsetCommandState.usesLockedDistance
         )
     }
 

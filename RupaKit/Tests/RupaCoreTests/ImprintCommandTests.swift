@@ -105,6 +105,21 @@ import Testing
             ))
         }
         #expect(session.document.cadDocument.designGraph == before)
+
+        // A negative distance offsets over the face across the edge: the wall below a top edge.
+        let other = EditorSession()
+        let box = try self.box(other, "Box")
+        let edge = try #require(try entries(.edge, of: box, in: other).first { ($0.start?.z ?? 0) > 0.09 && ($0.end?.z ?? 0) > 0.09 }?.selectionTarget())
+        let topZ = try #require(try entries(.edge, of: box, in: other).compactMap { $0.start?.z }.max())
+        _ = try other.execute(.offsetEdges(
+            name: "Offset Edge", targets: [edge], supportFace: try top(of: box, in: other), distance: .length(-0.01, .meter),
+            isSymmetric: false, gapFill: .round
+        ))
+        #expect(other.evaluationStatus == .valid)
+        #expect(try entries(.edge, of: box, in: other).contains { entry in
+            guard let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - (topZ - 0.01)) < 1e-9 && abs(end.z - (topZ - 0.01)) < 1e-9
+        })
     }
 
     @Test(.timeLimit(.minutes(1)))

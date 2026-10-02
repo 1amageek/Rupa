@@ -130,8 +130,16 @@ struct ViewportNativeAxisInput: Sendable {
              .surfaceControlPointSlide, .surfaceFrame, .regionOffset,
              .polySplineSurfaceVertex, .surfaceControlPoint:
             return sourceDelta
-        case .edgeOffset, .sketchVertexOffset:
+        case .sketchVertexOffset:
             return try Self.positiveValue(axis.baseValue, adding: sourceDelta)
+        case .edgeOffset:
+            // Signed: dragged back across the edge the offset runs over the face on its other side,
+            // as Plasticity's drag the other way.
+            let result = axis.baseValue + sourceDelta
+            guard result.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native edge-offset value overflowed.")
+            }
+            return result
         case .sectionAnalysisDistance, .sketchCornerTreatment:
             // A signed offset: the plane may move to either side of its source, and Fillet's
             // handle is a Fillet radius on its inside and a Chamfer distance outside.
@@ -213,10 +221,7 @@ struct ViewportNativeAxisInput: Sendable {
             return .regionOffset(.init(target: target, distance: value))
 
         case .edgeOffset(_, _, let target, _, _, _):
-            guard value > 0.0 else {
-                throw RealityViewportSpatialBatch.invalid("The edge-offset value is not positive.")
-            }
-            guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
+            guard abs(value) > 1.0e-12, abs(value - axis.baseValue) > 1.0e-12 else { return nil }
             return .edgeOffset(.init(target: target, distance: value))
 
         case .slotWidth(_, _, let target, _):

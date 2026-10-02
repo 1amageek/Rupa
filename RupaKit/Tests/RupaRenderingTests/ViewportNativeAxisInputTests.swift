@@ -141,7 +141,8 @@ func nativeAxisInputAppliesRouteSpecificScalarRulesAndSuppressesUnchangedCommit(
     let edge = try #require(try ViewportNativeAxisInput(record: edgeRecord))
     let slot = try #require(try ViewportNativeAxisInput(record: slotRecord))
     let region = try #require(try ViewportNativeAxisInput(record: regionRecord))
-    #expect(try edge.value(forWorldDelta: -3) == 1.0e-9)
+    // An edge offset is signed: dragged back past its edge it runs over the face across it.
+    #expect(try edge.value(forWorldDelta: -3) == -1.0)
     #expect(try slot.value(forWorldDelta: 0.5) == 3.0)
     #expect(try region.value(forWorldDelta: -0.5) == -0.5)
     #expect(try edge.commit(value: 2.0) == nil)
@@ -153,6 +154,11 @@ func nativeAxisInputAppliesRouteSpecificScalarRulesAndSuppressesUnchangedCommit(
         return
     }
     #expect(edgeCommit.distance == 2.5)
+    guard case .edgeOffset(let backCommit) = try edge.commit(value: -1.5) else {
+        Issue.record("A negative edge offset was not produced.")
+        return
+    }
+    #expect(backCommit.distance == -1.5)
     guard case .slotWidth(let slotCommit) = try slot.commit(value: 3.0) else {
         Issue.record("The slot-width callback payload was not produced.")
         return
