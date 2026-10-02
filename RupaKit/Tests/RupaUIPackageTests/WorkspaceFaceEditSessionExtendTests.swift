@@ -35,4 +35,20 @@ struct WorkspaceFaceEditSessionExtendTests {
         }
         #expect(shape == .natural && modifies)
     }
+
+    @Test func aFaceOfAnotherObjectClickedInTheDialogIsTheLimit() throws {
+        let sheet = SceneNodeID()
+        let edge = SelectionTarget(sceneNodeID: sheet)
+        let wall = SceneNodeID()
+        var session = WorkspaceFaceEditSession(kind: .extendSheet(edges: [edge], limit: nil))
+        // A face of the extended sheet itself is not a limit.
+        session.pick(face: SelectionTarget(sceneNodeID: sheet), toggles: false)
+        #expect(session.kind == .extendSheet(edges: [edge], limit: nil))
+        session.pick(face: SelectionTarget(sceneNodeID: wall), toggles: false)
+        #expect(session.kind == .extendSheet(edges: [edge], limit: SelectionTarget(sceneNodeID: wall)))
+        // With a limit the extension needs no distance.
+        #expect(session.missingInput == nil)
+        session.pick(face: SelectionTarget(sceneNodeID: wall), toggles: true)
+        #expect(session.kind == .extendSheet(edges: [edge], limit: nil))
+    }
 }

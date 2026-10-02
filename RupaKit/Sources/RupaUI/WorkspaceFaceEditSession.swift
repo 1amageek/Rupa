@@ -144,11 +144,11 @@ struct WorkspaceFaceEditSession: Equatable {
     var offersModify: Bool { extensionShape != .natural }
 
     /// Whether clicks on faces go to the dialog: Push Face's face to push onto, Draft Face's
-    /// reference and faces, Match Face's reference.
+    /// reference and faces, Match Face's reference, Extend Sheet's object to extend up to.
     var takesFacePicks: Bool {
         switch kind {
-        case .push, .draft, .match: true
-        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace: false
+        case .push, .draft, .match, .extendSheet: true
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace: false
         }
     }
 
@@ -180,7 +180,11 @@ struct WorkspaceFaceEditSession: Equatable {
             guard faces.contains(face) == false else { return }
             kind = .push(faces: faces, onto: face)
             distanceMeters = 0
-        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace:
+        case let .extendSheet(edges, _):
+            // A face of another object makes that object the limit; Control-click drops it.
+            guard edges.contains(where: { $0.sceneNodeID == face.sceneNodeID }) == false else { return }
+            kind = .extendSheet(edges: edges, limit: toggles ? nil : SelectionTarget(sceneNodeID: face.sceneNodeID))
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace:
             return
         }
     }

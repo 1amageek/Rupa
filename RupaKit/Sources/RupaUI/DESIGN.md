@@ -918,7 +918,8 @@ on one sheet or the selected faces, with its Front and Back, which S locks toget
 palette's Thicken takes Front and Back as well. The palette's Extend dispatches by selection:
 open edges of a sheet open Extend Sheet's dialog (Distance, opening at 0; the Shape Tab steps —
 Linear, Reflective and Soft from Linear on a planar sheet, Natural too and from it on a curved
-one; Modify, not offered while Natural extends the surface itself); one
+one; Modify, not offered while Natural extends the surface itself; a face of another object clicked
+in the dialog makes that object the limit, Control-click dropping it); one
 sketch curve extends through Extend Curve's natural shape. The palette's Align dispatches by
 selection too: an edge of a sheet and then a reference edge — or several such pairs, in selection
 order — open Align Surface's dialog (Continuity, which Tab steps for every pair, each pair's own
