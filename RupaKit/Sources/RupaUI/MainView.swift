@@ -7061,6 +7061,16 @@ private struct ProjectMainViewContent: View {
                 bridgeAction()
                 return .handled
             }
+            // One edge alone lofts on from it along the open edges leaving its ends (Plasticity's
+            // continuous lofting).
+            if targets.count == 1, let edge = targets.first, case .edge = edge.component,
+               let guides = neighbouringOpenEdges(of: edge) {
+                beginModelingOperation(.loft)
+                modelingDraft?.targets = [edge] + guides
+                modelingDraft?.loftGuideEdges = Set(guides)
+                reportToolStatus("Loft: from the edge along the two open edges leaving its ends.")
+                return .handled
+            }
             beginModelingOperation(.loft)
             modelingDraft?.targets = targets
             return .handled
@@ -10346,6 +10356,48 @@ private struct ProjectMainViewContent: View {
         } catch {
             reportToolStatus("Extend Sheet: the sheet's faces cannot be read: \(error.localizedDescription)", severity: .warning)
             return false
+        }
+    }
+
+    /// The open edges of the scene's bodies leaving each end of `edge`, one at each end; nil
+    /// unless there is exactly one at each, read from Core's boundary edges and topology.
+    private func neighbouringOpenEdges(of edge: SelectionTarget) -> [SelectionTarget]? {
+        guard case let .edge(component) = edge.component else { return nil }
+        let document = snapshot.document.document
+        let bodies = document.productMetadata.sceneNodes.values
+            .filter { $0.reference?.kind == .body }
+            .map { SelectionTarget(sceneNodeID: $0.id) }
+        do {
+            let open = try BoundaryEdgeSelectionService().boundaryEdges(
+                of: bodies, in: document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            let topology = try TopologySnapshotService().snapshot(
+                document: document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            func ends(_ target: SelectionTarget) -> (TopologySummaryResult.Entry.Point, TopologySummaryResult.Entry.Point)? {
+                guard case let .edge(id) = target.component,
+                      let entry = topology.entries.first(where: {
+                          $0.kind == .edge && $0.selectionComponentID == id.rawValue && $0.sceneNodeID == target.sceneNodeID.description
+                      }), let start = entry.start, let end = entry.end else { return nil }
+                return (start, end)
+            }
+            func same(_ a: TopologySummaryResult.Entry.Point, _ b: TopologySummaryResult.Entry.Point) -> Bool {
+                abs(a.x - b.x) <= 1e-9 && abs(a.y - b.y) <= 1e-9 && abs(a.z - b.z) <= 1e-9
+            }
+            guard let (start, end) = ends(edge) else { return nil }
+            let others = open.filter { candidate in
+                guard case let .edge(id) = candidate.component else { return false }
+                return id != component || candidate.sceneNodeID != edge.sceneNodeID
+            }
+            let atStart = others.filter { ends($0).map { same($0.0, start) || same($0.1, start) } ?? false }
+            let atEnd = others.filter { ends($0).map { same($0.0, end) || same($0.1, end) } ?? false }
+            guard atStart.count == 1, atEnd.count == 1, atStart[0] != atEnd[0] else { return nil }
+            return [atStart[0], atEnd[0]]
+        } catch {
+            reportToolStatus("Loft: the open edges beside the edge cannot be read: \(error.localizedDescription)", severity: .warning)
+            return nil
         }
     }
 

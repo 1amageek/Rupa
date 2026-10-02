@@ -384,6 +384,10 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
 - While Loft's dialog runs its clicks are Plasticity's "Select guides" slot (the `loftGuide`
   picking command): a body edge, or a curve's object, becomes a guide (added to the operands when
   new), and clicked again is dropped.
+- L with one edge of a body selected is continuous lofting: the open edges of the scene's
+  bodies leaving each of its ends (exactly one at each, from Core's boundary edges and topology)
+  become its guides; the form takes one section with two guides, the kernel building the far
+  section.
 - Preview is offered only while the draft names a command. The panel plans the
   draft it is showing against the document it is showing it for, and when that
   plan refuses it disables Preview and displays the reason the plan gave, so a

@@ -948,8 +948,15 @@ struct ModelingOperationDraft: Equatable {
                 }
             }
             guard vertices.count <= 1 else { throw invalid("A loft ends at one vertex.") }
-            guard sectionTargets.count >= (vertices.isEmpty ? 2 : 1) else {
-                throw invalid(vertices.isEmpty ? "Select at least two ordered sections, separate from guides." : "Select a section to loft to the vertex.")
+            // Continuous lofting: one section runs on along two guides leaving its ends.
+            let guideCount = Set(targets.filter(isLoftGuide).map { target -> String in
+                if case .edge = target.component { return "\(target)" }
+                return target.sceneNodeID.description
+            }).count
+            guard sectionTargets.count >= (vertices.isEmpty ? (guideCount == 2 ? 1 : 2) : 1) else {
+                throw invalid(vertices.isEmpty
+                    ? "Select at least two ordered sections, separate from guides, or one section with a guide leaving each end."
+                    : "Select a section to loft to the vertex.")
             }
             // A selected edge of a body is a curve section or guide along it, its curve added with
             // the loft.

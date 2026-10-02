@@ -1084,6 +1084,42 @@ struct ModelingOperationDraftTests {
         #expect(draft.offeredFilletShapes == [.conic, .chordal, .curvature, .full])
     }
 
+    @Test func oneEdgeLoftsOnAlongTwoGuideEdges() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        func edge(_ isIt: (TopologySummaryResult.Entry.Point, TopologySummaryResult.Entry.Point) -> Bool) throws -> SelectionTarget {
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return isIt(start, end)
+            }?.selectionTarget())
+        }
+        // The top edge along X at y = 0, and the upright edges at its ends.
+        let top = try edge { abs($0.z - 0.02) < 1e-9 && abs($1.z - 0.02) < 1e-9 && abs($0.y) < 1e-9 && abs($1.y) < 1e-9 }
+        let left = try edge { abs($0.x) < 1e-9 && abs($1.x) < 1e-9 && abs($0.y) < 1e-9 && abs($1.y) < 1e-9 }
+        let right = try edge { abs($0.x - 0.02) < 1e-9 && abs($1.x - 0.02) < 1e-9 && abs($0.y) < 1e-9 && abs($1.y) < 1e-9 }
+        var draft = makeDraft(.loft, targets: [top, left, right])
+        draft.loftGuideEdges = [left, right]
+        // A box's edge has two faces beside it; the loft runs down one, so it starts G0.
+        draft.loftStartContinuity = .g0
+        guard case let .createLoft(_, sections, guides, options, _) = try draft.command(in: document) else {
+            Issue.record("Expected a loft.")
+            return
+        }
+        #expect(sections.count == 1 && guides.count == 2 && options.resultKind == .sheet)
+        // The kernel lofts the top edge down the upright edges onto the bottom: the box's front.
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(try draft.command(in: document))
+        let result = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)
+        let sheets = result.brep.bodies.values.filter { $0.kind == .sheet }
+        #expect(sheets.count == 1)
+    }
+
     @Test func aConicFilletRoundsABoxEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(
@@ -2147,8 +2183,13 @@ struct ModelingOperationDraftTests {
             try [0.0, 1.0].map { try surface.point(u: $0, v: 0.5, tolerance: .standard) }
         }
         #expect(contacts.filter { ($0 - Point3D(x: 0.02, y: 0, z: 0.01)).length < 1e-8 }.count == 2)
+        // A section marked as a guide too leaves one section along two guides: continuous
+        // lofting, which the kernel builds only when the guides leave the section's ends.
         draft.loftGuideNodeIDs.insert(targets[0].sceneNodeID)
-        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        guard case let .createLoft(_, oneSection, twoGuides, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Loft command."); return
+        }
+        #expect(oneSection.count == 1 && twoGuides.count == 2)
         draft.loftGuideNodeIDs.remove(targets[0].sceneNodeID)
         document.productMetadata.sceneNodes[guideNode.id]?.isLocked = true
         #expect(throws: EditorError.self) { try draft.command(in: document) }
