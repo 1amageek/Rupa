@@ -217,6 +217,12 @@ struct ModelingOperationDraft: Equatable {
     var squareWeight = "1"
     var squareBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
 
+    /// Whether `target` is a face (a Square over faces refits them).
+    func isFace(_ target: SelectionTarget) -> Bool {
+        if case .face = target.component { return true }
+        return false
+    }
+
     /// The continuity a Square side takes: its own, else the Square's.
     func squareContinuity(of target: SelectionTarget) -> SquareContinuityChoice {
         squareSideContinuity[target] ?? squareContinuity
@@ -899,6 +905,19 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBridgeSurface(name: name, bridge: bridge, wallByReach: wallByReach)
         case .square:
+            // Faces: Refit, each replaced by a Square sheet on its own edges at the Square's
+            // continuity (Free has no meaning there, the edges staying shared).
+            if targets.isEmpty == false, targets.allSatisfy(isFace) {
+                guard squareContinuity != .free else {
+                    throw invalid("Refit keeps a face's edges: choose G0, G1 or G2.")
+                }
+                let order = squareContinuity.order
+                let refit = SquareRefit(options: try squareFitOptions(), order: order,
+                                        angularAllowance: order == nil ? nil : try continuityAllowanceRadians(),
+                                        curvatureAllowance: try order.flatMap { try curvatureAllowance(for: $0) })
+                do { try refit.validate() } catch { throw invalid("The Refit is invalid: \(error).") }
+                return .rebuildFaces(targets: targets, method: .square(refit))
+            }
             // Two to four sides in any order: edges of bodies (their curves added with the
             // Square), which take G1 or G2, or whole curve sources; each side Free, G0 or its edge's
             // continuity.

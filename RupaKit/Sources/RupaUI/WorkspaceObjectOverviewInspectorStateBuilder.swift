@@ -648,6 +648,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             case let .explicit(layout): "Degree \(layout.uDegree)×\(layout.vDegree), Spans \(layout.uSpans)×\(layout.vSpans)"
             case .tolerance: "Tolerance"
             case .nominal: "Nominal surface removed"
+            case let .square(refit):
+                "Square refit, \(refit.order == nil ? "G0" : refit.order == .tangent ? "G1" : "G2"), Degree \(refit.options.uDegree)×\(refit.options.vDegree), Spans \(refit.options.uSpans)×\(refit.options.vSpans)"
             }
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Rebuild Face"),

@@ -287,6 +287,20 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func squareRefitsABoxsTopOnItsEdges() throws {
+        let session = EditorSession()
+        let object = try box(session, "Box")
+        let top = try face(of: object, in: session, normal: Vector3D(x: 0, y: 0, z: 1)) { $0.z }
+        _ = try session.execute(.rebuildFaces(targets: [top], method: .square(SquareRefit(options: SquareFitOptions(uDegree: 4, vDegree: 4)))))
+        #expect(session.evaluationStatus == .valid)
+        #expect(try faces(of: object, in: session).count == 6)
+        #expect(abs(try volume(session) - 0.1 * 0.1 * 0.1) < 1e-12)
+        #expect(throws: (any Error).self) {
+            _ = try session.execute(.rebuildFaces(targets: [top], method: .square(SquareRefit()), extendU: 0.1))
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func unwrapFaceLaysAMovedBoxsTopFlatAboutTheOrigin() throws {
         let session = EditorSession()
         let object = try box(session, "Box")

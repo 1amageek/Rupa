@@ -382,6 +382,15 @@ extension DesignDocument {
             guard extendU == 0, extendV == 0 else {
                 throw EditorError(code: .commandInvalid, message: "Remove Nominal Surface cuts a face's surface to its extent, with no extension.")
             }
+        case let .square(refit):
+            do {
+                try refit.validate()
+            } catch {
+                throw EditorError(code: .commandInvalid, message: "Square's Refit options: \(error)")
+            }
+            guard extendU == 0, extendV == 0, shrinks == false else {
+                throw EditorError(code: .commandInvalid, message: "Square's Refit spans a face's own edges, with no extension.")
+            }
         }
         guard FaceRebuildFeature.extensions.contains(extendU), FaceRebuildFeature.extensions.contains(extendV) else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) extends each way by 0 to 1 of the face's extent.")

@@ -1273,6 +1273,34 @@ struct ModelingOperationDraftTests {
         #expect(rows["Side 1"]?.hasPrefix("G0 ✓") == true && rows["Side 2"] != nil)
     }
 
+    @Test func aSquareOverAFaceRefitsIt() throws {
+        var document = DesignDocument.empty()
+        let box = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let top = try #require(topology.entries.first { entry in
+            entry.kind == .face && entry.sourceFeatureID == box.description && (entry.normal?.z ?? 0) > 0.99
+        }?.selectionTarget())
+        var draft = makeDraft(.square, targets: [top])
+        draft.squareUDegree = "5"
+        guard case .rebuildFaces(let targets, .square(let refit), _, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Refit.")
+            return
+        }
+        #expect(targets == [top] && refit.order == nil && refit.options.uDegree == 5)
+        draft.squareContinuity = .free
+        #expect(throws: (any Error).self) { try draft.command(in: document) }
+        draft.squareContinuity = .g0
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - 0.02 * 0.02 * 0.02) < 1e-12)
+    }
+
     @Test func aSquareBetweenEdgesOfTwoBoxesIsTangentToTheirFaces() throws {
         var document = DesignDocument.empty()
         // Box A spans [0, 20 mm]³, box B [0, 20] × [-70, -50] × [30, 50] mm.

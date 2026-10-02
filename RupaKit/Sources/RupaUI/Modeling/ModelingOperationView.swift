@@ -83,7 +83,7 @@ struct ModelingOperationView: View {
                                 )).contentShape(Rectangle())
                                 if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
                             }
-                            if draft.kind == .square {
+                            if draft.kind == .square, !draft.isFace(draft.targets[index]) {
                                 let target = draft.targets[index]
                                 Picker("Side continuity", selection: Binding(
                                     get: { draft.squareContinuity(of: target) },
@@ -499,7 +499,7 @@ struct ModelingOperationView: View {
                     lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
                 }
             }
-            Text("Select two to four sides: edges of bodies or curves. Four meeting end to end frame the sheet; three are closed by a straight side; two at a corner are completed by their copies; two apart are ruled between. Degree and Spans are the least the sheet takes; its other control points are as fair as Flatness asks, Free sides and the Boundary flow weighted by Weight. The sheet's Analysis is shown in its inspector.")
+            Text("Select faces to refit each as an untrimmed four-sided sheet on its own edges, at G0, G1 or G2 with its neighbours. Or select two to four sides: edges of bodies or curves. Four meeting end to end frame the sheet; three are closed by a straight side; two at a corner are completed by their copies; two apart are ruled between. Degree and Spans are the least the sheet takes; its other control points are as fair as Flatness asks, Free sides and the Boundary flow weighted by Weight. The sheet's Analysis is shown in its inspector.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
