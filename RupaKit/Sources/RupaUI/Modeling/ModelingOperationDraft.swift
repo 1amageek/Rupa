@@ -971,7 +971,8 @@ struct ModelingOperationDraft: Equatable {
             // Boundaries: edges of bodies (their curves added with it, taking the continuity) or
             // curves; guides: curves marked as such.
             let boundaryTargets = targets.filter { !xnurbsGuideNodeIDs.contains($0.sceneNodeID) }
-            guard boundaryTargets.count >= 2 else { throw invalid("XNURBS takes two or more boundary edges or curves.") }
+            // One closed curve frames it on its own (Plasticity fills a single outline).
+            guard boundaryTargets.isEmpty == false else { throw invalid("XNURBS takes a closed curve, or two or more boundary edges or curves.") }
             let tension = DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
             var edgeCurves: [EdgeCurveSource] = []
             let boundaries = try boundaryTargets.map { target -> SquareSide in
