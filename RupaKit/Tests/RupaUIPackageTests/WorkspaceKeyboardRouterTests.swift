@@ -824,3 +824,12 @@ private func keyboardContext(
     #expect(action("w", [.option]) == .beginMatchFace)
     #expect(action("∑", [.option]) == .beginMatchFace)
 }
+
+@Test func workspaceKeyboardRouterTogglesFilletTangentEdgesOnT() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isFilletDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) == .toggleFilletTangentEdges)
+    context.isFilletDialogActive = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "t"), context: context) != .toggleFilletTangentEdges)
+}

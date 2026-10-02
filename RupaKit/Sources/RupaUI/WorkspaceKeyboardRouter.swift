@@ -261,6 +261,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleImprintOption
     /// S while Isoparam runs: subdivide the control net.
     case toggleIsoparamSubdivide
+    /// T while Fillet's dialog runs: Tangent edges on or off.
+    case toggleFilletTangentEdges
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -399,6 +401,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isImprintSessionActive: Bool = false
     /// Whether Push Face's, Draft Face's or Match Face's dialog runs.
     var isFaceEditSessionActive: Bool = false
+    /// Whether Fillet's dialog runs.
+    var isFilletDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -500,6 +504,10 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isEscape { return .cancelImprint }
             if input.isTab { return .toggleImprintOption }
             if input.characters.lowercased() == "s" { return .toggleIsoparamSubdivide }
+        }
+        if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.characters.lowercased() == "t" {
+            return .toggleFilletTangentEdges
         }
         if context.isFaceEditSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {

@@ -6349,6 +6349,7 @@ private struct ProjectMainViewContent: View {
             hasImprintableSelection: imprintSessionKind() != nil,
             isImprintSessionActive: imprintSession != nil,
             isFaceEditSessionActive: faceEditSession != nil,
+            isFilletDialogActive: modelingDraft?.kind == .fillet,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6792,6 +6793,10 @@ private struct ProjectMainViewContent: View {
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
+            return .handled
+        case .toggleFilletTangentEdges:
+            modelingDraft?.tangentEdges.toggle()
+            reportToolStatus("Fillet: tangent edges \(modelingDraft?.tangentEdges == true ? "on" : "off").")
             return .handled
         case .beginPatch:
             beginSurfaceModelingOperation()
