@@ -5,7 +5,7 @@ import RupaCoreTypes
 extension DesignDocument {
     /// Delete Face: faces of one object taken out. Healing, the faces around grow over them until
     /// they meet and the solid stays a solid (Swift-CAD's healing face delete); otherwise the solid
-    /// opens into a sheet.
+    /// opens into a sheet. A sheet's faces are taken out of it without healing.
     @discardableResult
     public mutating func deleteBodyFaces(
         targets: [SelectionTarget],
@@ -107,17 +107,19 @@ extension DesignDocument {
             )
         }
         guard let targetFeature = cadDocument.designGraph.nodes[targetFeatureID],
-              targetFeature.outputs.contains(where: { $0.role == .body }) else {
+              targetFeature.outputs.contains(where: { $0.role == .body || $0.role == .sheet }) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "\(operationName) requires a body-producing target feature."
+                message: "\(operationName) requires a body- or sheet-producing target feature."
             )
         }
+        // A sheet's faces are simply taken out of it; only a solid heals over them.
+        let isSolid = productMetadata.sceneNodes[targetSceneNodeID]?.object?.geometryRole == .solid
 
         let faceDelete = FaceDeleteFeature(
             target: FaceDeleteTargetReference(featureID: targetFeatureID),
             faces: faceReferences,
-            heals: heals
+            heals: heals && isSolid
         )
         try faceDelete.validate()
 

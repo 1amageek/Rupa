@@ -53,6 +53,16 @@ import SwiftCAD
     #expect((measurement.sheets.first?.surfaceAreaSquareMeters ?? 0.0) > 0.0)
     #expect(session.document.productMetadata.sceneNodes[deleteSceneNodeID]?.object?.geometryRole == .surface)
     #expect(session.evaluationStatus == .valid)
+
+    // A face of the sheet taken out with healing asked for, as the Delete key asks: a sheet does
+    // not heal, it loses the face.
+    let sheetTopology = try TopologySnapshotService().snapshot(document: session.document)
+    let sheetFace = try #require(sheetTopology.entries.first {
+        $0.kind == .face && $0.sceneNodeID == deleteSceneNodeID.description
+    }?.selectionTarget())
+    _ = try session.execute(.deleteBodyFaces(targets: [sheetFace], heals: true))
+    #expect(try TopologySnapshotService().snapshot(document: session.document).counts.faceCount == 4)
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor
