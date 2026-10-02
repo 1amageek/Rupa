@@ -39,6 +39,13 @@ struct ModelingOperationDraftTests {
                 Issue.record("A solid revolve of a curve is one revolve.")
                 return
             }
+        } else if kind == .loft {
+            // Curves loft into a sheet whether or not Sheet output is on, as Plasticity lofts them.
+            guard case .createLoft(_, _, _, let options, _) = try draft.command(in: document) else {
+                Issue.record("A Loft of curves is one loft.")
+                return
+            }
+            #expect(options.resultKind == .sheet)
         } else {
             #expect(throws: EditorError.self) { try draft.command(in: document) }
         }
@@ -544,6 +551,9 @@ struct ModelingOperationDraftTests {
         }
         var draft = makeDraft(.loft, targets: edges)
         draft.sheet = true
+        // G0 at both edges: the ruled sheet straight between them (Loft defaults to G1 there).
+        draft.loftStartContinuity = .g0
+        draft.loftEndContinuity = .g0
         guard case .createLoft(_, let sections, _, _, let edgeCurves) = try draft.command(in: document) else {
             Issue.record("Expected native Loft source intent.")
             return
@@ -580,7 +590,8 @@ struct ModelingOperationDraftTests {
         draft.sheet = true
         draft.loftStartContinuity = .g1
         draft.loftEndContinuity = .g2
-        draft.loftEdgeTension = "1.2"
+        draft.loftStartTension = "1.2"
+        draft.loftEndTension = "1.2"
         guard case .createLoft(_, let sections, _, _, _) = try draft.command(in: document) else {
             Issue.record("Expected native Loft source intent.")
             return
@@ -608,8 +619,53 @@ struct ModelingOperationDraftTests {
             start: SketchPoint(x: .length(0, .meter), y: .length(-0.1, .meter)),
             end: SketchPoint(x: .length(0.02, .meter), y: .length(-0.1, .meter)))
         let line = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(sketch) })
+        // An end that is not an edge of a body takes no continuity; the edge's end keeps its own.
         draft.targets = [edges[0], .init(sceneNodeID: line.id)]
-        #expect(throws: EditorError.self) { try draft.command(in: document) }
+        guard case .createLoft(_, let mixed, _, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Loft from an edge to a curve.")
+            return
+        }
+        #expect(mixed.map { $0.continuity?.order } == [.tangent, nil])
+    }
+
+    @Test func loftDefaultsFollowPlasticity() throws {
+        // Smooth connectors and G1 at both ends by default; each end its own tension; curves loft
+        // into a sheet without Sheet output.
+        let draft = makeDraft(.loft, targets: [])
+        #expect(draft.smooth)
+        #expect(draft.loftStartContinuity == .g1 && draft.loftEndContinuity == .g1)
+        var document = DesignDocument.empty()
+        let boxes = try [Point3D(x: 0, y: 0, z: 0), Point3D(x: 0, y: -0.07, z: 0.03)].map { origin in
+            try document.createExtrudedRectangleFromCorners(
+                name: "Box", plane: .plane(Plane3D(origin: origin, normal: .unitZ)),
+                firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+                oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+                depth: .length(0.02, .meter), direction: .normal
+            )
+        }
+        #expect(boxes.count == 2)
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edges = try [(0.0, 0.02), (-0.05, 0.03)].map { y, z in
+            try #require(topology.entries.first { entry in
+                guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+                return abs(start.y - y) < 1e-9 && abs(end.y - y) < 1e-9 && abs(start.z - z) < 1e-9 && abs(end.z - z) < 1e-9
+            }?.selectionTarget())
+        }
+        var edgeLoft = makeDraft(.loft, targets: edges)
+        edgeLoft.loftStartTension = "2.5"
+        edgeLoft.loftEndTension = "1.5"
+        guard case .createLoft(_, let sections, _, let options, _) = try edgeLoft.command(in: document) else {
+            Issue.record("Expected a Loft of two edges.")
+            return
+        }
+        #expect(options.resultKind == .sheet)
+        #expect(options.surfaceMode == .smooth)
+        #expect(sections.map { $0.continuity?.order } == [.tangent, .tangent])
+        #expect(sections.map { $0.continuity?.tension } == [2.5, 1.5])
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(edgeLoft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
     }
 
     @Test func twoEdgesOfABoxRoundTogether() throws {

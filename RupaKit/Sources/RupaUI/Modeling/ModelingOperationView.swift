@@ -400,13 +400,18 @@ struct ModelingOperationView: View {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
+            if draft.loftStartContinuity != .g0 {
+                TextField("Start tension", text: $draft.loftStartTension)
+            }
+            if draft.loftEndContinuity != .g0 {
+                TextField("End tension", text: $draft.loftEndTension)
+            }
             if draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 {
-                TextField("Edge tension", text: $draft.loftEdgeTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
                 if draft.loftStartContinuity == .g2 || draft.loftEndContinuity == .g2 {
                     lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
                 }
-                Text("G1 and G2 ends meet a planar face beside the edge exactly; beside a curved face within the allowances.")
+                Text("Continuity applies at an end that is an edge of a body: G1 and G2 meet a planar face beside the edge exactly, a curved face within the allowances.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         case .fillet:

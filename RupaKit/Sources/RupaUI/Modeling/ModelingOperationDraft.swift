@@ -166,7 +166,8 @@ struct ModelingOperationDraft: Equatable {
     var keepsTools = false
     var sheet = false
     var isSurfaceCreation = false
-    var smooth = false
+    /// Loft's smooth connectors: on, as Plasticity lofts several sections into one smooth surface.
+    var smooth = true
     /// Simplify: flat faces of a sweep or loft are trimmed planes. Plasticity leaves it off for
     /// Sweep and on for Loft.
     var sweepSimplify = false
@@ -186,10 +187,13 @@ struct ModelingOperationDraft: Equatable {
             }
         }
     }
-    var loftStartContinuity = LoftContinuityChoice.g0
-    var loftEndContinuity = LoftContinuityChoice.g0
-    /// The cross-boundary scale of a G1 or G2 end, times the distance between the end sections.
-    var loftEdgeTension = "1"
+    /// How each end of a Loft meets the face beside the edge selected there: G1 by default, as
+    /// Plasticity labels both edges; ends that are not edges of a body take none.
+    var loftStartContinuity = LoftContinuityChoice.g1
+    var loftEndContinuity = LoftContinuityChoice.g1
+    /// The cross-boundary scale of each G1 or G2 end, times the distance between the end sections.
+    var loftStartTension = "1"
+    var loftEndTension = "1"
     /// How a Square meets the faces beside the edges among its sides, and their tension.
     /// How a Square side meets what is beside it: Free (followed loosely), G0, or G1/G2 with the
     /// face beside an edge (a curve's side takes G0 for those).
@@ -855,13 +859,20 @@ struct ModelingOperationDraft: Equatable {
             }
             // A selected edge of a body is a curve section along it, its curve added with the loft.
             var edgeCurves: [EdgeCurveSource] = []
-            // A G1 or G2 end is continuous with the face beside the edge selected there.
-            let hasContinuity = loftStartContinuity != .g0 || loftEndContinuity != .g0
-            let edgeTension = hasContinuity ? try number(loftEdgeTension, label: "Edge tension") : 1
-            guard edgeTension.isFinite, edgeTension > 0 else { throw invalid("Edge tension must be positive.") }
+            // A G1 or G2 end is continuous with the face beside the edge selected there, with its
+            // own tension.
+            func endTension(_ text: String, _ choice: LoftContinuityChoice, label: String) throws -> Double {
+                guard choice != .g0 else { return 1 }
+                let value = try number(text, label: label)
+                guard value.isFinite, value > 0 else { throw invalid("\(label) must be positive.") }
+                return value
+            }
+            let startTension = try endTension(loftStartTension, loftStartContinuity, label: "Start tension")
+            let endTension = try endTension(loftEndTension, loftEndContinuity, label: "End tension")
             let sections = try sectionTargets.enumerated().map { index, target in
                 let reference: SectionReference
                 let choice = index == 0 ? loftStartContinuity : index == sectionTargets.count - 1 ? loftEndContinuity : .g0
+                let edgeTension = index == 0 ? startTension : endTension
                 var continuity: SurfaceEdgeContinuity?
                 switch target.component {
                 case .edge:
@@ -882,18 +893,14 @@ struct ModelingOperationDraft: Equatable {
                 default:
                     reference = try sectionReference(for: target.sceneNodeID, in: document)
                 }
-                guard choice == .g0 || continuity != nil else {
-                    throw invalid("\(choice.rawValue) continuity needs an edge of a body at that end of the loft.")
-                }
                 let controls = loftSectionControls[target.sceneNodeID] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
                 var section = try controls.applying(to: LoftSectionReference(section: reference))
                 section.continuity = continuity
                 return section
             }
-            guard createsSheet || sections.allSatisfy({ $0.section.isClosedRegion }) else {
-                throw invalid("A selected curve requires Sheet output.")
-            }
-            let options = LoftOptions(resultKind: createsSheet ? .sheet : .solid,
+            // Curves loft into a sheet; regions and faces into a solid unless Sheet output is on.
+            let lofted = createsSheet || sections.contains { $0.section.isClosedRegion == false }
+            let options = LoftOptions(resultKind: lofted ? .sheet : .solid,
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"),
                 simplify: loftSimplify)
