@@ -369,9 +369,19 @@ struct ModelingOperationDraft: Equatable {
             }
         }
         var takesTension: Bool { self == .conic || self == .curvature }
+        /// The shapes Plasticity's dialog offers: no Round, Conic at 0.5 being one.
+        static let offered: [FilletShapeChoice] = [.conic, .chordal, .curvature, .full]
     }
-    var filletShape = FilletShapeChoice.round
-    var filletTension = ""
+    /// Plasticity's default: Conic at tension 0.5, which is the round of the distance's radius.
+    var filletShape = FilletShapeChoice.conic
+    var filletTension = "0.5"
+    /// The shape the kernel builds: a Conic at tension 0.5 (or blank) is the round itself, which
+    /// takes the round's full route (curved edges, chains, corners).
+    var effectiveFilletShape: FilletShapeChoice {
+        guard filletShape == .conic else { return filletShape }
+        let text = filletTension.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty || Double(text) == 0.5 ? .round : .conic
+    }
     /// A chamfer's mode, its angle from the reference face (blank for a symmetric chamfer) and
     /// whether the reference is each edge's second face.
     enum ChamferModeChoice: String, CaseIterable, Identifiable {
@@ -1189,7 +1199,7 @@ struct ModelingOperationDraft: Equatable {
             }
             // Fillet Shell: a negative distance chamfers the edges by its size.
             let signedAmount = try topologyLength(distance,
-                label: kind == .fillet && filletShape == .round ? "Radius" : "Distance", signed: kind == .fillet, in: document)
+                label: kind == .fillet && effectiveFilletShape == .round ? "Radius" : "Distance", signed: kind == .fillet, in: document)
             let signedValue = try document.cadDocument.parameters.resolvedValue(for: signedAmount).value
             let chamfers = kind == .fillet && signedValue < 0
             let amount: CADExpression
@@ -1225,14 +1235,14 @@ struct ModelingOperationDraft: Equatable {
                 treatment = .chamfer(distance: amount, limits: limits)
             case .fillet where limits != nil:
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
-                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                let tension = effectiveFilletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
                 guard let limits else { throw invalid("A limited fillet has its limits.") }
-                treatment = .limitedFillet(distance: amount, shape: filletShape.shape, tension: tension, limits: limits)
+                treatment = .limitedFillet(distance: amount, shape: effectiveFilletShape.shape, tension: tension, limits: limits)
             case .fillet where filletEndRadius.trimmingCharacters(in: .whitespaces).isEmpty == false
                 || filletVariablePoints.trimmingCharacters(in: .whitespaces).isEmpty == false:
                 guard edges.count == 1 else { throw invalid("A variable fillet rounds one edge.") }
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
-                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                let tension = effectiveFilletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
                 let endText = filletEndRadius.trimmingCharacters(in: .whitespaces)
                 let points = try filletVariablePoints.split(separator: ",").map { entry -> FilletVariablePoint in
                     let parts = entry.split(separator: "@", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1242,11 +1252,11 @@ struct ModelingOperationDraft: Equatable {
                 }
                 treatment = .variableFillet(radius: amount,
                                             endRadius: endText.isEmpty ? amount : try topologyLength(endText, label: "End radius", in: document),
-                                            shape: filletShape.shape, tension: tension, points: points)
-            case .fillet where filletShape != .round:
+                                            shape: effectiveFilletShape.shape, tension: tension, points: points)
+            case .fillet where effectiveFilletShape != .round:
                 let text = filletTension.trimmingCharacters(in: .whitespaces)
-                let tension = filletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
-                treatment = .shapedFillet(distance: amount, shape: filletShape.shape, tension: tension)
+                let tension = effectiveFilletShape.takesTension && !text.isEmpty ? try number(text, label: "Tension") : nil
+                treatment = .shapedFillet(distance: amount, shape: effectiveFilletShape.shape, tension: tension)
             case .fillet: treatment = .fillet(radius: amount)
             case .chamfer:
                 let angleText = chamferAngle.trimmingCharacters(in: .whitespaces)

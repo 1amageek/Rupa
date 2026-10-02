@@ -439,14 +439,14 @@ struct ModelingOperationView: View {
             }
         case .fillet:
             Picker("Shape", selection: $draft.filletShape) {
-                ForEach(ModelingOperationDraft.FilletShapeChoice.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(ModelingOperationDraft.FilletShapeChoice.offered) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
             if draft.filletShape == .full {
                 Text("Select the two edges on either side of a face: the round is tangent to it and to both faces beside it.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
-                lengthField(draft.filletShape == .round ? "Radius" : "Distance", text: $draft.distance)
+                lengthField(draft.effectiveFilletShape == .round ? "Radius" : "Distance", text: $draft.distance)
                 lengthField("End radius (variable; blank for constant)", text: $draft.filletEndRadius)
                 TextField("Variable points (fraction@radius, …)", text: $draft.filletVariablePoints)
                 TextField("Limit start (fraction of the edge; blank 0)", text: $draft.limitStart)
@@ -455,7 +455,7 @@ struct ModelingOperationView: View {
                 Toggle("Tangent edges", isOn: $draft.tangentEdges)
             }
             if draft.filletShape.takesTension {
-                TextField(draft.filletShape == .conic ? "Tension (rho, 0–1; blank 0.5)" : "Tension (blank 1)", text: $draft.filletTension)
+                TextField(draft.filletShape == .conic ? "Tension (0–1; 0.5 is the round)" : "Tension (blank 1)", text: $draft.filletTension)
             }
         case .chamfer:
             lengthField("Distance", text: $draft.distance)

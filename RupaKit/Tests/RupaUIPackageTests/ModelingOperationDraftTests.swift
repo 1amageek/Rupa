@@ -1056,19 +1056,36 @@ struct ModelingOperationDraftTests {
         }?.selectionTarget())
         var draft = makeDraft(.fillet, targets: [edge])
         draft.distance = "4 mm"
-        draft.filletShape = .conic
+        // Plasticity's default, Conic at 0.5, is the round of the distance's radius itself.
+        #expect(draft.filletShape == .conic && draft.filletTension == "0.5")
+        guard case .createBodyEdgeTreatment(_, _, .fillet) = try draft.command(in: document) else {
+            Issue.record("Expected a round fillet.")
+            return
+        }
+        draft.filletTension = "0.3"
         guard case .createBodyEdgeTreatment(_, _, let treatment) = try draft.command(in: document),
               case .shapedFillet(_, let shape, let tension) = treatment else {
             Issue.record("Expected a shaped fillet.")
             return
         }
-        #expect(shape == .conic && tension == nil)
+        #expect(shape == .conic && tension == 0.3)
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
-        // A parabola (rho 0.5) removes a sixth of the 4 mm square's corner along the 20 mm edge.
+        // A conic of tension 0.3 set back 4 mm: weight sin 45° · 3/7, flatter than the round.
+        let w = 0.5.squareRoot() * 0.3 / 0.7, d = 0.004
+        // The area between the conic and the corner's sides (the rational quadratic's segment).
+        var area = 0.0
+        var previous = (d, 0.0)
+        for step in 1...20_000 {
+            let t = Double(step) / 20_000
+            let (b0, b1, b2) = ((1 - t) * (1 - t), 2 * t * (1 - t) * w, t * t)
+            let next = ((b0 * d) / (b0 + b1 + b2), (b2 * d) / (b0 + b1 + b2))
+            area += previous.0 * next.1 - next.0 * previous.1
+            previous = next
+        }
         #expect(measurement.counts.solids == 1)
-        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.004 * 0.004 / 6 * 0.02)) < 1e-12)
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - abs(0.5 * area) * 0.02)) < 1e-11)
     }
 
     @Test func aFullFilletRoundsABlocksTopBetweenTwoEdges() throws {
