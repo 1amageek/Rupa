@@ -376,6 +376,23 @@ struct ModelingOperationDraft: Equatable {
         /// The shapes Plasticity's dialog offers: no Round, Conic at 0.5 being one.
         static let offered: [FilletShapeChoice] = [.conic, .chordal, .curvature, .full]
     }
+    /// Fillet's click on an edge while the dialog runs: added to its edges, or taken back off when
+    /// it is one, as Plasticity's Shift-click edits the selection inside the command.
+    mutating func toggleFilletEdge(_ edge: SelectionTarget) {
+        if let index = targets.firstIndex(of: edge) {
+            targets.remove(at: index)
+        } else {
+            targets.append(edge)
+        }
+    }
+
+    /// Fillet's click on a round: its radius becomes the Distance, as Plasticity copies a fillet's
+    /// radius from a clicked round.
+    mutating func copyFilletRadius(meters: Double) {
+        let presented = workspaceLengthFieldPresentation(fromMeters: meters, preferredUnit: unit)
+        distance = presented.text + " " + presented.unit.symbol
+    }
+
     /// Plasticity's default: Conic at tension 0.5, which is the round of the distance's radius.
     var filletShape = FilletShapeChoice.conic
     /// The shapes the dialog offers for its edges: Full only once two edges, the pair on either

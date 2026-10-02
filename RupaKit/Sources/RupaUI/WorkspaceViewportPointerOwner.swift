@@ -13,6 +13,8 @@ enum WorkspaceViewportPickingCommand: Equatable, Sendable {
     case deform
     /// Draft Face's and Match Face's reference and faces, clicked while their dialog runs.
     case faceEdit
+    /// Fillet's edges toggled, and a round's radius copied, by clicks while its dialog runs.
+    case filletEdit
     /// Freestyle Offset: a click sets the offset distance through the snapped point.
     case freestyleOffset
     /// A constrained-surface draft: a click appends a world point, under any tool.

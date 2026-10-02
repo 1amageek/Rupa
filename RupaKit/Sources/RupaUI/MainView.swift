@@ -6061,6 +6061,9 @@ private struct ProjectMainViewContent: View {
                 return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
         }
+        if modelingDraft?.kind == .fillet, selectedTool == .select {
+            return .pickingCommand(.filletEdit, hitPolicy: .all, scope: selectionScope, transforming: transforming)
+        }
         if modelingDraft?.kind == .constrainedSurface {
             return .pickingCommand(.constrainedSurfacePoints, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
         }
@@ -6089,6 +6092,8 @@ private struct ProjectMainViewContent: View {
             pickDeformFace(at: target)
         case .faceEdit:
             pickFaceEditFace(at: target)
+        case .filletEdit:
+            pickFilletTarget(at: target)
         case .freestyleOffset:
             pickFreestyleOffset(at: target)
         case .constrainedSurfacePoints:
@@ -10326,6 +10331,39 @@ private struct ProjectMainViewContent: View {
         } catch {
             reportToolStatus("Extend Sheet: the sheet's faces cannot be read: \(error.localizedDescription)", severity: .warning)
             return false
+        }
+    }
+
+    /// A click while Fillet's dialog runs: an edge goes on or off its edges; a round (a face on a
+    /// cylinder) gives its radius to the Distance.
+    private func pickFilletTarget(at target: ViewportCanvasTarget) {
+        guard let hit = target.hit else { return }
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .edge
+        if let edge = resolver.selectionTarget(for: hit), case .edge = edge.component {
+            modelingDraft?.toggleFilletEdge(edge)
+            return
+        }
+        resolver.selectionScope = .face
+        guard let face = resolver.selectionTarget(for: hit), case let .face(component) = face.component else {
+            reportToolStatus("Fillet: click an edge to add or remove it, or a round to copy its radius.", severity: .warning)
+            return
+        }
+        do {
+            let topology = try TopologySnapshotService().snapshot(
+                document: snapshot.document.document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            guard let entry = topology.entries.first(where: {
+                $0.kind == .face && $0.selectionComponentID == component.rawValue && $0.sceneNodeID == face.sceneNodeID.description
+            }), entry.surfaceKind == "cylinder", let radius = entry.surfaceRadius else {
+                reportToolStatus("Fillet: the clicked face is not a round to copy a radius from.", severity: .warning)
+                return
+            }
+            modelingDraft?.copyFilletRadius(meters: radius)
+            reportToolStatus("Fillet: the round's radius copied into Distance.")
+        } catch {
+            reportToolStatus("Fillet: the clicked face cannot be read: \(error.localizedDescription)", severity: .warning)
         }
     }
 
