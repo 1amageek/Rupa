@@ -225,8 +225,9 @@ extension DesignDocument {
     ) throws -> FeatureID {
         let operationName = "Extend Sheet"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
-        guard try resolvedLengthValue(distance, owner: "\(operationName) distance") > 0 else {
-            throw EditorError(code: .commandInvalid, message: "\(operationName) distance must be positive.")
+        // A negative distance moves the edges back into the sheet.
+        guard try resolvedLengthValue(distance, owner: "\(operationName) distance") != 0 else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) distance must not be zero.")
         }
         let object = try offsetObject(for: targets, operationName: operationName)
         guard productMetadata.sceneNodes[object.nodeID]?.object?.geometryRole == .surface else {

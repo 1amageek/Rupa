@@ -202,6 +202,20 @@ import Testing
             #expect(abs(reach - 0.11) < 1e-9)
             #expect(session.evaluationStatus == .valid)
         }
+        // A negative distance moves the edge back into the sheet.
+        let session = EditorSession()
+        _ = try session.execute(.createBSplineSurface(name: "Sheet", surface: .bilinearPatch(
+            bottomLeft: .origin, bottomRight: Point3D(x: 0.1, y: 0, z: 0),
+            topRight: Point3D(x: 0.1, y: 0.1, z: 0), topLeft: Point3D(x: 0, y: 0.1, z: 0))))
+        let sheet = try #require(session.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body }).id
+        let edge = try #require(try TopologySnapshotService().snapshot(document: session.document).entries.first {
+            $0.kind == .edge && $0.sceneNodeID == sheet.description && ($0.start?.x ?? 0) > 0.09 && ($0.end?.x ?? 0) > 0.09
+        }?.selectionTarget())
+        _ = try session.execute(.extendSheet(targets: [edge], distance: .length(-0.01, .meter), shape: .natural, modifies: true))
+        let reach = try TopologySnapshotService().snapshot(document: session.document).entries
+            .filter { $0.kind == .edge }.compactMap { $0.end?.x }.max() ?? 0
+        #expect(abs(reach - 0.09) < 1e-9)
+        #expect(session.evaluationStatus == .valid)
     }
 
     @Test(.timeLimit(.minutes(1)))
