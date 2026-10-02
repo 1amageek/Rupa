@@ -377,6 +377,10 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
   edit that leaves the draft naming a command, and a right-click on the canvas confirms them:
   it applies a ready preview, or previews and applies once the preview is ready (a failed or
   superseded preview applies nothing).
+- While Fillet's dialog runs the canvas's clicks are its own (the `filletEdit` picking
+  command): an edge goes on or off its edges, and a round (a face on a cylinder, read from
+  Core's topology) gives its radius to the Distance, as Plasticity's Fillet edits its edges and
+  copies a radius inside the command.
 - Preview is offered only while the draft names a command. The panel plans the
   draft it is showing against the document it is showing it for, and when that
   plan refuses it disables Preview and displays the reason the plan gave, so a
