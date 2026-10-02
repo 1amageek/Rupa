@@ -5,7 +5,8 @@ import RupaCoreTypes
 extension DesignDocument {
     /// Draft Face, isocline: the target faces turn about their crossing with the neutral face's
     /// plane, moved `neutralOffset` along its outward side, so each makes `angle` with the pull
-    /// direction (its outward normal), a positive angle leaning them out away from the plane.
+    /// direction (its outward normal), a positive angle leaning them out away from the plane. A
+    /// curved neutral face (no offset) turns each face about the straight edge it shares with it.
     @discardableResult
     public mutating func draftBodyFaces(
         targets: [SelectionTarget],

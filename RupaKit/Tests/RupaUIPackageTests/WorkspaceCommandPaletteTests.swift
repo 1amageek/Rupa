@@ -17,6 +17,9 @@ struct WorkspaceCommandPaletteTests {
         #expect(catalog.matches("no such command").isEmpty)
         #expect(catalog.matches("reverse").map(\.title) == ["Reverse"])
         #expect(Set(catalog.commands.map(\.title)).count == catalog.commands.count)
+        // Plasticity's videos run Patch and Remove Nominal Surface from the palette.
+        #expect(catalog.matches("patch").map(\.invocation) == [.keyboard(.beginPatch)])
+        #expect(catalog.matches("nominal").map(\.invocation) == [.keyboard(.removeNominalSurface)])
     }
 
     @MainActor

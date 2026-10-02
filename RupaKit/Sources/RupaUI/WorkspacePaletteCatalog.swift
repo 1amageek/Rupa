@@ -84,6 +84,8 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Toggle Curvature", aliases: ["Toggle Surface Curvature", "Curvature Comb"], invocation: .edit(.toggleCurvature)),
         Command(title: "Convert Vertex", invocation: .edit(.convertVertex)),
         Command(title: "Rebuild", aliases: ["Rebuild Curve", "Rebuild Face"], invocation: .edit(.rebuild)),
+        Command(title: "Remove Nominal Surface", invocation: .keyboard(.removeNominalSurface)),
+        Command(title: "Patch", aliases: ["Insert Sheet"], invocation: .keyboard(.beginPatch)),
         Command(title: "Unwrap", aliases: ["Unwrap Face"], invocation: .keyboard(.unwrapFace)),
         Command(title: "Deform", aliases: ["Deform Curve", "Deform Solid and Sheet"], invocation: .edit(.deform)),
         Command(title: "Create Outline", invocation: .edit(.createOutline)),

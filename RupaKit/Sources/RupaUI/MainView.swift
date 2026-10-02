@@ -6732,6 +6732,19 @@ private struct ProjectMainViewContent: View {
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
             return .handled
+        case .beginPatch:
+            beginSurfaceModelingOperation()
+            modelingDraft?.selectSurfaceOperation(.patch)
+            reportToolStatus("Patch: select the curves or the boundary edges to fill, then OK.")
+            return .handled
+        case .removeNominalSurface:
+            let faces = selectedBodyFaceTargets
+            guard faces.isEmpty == false else {
+                reportToolStatus("Remove Nominal Surface: select the faces.", severity: .warning)
+                return .handled
+            }
+            submitSource(.rebuildFaces(targets: faces, method: .nominal, extendU: 0, extendV: 0, shrinks: true))
+            return .handled
         case .beginRemoveFillets:
             guard selectedBodyObjectIDs.count == 1, let object = selectedBodyObjectIDs.first else {
                 reportToolStatus("Remove Fillets: select one solid.", severity: .warning)

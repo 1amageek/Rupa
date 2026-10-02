@@ -267,6 +267,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginMatchFace
     /// Remove Fillets From Shell on the selected solid (palette).
     case beginRemoveFillets
+    /// Patch: the Surface Creation dialog on Patch (palette).
+    case beginPatch
+    /// Remove Nominal Surface on the selected faces, at once (palette).
+    case removeNominalSurface
     /// Hollow on the selected solid or its faces, and Thicken on the selected sheet or faces
     /// (palette).
     case beginHollow
