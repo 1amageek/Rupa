@@ -205,6 +205,10 @@ private struct ProjectMainViewContent: View {
     @State private var deformSession: WorkspaceDeformSession?
     @State private var imprintSession: WorkspaceImprintSession?
     @State private var faceEditSession: WorkspaceFaceEditSession?
+    /// The pending live preview of a dialog that previews as it is edited.
+    @State private var liveModelingPreviewTask: Task<Void, Never>?
+    /// Set when a right-click confirmed such a dialog before its preview was ready.
+    @State private var appliesModelingDraftWhenPreviewed = false
     /// Set when a face's arrow changed Push Face's Distance, so the change previews.
     @State private var previewsFaceEditAfterChange = false
     /// Control held over a previewed face edit (Align's Ctrl Show original): the original shows.
@@ -424,7 +428,23 @@ private struct ProjectMainViewContent: View {
             _ = handleDeleteSelection()
         }
         .frame(minWidth: WorkspaceEditorSplitLayout.minimumWindowWidth, minHeight: 720)
-        .onChange(of: modelingDraft) { _, _ in invalidateModelingPreview() }
+        .onChange(of: modelingDraft) { _, new in
+            invalidateModelingPreview()
+            scheduleLiveModelingPreview(new)
+        }
+        .onChange(of: modelingPreview.phase) { _, phase in
+            // A right-click confirmed the dialog before its preview was ready: apply once it is.
+            guard appliesModelingDraftWhenPreviewed else { return }
+            switch phase {
+            case .ready:
+                appliesModelingDraftWhenPreviewed = false
+                applyModelingOperation()
+            case .idle:
+                appliesModelingDraftWhenPreviewed = false
+            case .evaluating, .applying:
+                break
+            }
+        }
         .onChange(of: meshDraft) { _, _ in invalidateModelingPreview() }
         .task(id: meshOverlayRequest) { await updateMeshSelectionOverlay() }
         .onChange(of: snapshot.authorityCoordinate) { _, _ in
@@ -546,6 +566,37 @@ private struct ProjectMainViewContent: View {
         gearDraft = InvoluteGearDraft(feature: feature,
             parameters: snapshot.document.document.cadDocument.parameters,
             unit: snapshot.workspaceState.ruler.displayUnit)
+    }
+
+    /// Previews a dialog that previews as it is edited a moment after its last change, once it
+    /// names a command; a draft that names none shows its reason in the panel instead.
+    private func scheduleLiveModelingPreview(_ draft: ModelingOperationDraft?) {
+        liveModelingPreviewTask?.cancel()
+        liveModelingPreviewTask = nil
+        guard let draft, draft.kind.previewsLive,
+              case .success = Result(catching: { try draft.command(in: snapshot.document.document) }) else { return }
+        liveModelingPreviewTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .milliseconds(250))
+            } catch {
+                // Superseded by a later change, which schedules its own preview.
+                return
+            }
+            guard modelingDraft == draft else { return }
+            previewModelingOperation()
+        }
+    }
+
+    /// A right-click on a dialog that previews as it is edited: applies its preview, previewing
+    /// it first when it is not ready.
+    private func confirmLiveModelingDraft() {
+        if modelingPreview.phase == .ready {
+            applyModelingOperation()
+            return
+        }
+        liveModelingPreviewTask?.cancel()
+        appliesModelingDraftWhenPreviewed = true
+        previewModelingOperation()
     }
 
     private func previewModelingOperation() {
@@ -2980,7 +3031,8 @@ private struct ProjectMainViewContent: View {
     }
 
     private var hasActiveWorkspaceCommand: Bool {
-        cutCurveSession != nil
+        modelingDraft?.kind.previewsLive == true
+            || cutCurveSession != nil
             || booleanSession != nil || bodyCutSession != nil
             || filletSession != nil
             || rebuildSession != nil
@@ -2998,6 +3050,10 @@ private struct ProjectMainViewContent: View {
 
     @discardableResult
     private func confirmActiveWorkspaceCommand() -> Bool {
+        if modelingDraft?.kind.previewsLive == true {
+            confirmLiveModelingDraft()
+            return true
+        }
         if cutCurveSession != nil {
             confirmCutCurve()
             return true

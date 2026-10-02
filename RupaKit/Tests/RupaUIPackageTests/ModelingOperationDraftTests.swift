@@ -6,6 +6,11 @@ import SwiftCAD
 
 @Suite("Modeling operation drafts", .timeLimit(.minutes(1)))
 struct ModelingOperationDraftTests {
+    @Test func squareAndConstrainedSurfacePreviewLiveAndConfirmOnRightClick() {
+        // Plasticity's Square and Constrained Surface preview as they are edited.
+        #expect(ModelingOperationDraft.Kind.allCases.filter(\.previewsLive) == [.constrainedSurface, .square])
+    }
+
     @Test(arguments: [ModelingOperationDraft.Kind.extrude, .revolve, .loft])
     func surfaceCreationAcceptsWholeOpenCurveSelection(kind: ModelingOperationDraft.Kind) throws {
         var document = DesignDocument.empty()

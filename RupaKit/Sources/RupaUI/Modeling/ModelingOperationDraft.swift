@@ -36,6 +36,10 @@ struct ModelingOperationDraft: Equatable {
             allCases.filter { ![.box, .sphere, .cylinder, .sweep, .surfacePatch, .patch, .bridge, .constrainedSurface, .square, .xnurbs, .bridgeSurface].contains($0) }
         }
 
+        /// The dialogs that preview as they are edited and that a right-click confirms, as
+        /// Plasticity's Square and Constrained Surface do.
+        var previewsLive: Bool { self == .square || self == .constrainedSurface }
+
         static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square, .xnurbs, .bridgeSurface]
 
         var systemImage: String {
