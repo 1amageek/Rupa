@@ -916,7 +916,10 @@ order — open Align Surface's dialog (Continuity, which Tab steps for every pai
 continuity when there are several, Tension, Blend rows with their Influence, Partial Start and
 End, Boundary flow, and Degree/Spans refitting the sheet first), applied as one alignment per pair;
 an aligned sheet's inspector shows its Analysis (G0 distance, G1 angle, G2 curvature difference),
-measured once per document generation; curve ends align through Align Vertex. Rebuild
+measured once per document generation; curve ends align through Align Vertex. Face-edit dialogs
+offer Preview: the edit's commands previewed through the modeling preview in place of the
+document, Control held showing the original (Align's Ctrl Show original), any change to the edit
+dropping the preview. Rebuild
 dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
 Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays
 the one selected face flat as a new sheet object.

@@ -205,6 +205,10 @@ private struct ProjectMainViewContent: View {
     @State private var deformSession: WorkspaceDeformSession?
     @State private var imprintSession: WorkspaceImprintSession?
     @State private var faceEditSession: WorkspaceFaceEditSession?
+    /// Control held over a previewed face edit (Align's Ctrl Show original): the original shows.
+    @State private var showsOriginalOverPreview = false
+    /// Whether the modeling preview shows the face edit's result, so a change to the edit drops it.
+    @State private var previewsFaceEdit = false
     /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
     @State private var faceLoopOffsetIsIndividual = true
     @State private var projectSession: WorkspaceProjectSession?
@@ -2100,7 +2104,7 @@ private struct ProjectMainViewContent: View {
                 onHover: handleWorkspaceOverlayHover,
                 onChromeGeometryChange: setViewportChromeGeometry
             ) {
-                if let payload = modelingPreview.payload {
+                if let payload = modelingPreview.payload, showsOriginalOverPreview == false {
                     Viewport(
                         document: payload.document,
                         sourceIdentity: .presentation(payload.presentationScene.snapshotID),
@@ -2453,7 +2457,23 @@ private struct ProjectMainViewContent: View {
         .onChange(of: slideCommandState.isActive) { _, isActive in
             slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)
         }
+        .onChange(of: faceEditSession) { _, _ in
+            // The face edit changed or ended: its preview no longer shows it.
+            guard previewsFaceEdit else { return }
+            previewsFaceEdit = false
+            showsOriginalOverPreview = false
+            invalidateModelingPreview()
+        }
         .onModifierKeysChanged(mask: .control) { _, keys in
+            // A previewed face edit shows the original while Control is held.
+            if faceEditSession != nil, modelingPreview.payload != nil {
+                showsOriginalOverPreview = keys.contains(.control)
+                reportToolStatus(showsOriginalOverPreview
+                    ? "\(faceEditSession?.title ?? "Face edit"): the original; release Control for the preview."
+                    : "\(faceEditSession?.title ?? "Face edit"): the preview.")
+                return
+            }
+            showsOriginalOverPreview = false
             let wasComparing = slideComparison.isComparing
             slideComparison.controlChanged(isHeld: keys.contains(.control))
             guard slideComparison.isComparing != wasComparing else { return }
@@ -10149,9 +10169,25 @@ private struct ProjectMainViewContent: View {
                             done: { reportToolStatus("\(imprint.title) applied.") })
     }
 
+    /// Previews the running face operation's result in place of the document until it changes.
+    private func previewFaceEdit() {
+        guard let edit = faceEditSession else { return }
+        do {
+            let action = try DefaultProjectWorkspaceActionPlanner().source(name: edit.title, commands: edit.commands(), from: snapshot)
+            startModelingPreview(.source(action))
+            previewsFaceEdit = true
+            reportToolStatus("\(edit.title): the preview; hold Control for the original.")
+        } catch {
+            invalidateModelingPreview()
+            modelingPreview.errorMessage = recordFailure(error)
+        }
+    }
+
     /// Applies the running face operation as one step; it stays for another try when Core refuses.
     private func confirmFaceEdit() {
         guard let edit = faceEditSession else { return }
+        invalidateModelingPreview()
+        showsOriginalOverPreview = false
         submitDialogCommand(edit.commands(), name: edit.title, instance: edit.instance,
                             running: { faceEditSession?.instance }, end: { faceEditSession = nil },
                             done: { reportToolStatus("\(edit.title) applied.") })
@@ -10165,6 +10201,8 @@ private struct ProjectMainViewContent: View {
             dialog: Binding(get: { faceEditSession ?? edit }, set: { faceEditSession = $0 }),
             displayUnit: snapshot.workspaceState.ruler.displayUnit
         )
+        workspaceIconButton(systemImage: "eye", help: "Preview \(edit.title)", accessibilityIdentifier: "WorkspaceFaceEdit.preview",
+                            action: { previewFaceEdit() })
         workspaceIconButton(systemImage: "checkmark", help: edit.title, accessibilityIdentifier: "WorkspaceFaceEdit.apply", action: { confirmFaceEdit() })
     }
 
