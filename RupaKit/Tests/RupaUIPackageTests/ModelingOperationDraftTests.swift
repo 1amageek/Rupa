@@ -285,17 +285,33 @@ struct ModelingOperationDraftTests {
         let nodes = try paths.map { path in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(path) }) }
         var draft = makeDraft(.pipe, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.pipeDiameter = "10 mm"
-        draft.wallThickness = "1 mm"
+        // A negative thickness hollows the section; a positive one grows outside it.
+        draft.wallThickness = "-1 mm"
         guard case .createPipes(_, let sources, _) = try draft.command(in: document) else {
             Issue.record("Expected native Pipe source intent.")
             return
         }
-        #expect(sources.map(\.path.featureID) == paths && sources.allSatisfy { $0.thickness == .length(0.001, .meter) })
+        #expect(sources.map(\.path.featureID) == paths && sources.allSatisfy { $0.thickness == .length(-0.001, .meter) })
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(measurement.counts.solids == 2)
         #expect(abs(measurement.totals.solidVolumeCubicMeters - 2 * Double.pi * (0.005 * 0.005 - 0.004 * 0.004) * 0.05) < 1e-12)
+
+        // Distance 1 below 0 runs the pipe on past the path's start; the twist reaches the source.
+        var longer = draft
+        longer.wallThickness = "1 mm"
+        longer.pipeStart = "-0.2"
+        longer.pipeTwist = "45"
+        guard case .createPipes(_, let extended, _) = try longer.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(extended.allSatisfy { $0.start == .scalar(-0.2) && $0.twist == .angle(45, .degree) })
+        let grown = CADDocumentStore(document: document)
+        _ = try grown.apply(longer.command(in: document))
+        let sleeve = try MeasurementService().measure(document: grown.document, ruler: .standard(for: .meter))
+        #expect(abs(sleeve.totals.solidVolumeCubicMeters - 2 * Double.pi * (0.006 * 0.006 - 0.005 * 0.005) * 0.06) < 1e-12)
 
         draft.pipeVertices = "2"
         #expect(throws: EditorError.self) { try draft.command(in: document) }
@@ -320,7 +336,7 @@ struct ModelingOperationDraftTests {
         }
         var draft = makeDraft(.pipe, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.pipeCustomProfile = true
-        draft.wallThickness = "1 mm"
+        draft.wallThickness = "-1 mm"
         guard case .createPipes(_, let sources, _) = try draft.command(in: document) else {
             Issue.record("Expected native Pipe source intent.")
             return

@@ -319,14 +319,15 @@ struct ModelingOperationView: View {
             if !draft.pipeCustomProfile {
                 lengthField("Diameter", text: $draft.pipeDiameter)
             }
-            lengthField("Thickness", text: $draft.wallThickness)
+            lengthField("Thickness (+ outward, − inward)", text: $draft.wallThickness)
             if !draft.pipeCustomProfile {
                 TextField("Vertices (0 for a circle)", text: $draft.pipeVertices)
             }
             TextField("Angle (degrees)", text: $draft.pipeAngle)
+            TextField("Twist (degrees)", text: $draft.pipeTwist)
             TextField("Scale at the end", text: $draft.pipeEndScale)
-            TextField("Start (0–1)", text: $draft.pipeStart)
-            TextField("End (0–1)", text: $draft.pipeEnd)
+            TextField("Distance 1 (below 0 runs on past the start)", text: $draft.pipeStart)
+            TextField("Distance 2 (above 1 runs on past the end)", text: $draft.pipeEnd)
             lengthField("Positional approximation allowance", text: $draft.pipeAllowance)
             Picker("Boolean", selection: $draft.solidBoolean) {
                 ForEach(ModelingOperationDraft.SolidBooleanChoice.allCases) { choice in

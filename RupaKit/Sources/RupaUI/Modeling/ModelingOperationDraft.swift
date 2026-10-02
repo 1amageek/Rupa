@@ -404,6 +404,8 @@ struct ModelingOperationDraft: Equatable {
     /// The fractions of each path's length a pipe runs between.
     var pipeStart = "0"
     var pipeEnd = "1"
+    /// A pipe's twist about its path from start to end, in degrees.
+    var pipeTwist = "0"
     /// The positional allowance a pipe along a curved path is built within.
     var pipeAllowance = "0.001 mm"
     var approximationTolerance = ""
@@ -773,6 +775,7 @@ struct ModelingOperationDraft: Equatable {
             }
             let diameter = profile == nil ? CADExpression.length(try length(pipeDiameter, label: "Diameter"), .meter) : nil
             let angle = CADExpression.angle(try number(pipeAngle, label: "Angle"), .degree)
+            let twist = CADExpression.angle(try number(pipeTwist, label: "Twist"), .degree)
             let endScale = CADExpression.scalar(try number(pipeEndScale, label: "Scale"))
             let start = CADExpression.scalar(try number(pipeStart, label: "Start"))
             let end = CADExpression.scalar(try number(pipeEnd, label: "End"))
@@ -781,6 +784,7 @@ struct ModelingOperationDraft: Equatable {
                 var pipe = source
                 pipe.diameter = diameter
                 pipe.angle = angle
+                pipe.twist = twist
                 pipe.endScale = endScale
                 pipe.start = start
                 pipe.end = end
