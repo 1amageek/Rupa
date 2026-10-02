@@ -6808,6 +6808,21 @@ private struct ProjectMainViewContent: View {
             modelingDraft?.tangentEdges.toggle()
             reportToolStatus("Fillet: tangent edges \(modelingDraft?.tangentEdges == true ? "on" : "off").")
             return .handled
+        case .beginPolySplines:
+            let document = snapshot.document.document
+            guard selectedBodyObjectIDs.isEmpty, snapshot.selection.wholeSceneNodeIDs.count == 1,
+                  let object = snapshot.selection.wholeSceneNodeIDs.first else {
+                reportToolStatus("PolySplines: select one mesh object.", severity: .warning)
+                return .handled
+            }
+            do {
+                let mesh = try document.polySplineSourceMesh(forMeshObject: object)
+                faceEditSession = WorkspaceFaceEditSession(kind: .polySplines(object: object, mesh: mesh))
+                reportToolStatus("PolySplines: OK, Return or right-click turns the mesh into spline patches.")
+            } catch {
+                reportToolStatus("PolySplines: \(error.localizedDescription)", severity: .warning)
+            }
+            return .handled
         case .beginPatch:
             beginSurfaceModelingOperation()
             modelingDraft?.selectSurfaceOperation(.patch)

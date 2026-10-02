@@ -696,7 +696,10 @@ the canvas as Return; the router gives the open palette's Escape back to it
 (`closeCommandPalette`) and nothing else. `WorkspaceCommandPaletteTests` mount it
 inside `WorkspaceKeyboardScope`. Shortcut assignment and favorites are not
 offered. Patch opens the Surface Creation dialog on Patch, and Remove Nominal Surface runs at once
-on the selected faces (Rebuild Face's nominal method), as Plasticity's videos run them.
+on the selected faces (Rebuild Face's nominal method), as Plasticity's videos run them. PolySplines opens a dialog on one selected mesh
+object (Rounded corners off, Merge patches on, Interpolate boundary exactly off, as Plasticity
+opens it); OK turns the mesh Core reads in world space (`polySplineSourceMesh(forMeshObject:)`)
+into spline patches and removes the mesh object in the same step.
 
 Text (Edit menu, palette) opens `WorkspaceTextDialog` (text, font family, size;
 the official default is 1 cm) and OK makes the curves: `SketchTextOutliner`, the

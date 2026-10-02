@@ -22,4 +22,18 @@ struct WorkspaceFaceEditSessionRemoveFilletsTests {
         }
         #expect(limited == .length(0.003, .meter))
     }
+
+    @Test func polySplinesConvertsTheMeshAndRemovesItWithPlasticitysDefaults() throws {
+        let object = SceneNodeID()
+        let mesh = Mesh(positions: [], indices: [])
+        let session = WorkspaceFaceEditSession(kind: .polySplines(object: object, mesh: mesh))
+        let commands = session.commands()
+        guard commands.count == 2, case let .createPolySplineSurface(_, _, options) = commands[0],
+              case let .deleteSceneNodes(ids) = commands[1] else {
+            Issue.record("Expected the conversion and the mesh's removal.")
+            return
+        }
+        #expect(options.roundedCorners == false && options.mergePatches && options.interpolateBoundaryExactly == false)
+        #expect(ids == [object])
+    }
 }

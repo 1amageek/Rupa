@@ -86,6 +86,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Rebuild", aliases: ["Rebuild Curve", "Rebuild Face"], invocation: .edit(.rebuild)),
         Command(title: "Remove Nominal Surface", invocation: .keyboard(.removeNominalSurface)),
         Command(title: "Patch", aliases: ["Insert Sheet"], invocation: .keyboard(.beginPatch)),
+        Command(title: "PolySplines", aliases: ["PolySpline"], invocation: .keyboard(.beginPolySplines)),
         Command(title: "Unwrap", aliases: ["Unwrap Face"], invocation: .keyboard(.unwrapFace)),
         Command(title: "Deform", aliases: ["Deform Curve", "Deform Solid and Sheet"], invocation: .edit(.deform)),
         Command(title: "Create Outline", invocation: .edit(.createOutline)),

@@ -1697,7 +1697,7 @@ nonuniform-knot, closed-curve and atomic refusal coverage.
 
 ### PolySplines of general meshes
 
-`createPolySplineSurface` admits a mesh the kernel's analysis supports as a rectangular quad grid
+`polySplineSourceMesh(forMeshObject:)` reads a mesh object's presented authored mesh as PolySplines' source: its faces triangulated (a quad as the triangle pair the kernel reads back as one quad), its vertices placed in world space by the object's placement (`PolySplineSourceMeshTests`). `createPolySplineSurface` admits a mesh the kernel's analysis supports as a rectangular quad grid
 or, `PolySplineMeshAnalysisResult.buildsGeneralPatchNetwork`, as a general patch network (any other
 valid manifold mesh). A closed mesh (`Mesh.isClosedSurface`) declares a body output and a solid
 role, an open one a sheet and a surface role; the PolySpline type leaves the role to its feature, as

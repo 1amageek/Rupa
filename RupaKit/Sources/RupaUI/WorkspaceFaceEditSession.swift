@@ -40,6 +40,9 @@ struct WorkspaceFaceEditSession: Equatable {
         /// Align Surface: each pair's sheet edge made to follow its reference edge.
         case alignSurface(pairs: [AlignPair])
         case rebuildFace(faces: [SelectionTarget])
+        /// PolySplines on a mesh object: its mesh (in world space) becomes spline patches, the
+        /// mesh object replaced by them.
+        case polySplines(object: SceneNodeID, mesh: Mesh)
     }
 
     private(set) var kind: Kind
@@ -108,6 +111,11 @@ struct WorkspaceFaceEditSession: Equatable {
     }
     var rebuildMethod = RebuildMethodChoice.explicit
     var rebuildToleranceMeters = 0.00001
+    /// PolySplines' options, opening as Plasticity's dialog does: Rounded corners off, Merge
+    /// patches on, Interpolate boundary exactly off.
+    var polySplineRoundedCorners = false
+    var polySplineMergesPatches = true
+    var polySplineInterpolatesBoundary = false
     var extendU = 0.0
     var extendV = 0.0
     var shrinks = false
@@ -127,6 +135,7 @@ struct WorkspaceFaceEditSession: Equatable {
         case .extendSheet: "Extend Sheet"
         case .alignSurface: "Align Surface"
         case .rebuildFace: "Rebuild Face"
+        case .polySplines: "PolySplines"
         }
     }
 
@@ -150,7 +159,7 @@ struct WorkspaceFaceEditSession: Equatable {
     var takesFacePicks: Bool {
         switch kind {
         case .push, .draft, .match, .extendSheet: true
-        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace: false
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace, .polySplines: false
         }
     }
 
@@ -186,7 +195,7 @@ struct WorkspaceFaceEditSession: Equatable {
             // A face of another object makes that object the limit; Control-click drops it.
             guard edges.contains(where: { $0.sceneNodeID == face.sceneNodeID }) == false else { return }
             kind = .extendSheet(edges: edges, limit: toggles ? nil : SelectionTarget(sceneNodeID: face.sceneNodeID))
-        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace:
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace, .polySplines:
             return
         }
     }
@@ -216,7 +225,7 @@ struct WorkspaceFaceEditSession: Equatable {
                 ? "Push Face: drag the face's arrow or set the Distance; click a face to push onto it." : nil
         case let .extendSheet(_, limit):
             return limit == nil && distanceMeters == 0 ? "Extend Sheet: set the Distance." : nil
-        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace:
+        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace, .polySplines:
             return nil
         }
     }
@@ -225,7 +234,7 @@ struct WorkspaceFaceEditSession: Equatable {
     var hasGrow: Bool {
         switch kind {
         case .push, .draft, .match: true
-        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace: false
+        case .removeFillets, .hollow, .thicken, .extendSheet, .alignSurface, .rebuildFace, .polySplines: false
         }
     }
 
@@ -264,6 +273,14 @@ struct WorkspaceFaceEditSession: Equatable {
     func commands() -> [EditorCommand] {
         if case let .alignSurface(pairs) = kind {
             return pairs.indices.map { alignCommand(pairs[$0], index: $0) }
+        }
+        if case let .polySplines(object, mesh) = kind {
+            return [
+                .createPolySplineSurface(name: "PolySpline", sourceMesh: mesh, options: PolySplineOptions(
+                    roundedCorners: polySplineRoundedCorners, mergePatches: polySplineMergesPatches,
+                    interpolateBoundaryExactly: polySplineInterpolatesBoundary)),
+                .deleteSceneNodes(ids: [object]),
+            ]
         }
         guard missingInput == nil, let command = command() else { return [] }
         return [command]
@@ -310,6 +327,9 @@ struct WorkspaceFaceEditSession: Equatable {
         case let .alignSurface(pairs):
             // The first pair's; `commands()` gives every pair's.
             return alignCommand(pairs[0], index: 0)
+        case .polySplines:
+            // `commands()` gives the conversion and the mesh's removal together.
+            return nil
         case let .hollow(targets):
             return .hollow(targets: targets, thickness: .length(wallThicknessMeters, .meter))
         case let .thicken(targets):

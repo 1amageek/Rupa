@@ -148,6 +148,13 @@ struct WorkspaceFaceEditDialogView: View {
             }
             Toggle("Lock", isOn: $dialog.locksThicknesses)
                 .accessibilityIdentifier("WorkspaceFaceEdit.lockThicknesses")
+        case .polySplines:
+            Toggle("Rounded corners", isOn: $dialog.polySplineRoundedCorners)
+                .accessibilityIdentifier("WorkspaceFaceEdit.polySplineRoundedCorners")
+            Toggle("Merge patches", isOn: $dialog.polySplineMergesPatches)
+                .accessibilityIdentifier("WorkspaceFaceEdit.polySplineMergesPatches")
+            Toggle("Interpolate boundary exactly", isOn: $dialog.polySplineInterpolatesBoundary)
+                .accessibilityIdentifier("WorkspaceFaceEdit.polySplineInterpolatesBoundary")
         case .removeFillets:
             Toggle("Max Radius", isOn: $dialog.limitsRadius)
                 .accessibilityIdentifier("WorkspaceFaceEdit.limitsRadius")
