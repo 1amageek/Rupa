@@ -812,3 +812,15 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\r", isReturn: true), context: context) == .confirmFaceEdit)
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\u{1b}", isEscape: true), context: context) == .cancelFaceEdit)
 }
+
+@Test func workspaceKeyboardRouterStartsMatchFaceOnOptionW() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    func action(_ characters: String, _ modifiers: WorkspaceKeyboardModifiers = []) -> WorkspaceKeyboardAction? {
+        router.action(for: WorkspaceKeyboardInput(characters: characters, modifiers: modifiers), context: context)
+    }
+    #expect(action("w", [.option]) == nil)
+    context.hasBodyFaceSelection = true
+    #expect(action("w", [.option]) == .beginMatchFace)
+    #expect(action("∑", [.option]) == .beginMatchFace)
+}

@@ -992,6 +992,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         if input.modifiers == [.option], key == "t" || key == "†" {
             return context.hasBodyFaceSelection ? .beginUntrim : nil
         }
+        if input.modifiers == [.option], key == "w" || key == "∑" {
+            return context.hasBodyFaceSelection ? .beginMatchFace : nil
+        }
         if input.modifiers == [.shift], key == "s" {
             let raises = context.selectedSketchTargetCount > 0
                 || context.hasBodyFaceSelection || context.hasBodyObjectSelection

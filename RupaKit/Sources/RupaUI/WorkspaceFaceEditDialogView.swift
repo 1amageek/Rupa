@@ -20,12 +20,15 @@ struct WorkspaceFaceEditDialogView: View {
             TextField("Angle Adjacent", value: $dialog.adjacentAngleDegrees, format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.adjacentAngle")
-        case .draft:
+        case let .draft(faces, neutral):
+            pickedLabel("Plane", picked: neutral != nil, identifier: "WorkspaceFaceEdit.referencePicked")
+            pickedLabel("Faces \(faces.count)", picked: faces.isEmpty == false, identifier: "WorkspaceFaceEdit.facesPicked")
             TextField("Degrees", value: $dialog.draftAngleDegrees, format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.degrees")
             lengthField("Offset", meters: $dialog.neutralOffsetMeters, identifier: "WorkspaceFaceEdit.neutralOffset")
-        case .match:
+        case let .match(_, reference):
+            pickedLabel("Face", picked: reference != nil, identifier: "WorkspaceFaceEdit.referencePicked")
             Toggle("Front", isOn: $dialog.front)
                 .accessibilityIdentifier("WorkspaceFaceEdit.front")
         case let .extendSheet(_, limit):
@@ -174,6 +177,13 @@ struct WorkspaceFaceEditDialogView: View {
     }
 
     /// A length typed in the display unit and kept in meters.
+    /// A pick the dialog waits for: checked once it is made, as Plasticity's Select rows are.
+    private func pickedLabel(_ title: String, picked: Bool, identifier: String) -> some View {
+        Label(title, systemImage: picked ? "checkmark.circle.fill" : "circle.dashed")
+            .foregroundStyle(picked ? Color.green : Color.secondary)
+            .accessibilityIdentifier(identifier)
+    }
+
     private func lengthField(_ title: String, meters: Binding<Double>, identifier: String) -> some View {
         TextField(title, value: Binding(
             get: { meters.wrappedValue / displayUnit.metersPerUnit },
@@ -189,7 +199,7 @@ struct WorkspaceFaceEditDialogView: View {
     VStack(alignment: .leading) {
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .push(faces: [face]))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .draft(faces: [face], neutral: face))), displayUnit: .millimeter)
-        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .match(faces: [face], reference: face))), displayUnit: .millimeter)
+        WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .match(faces: [face], reference: nil))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .removeFillets(object: SceneNodeID()))), displayUnit: .millimeter)
         WorkspaceFaceEditDialogView(dialog: .constant(WorkspaceFaceEditSession(kind: .alignSurface(pairs: [.init(edge: face, reference: face)]))),
                                     displayUnit: .millimeter)

@@ -75,7 +75,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Untrim", shortcut: "⌥T", invocation: .keyboard(.beginUntrim)),
         Command(title: "Push Face", aliases: ["Offset Face"], invocation: .keyboard(.beginPushFace)),
         Command(title: "Draft Face", invocation: .keyboard(.beginDraftFace)),
-        Command(title: "Match Face", invocation: .keyboard(.beginMatchFace)),
+        Command(title: "Match Face", shortcut: "⌥W", invocation: .keyboard(.beginMatchFace)),
         Command(title: "Remove Fillets From Shell", aliases: ["Remove Fillets"], invocation: .keyboard(.beginRemoveFillets)),
         Command(title: "Hollow", invocation: .keyboard(.beginHollow)),
         Command(title: "Extend", aliases: ["Extend Sheet", "Extend Curve"], invocation: .keyboard(.beginExtend)),

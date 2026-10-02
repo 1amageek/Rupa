@@ -900,9 +900,13 @@ Untrim.
 
 The palette's Push Face (alias Offset Face), Draft Face and Match Face start a dialog on the
 selected faces (`WorkspaceFaceEditSession`, laid out by `WorkspaceFaceEditDialogView`): Push
-Face's Distance, in the display unit, and Angle Adjacent; Draft Face's Degrees and neutral
-Offset about the last-selected face; Match Face's Front, onto the last-selected face; and the
-Grow mode Tab steps. Return, right-click or OK applies as one source command, a refused one
+Face's Distance, in the display unit, and Angle Adjacent; Draft Face's Degrees (opening at 0)
+and neutral Offset about its reference face; Match Face's Front, onto its reference face; and
+the Grow mode Tab steps. Draft Face and Match Face take faces as clicks while the dialog runs
+(the `faceEdit` picking command): Draft Face's reference is the first face selected or clicked
+and the faces after it are drafted, Control-click taking one back off; Match Face starts on the
+selected faces (Option-W) and its reference is the face clicked in the dialog, Control-click
+adding or taking off a face to match. OK reports what is still to pick or set. Return, right-click or OK applies as one source command, a refused one
 leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
 and a face drag push through the same `pushFaces`. The palette's Remove Fillets From Shell
 opens the same dialog on one selected solid, with its Max Radius and the Convexity Tab steps;

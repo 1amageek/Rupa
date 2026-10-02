@@ -5990,6 +5990,9 @@ private struct ProjectMainViewContent: View {
             if let deformSession {
                 return .pickingCommand(.deform, hitPolicy: deformSession.viewportHitPolicy, scope: selectionScope, transforming: transforming)
             }
+            if faceEditSession?.takesFacePicks == true {
+                return .pickingCommand(.faceEdit, hitPolicy: .face, scope: selectionScope, transforming: transforming)
+            }
             if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle {
                 return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
@@ -6020,6 +6023,8 @@ private struct ProjectMainViewContent: View {
             pickBodyCutOperand(at: target)
         case .deform:
             pickDeformFace(at: target)
+        case .faceEdit:
+            pickFaceEditFace(at: target)
         case .freestyleOffset:
             pickFreestyleOffset(at: target)
         case .constrainedSurfacePoints:
@@ -6703,17 +6708,21 @@ private struct ProjectMainViewContent: View {
             faceEditSession = WorkspaceFaceEditSession(kind: .push(faces: faces))
             reportToolStatus("Push Face: set the distance, Tab steps Grow; OK, Return or right-click pushes the faces.")
             return .handled
-        case .beginDraftFace, .beginMatchFace:
+        case .beginDraftFace:
+            // The reference comes first, as Plasticity picks it: the first selected face, the
+            // faces selected after it drafted; the rest are clicked while the dialog runs.
             let faces = selectedBodyFaceTargets
-            guard faces.count >= 2, let reference = faces.last else {
-                reportToolStatus("\(action == .beginDraftFace ? "Draft Face" : "Match Face"): select the faces, then the reference face last.", severity: .warning)
+            faceEditSession = WorkspaceFaceEditSession(kind: .draft(faces: Array(faces.dropFirst()), neutral: faces.first))
+            reportToolStatus(faceEditSession?.missingInput ?? "Draft Face: set Degrees; OK, Return or right-click drafts the faces.")
+            return .handled
+        case .beginMatchFace:
+            let faces = selectedBodyFaceTargets
+            guard faces.isEmpty == false else {
+                reportToolStatus("Match Face: select the faces to match.", severity: .warning)
                 return .handled
             }
-            let targets = Array(faces.dropLast())
-            faceEditSession = WorkspaceFaceEditSession(
-                kind: action == .beginDraftFace ? .draft(faces: targets, neutral: reference) : .match(faces: targets, reference: reference)
-            )
-            reportToolStatus("\(faceEditSession?.title ?? ""): the last-selected face is the reference; OK, Return or right-click applies.")
+            faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
+            reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
             return .handled
         case .beginRemoveFillets:
             guard selectedBodyObjectIDs.count == 1, let object = selectedBodyObjectIDs.first else {
@@ -10220,9 +10229,27 @@ private struct ProjectMainViewContent: View {
                             done: { reportToolStatus("\(imprint.title) applied.") })
     }
 
+    /// A face clicked while Draft Face or Match Face runs: its reference or one of its faces.
+    private func pickFaceEditFace(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .face
+        guard var edit = faceEditSession, let hit = target.hit, let face = resolver.selectionTarget(for: hit),
+              case .face = face.component else {
+            reportToolStatus("\(faceEditSession?.title ?? "Face edit"): click on a face of a body.", severity: .warning)
+            return
+        }
+        edit.pick(face: face, toggles: target.modifierFlags.containsControl)
+        faceEditSession = edit
+        reportToolStatus(edit.missingInput ?? "\(edit.title): OK, Return or right-click applies.")
+    }
+
     /// Previews the running face operation's result in place of the document until it changes.
     private func previewFaceEdit() {
         guard let edit = faceEditSession else { return }
+        if let missing = edit.missingInput {
+            reportToolStatus(missing, severity: .warning)
+            return
+        }
         do {
             let action = try DefaultProjectWorkspaceActionPlanner().source(name: edit.title, commands: edit.commands(), from: snapshot)
             startModelingPreview(.source(action))
@@ -10265,6 +10292,10 @@ private struct ProjectMainViewContent: View {
     /// Applies the running face operation as one step; it stays for another try when Core refuses.
     private func confirmFaceEdit() {
         guard let edit = faceEditSession else { return }
+        if let missing = edit.missingInput {
+            reportToolStatus(missing, severity: .warning)
+            return
+        }
         invalidateModelingPreview()
         showsOriginalOverPreview = false
         submitDialogCommand(edit.commands(), name: edit.title, instance: edit.instance,
