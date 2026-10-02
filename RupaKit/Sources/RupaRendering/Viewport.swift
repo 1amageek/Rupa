@@ -179,6 +179,7 @@ public struct Viewport: View {
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
+    private let edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis?
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
     /// The Section Analysis distance handle, while the section plane is being placed.
@@ -385,6 +386,7 @@ public struct Viewport: View {
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
+        edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle? = nil,
@@ -522,6 +524,7 @@ public struct Viewport: View {
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
+        self.edgeAlignmentAnalysis = edgeAlignmentAnalysis
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
         self.sectionAnalysisHandle = sectionAnalysisHandle
@@ -1639,6 +1642,7 @@ public struct Viewport: View {
         key.surfaceAnalysis = surfaceAnalysis
         key.surfaceAnalysisOptions = surfaceAnalysisOptions
         key.surfaceContinuity = surfaceContinuity
+        key.edgeAlignmentAnalysis = edgeAlignmentAnalysis
         key.sectionAnalysis = sectionAnalysis
         key.sectionAnalysisHandle = sectionAnalysisHandle
         key.snap = displayedSnapOverlayResult
@@ -5839,14 +5843,15 @@ extension Viewport {
                 )
                 : nil
         let analysisSource: ViewportSpatialOverlaySemanticSnapshot.AnalysisSource? =
-            surfaceAnalysis != nil || surfaceContinuity != nil
+            surfaceAnalysis != nil || surfaceContinuity != nil || edgeAlignmentAnalysis != nil
                 ? .init(
                     result: surfaceAnalysis,
                     continuity: surfaceContinuity,
                     scene: scene,
                     selection: selection,
                     document: document,
-                    options: surfaceAnalysisOptions
+                    options: surfaceAnalysisOptions,
+                    edgeAlignment: edgeAlignmentAnalysis
                 )
                 : nil
         // During a drag of the section handle the arrow previews the new distance; the section

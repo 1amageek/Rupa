@@ -346,6 +346,13 @@ for a changed source/overlay identity before it emits the complete batch; it
 does not add another authority, cache, or worker lane. Surface-analysis curvature
 combs are scaled so the longest tooth is a sixth of the view's diagonal, times
 the display options' positive `combScale` (Square's Scale).
+Align Surface's Analysis (`ViewportEdgeAlignmentAnalysis`, an optional viewport input carried by
+the analysis source) draws along each aligned edge, with a unit of a tenth of the model's
+diagonal: G0 each sample's gap to the sheet times its scale, G1 the two unit normals' difference
+times unit × scale, G2 both surfaces' curvature combs across the edge (tooth curvature × unit² ×
+scale, with an outline through the tips); each edge's worst value is labelled at its middle,
+green within its limit and orange beyond. A non-positive or non-finite scale or stroke is a typed
+refusal; `alignmentAnalysisDrawsEachGapAtItsScale` owns the G0 hairs and label.
 The original pure builder algorithms are shared with a nonescaping `rethrows`
 checkpoint `(items, positions, visits)`. Legacy nonthrowing wrappers supply an
 explicit no-op checkpoint; the native worker supplies cooperative cancellation

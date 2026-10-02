@@ -832,6 +832,32 @@ func curvatureCombsLengthenByTheirScale() throws {
     #expect(double > 1.5 * single)
 }
 
+/// Align Surface's G0 analysis draws each sample's gap to the sheet magnified by its scale, and
+/// labels the edge with its worst gap.
+@Test
+func alignmentAnalysisDrawsEachGapAtItsScale() throws {
+    let samples = (0..<3).map { k in
+        ViewportEdgeAlignmentAnalysis.Sample(
+            edgePoint: Point3D(x: Double(k) * 0.1, y: 0, z: 0), sheetPoint: Point3D(x: Double(k) * 0.1, y: 0, z: 0.001),
+            sheetNormal: Vector3D(x: 0, y: 0, z: 1), referenceNormal: Vector3D(x: 0, y: 0, z: 1),
+            sheetCurvature: 0, referenceCurvature: 0
+        )
+    }
+    let alignment = ViewportEdgeAlignmentAnalysis(measure: .position, scale: 10, edges: [
+        .init(samples: samples, label: "1 mm", isWithin: false),
+    ])
+    let input = try ViewportSpatialOverlayProducer.makeInput(
+        from: makeAnalysisBudgetSnapshot(curvatureCount: 0, edgeAlignment: alignment), renderOrigin: .origin,
+        retainedSurfaceByteCount: 0, topologyRevision: 13
+    )
+    let hairs = input.meshes.filter { $0.family == .analysis }.map(\.value.positions)
+    #expect(hairs.count == 3)
+    for hair in hairs {
+        #expect(hair.count == 2 && abs(abs(Double(hair[1].z - hair[0].z)) - 0.01) < 1e-6)
+    }
+    #expect(input.labels.filter { $0.family == .analysis }.map(\.value.text) == ["⚠ 1 mm"])
+}
+
 @Test
 func semanticAnalysisBuilderPropagatesMidBuildCancellation() async throws {
     let source = try #require(makeAnalysisBudgetSnapshot(curvatureCount: 100).analysisSource)
@@ -1030,7 +1056,8 @@ private func makePatternBudgetSnapshot(
 private func makeAnalysisBudgetSnapshot(
     curvatureCount: Int,
     includesLargeUnselectedFace: Bool = false,
-    combScale: Double = 1
+    combScale: Double = 1,
+    edgeAlignment: ViewportEdgeAlignmentAnalysis? = nil
 ) -> ViewportSpatialOverlaySemanticSnapshot {
     let featureID = FeatureID()
     let rootSceneNodeID = SceneNodeID()
@@ -1126,7 +1153,8 @@ private func makeAnalysisBudgetSnapshot(
                 showsPrincipalDirections: false,
                 showsTrimBoundaries: false,
                 combScale: combScale
-            )
+            ),
+            edgeAlignment: edgeAlignment
         ),
         editedBodies: [:],
         world: .init(modelBounds: item.modelBounds),

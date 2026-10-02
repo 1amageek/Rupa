@@ -1,11 +1,13 @@
 import SwiftUI
 import RupaCore
+import RupaRendering
 import SwiftCAD
 
 /// The options of the running local face operation (`WorkspaceFaceEditSession`), laid out in the
 /// context panel: Push Face's Distance and Angle Adjacent, Draft Face's Degrees and Offset, Match
 /// Face's Front, and the Grow mode they share; Remove Fillets' Max Radius and Convexity; Align
-/// Surface's Continuity, Tension, Blend rows, Influence, Partial Start and End, and Degree/Spans;
+/// Surface's Continuity, Tension, Blend rows, Influence, Partial Start and End, Degree/Spans and
+/// the Analysis drawn along the previewed edges at its scale;
 /// Rebuild Face's Method with its Degree and Spans or Tolerance, Extend U and V, and Shrink.
 struct WorkspaceFaceEditDialogView: View {
     @Binding var dialog: WorkspaceFaceEditSession
@@ -93,6 +95,19 @@ struct WorkspaceFaceEditDialogView: View {
             if dialog.refitsLayout {
                 layoutFields($dialog.layout)
             }
+            Picker("Analysis", selection: $dialog.analysisMeasure) {
+                ForEach(ViewportEdgeAlignmentAnalysis.Measure.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .fixedSize()
+            .contentShape(Rectangle())
+            .help("Checks the previewed edges' continuity: G0 their gap, G1 the turn between the normals, G2 both surfaces' curvature combs across the edge, each drawn at its scale.")
+            .accessibilityIdentifier("WorkspaceFaceEdit.analysisMeasure")
+            TextField("\(dialog.analysisMeasure.rawValue) Scale", value: Binding(
+                get: { dialog.analysisScales[dialog.analysisMeasure] ?? 10 },
+                set: { dialog.analysisScales[dialog.analysisMeasure] = $0 > 0 ? $0 : dialog.analysisScales[dialog.analysisMeasure] }
+            ), format: .number)
+            .frame(width: 56)
+            .accessibilityIdentifier("WorkspaceFaceEdit.analysisScale")
         case .rebuildFace:
             Picker("Method", selection: $dialog.rebuildMethod) {
                 ForEach(WorkspaceFaceEditSession.RebuildMethodChoice.allCases, id: \.self) { Text($0.rawValue).tag($0) }

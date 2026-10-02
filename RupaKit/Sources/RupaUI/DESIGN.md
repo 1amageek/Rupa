@@ -918,8 +918,16 @@ End, Boundary flow, and Degree/Spans refitting the sheet first), applied as one 
 an aligned sheet's inspector shows its Analysis (G0 distance, G1 angle, G2 curvature difference),
 measured once per document generation; curve ends align through Align Vertex. Face-edit dialogs
 offer Preview: the edit's commands previewed through the modeling preview in place of the
-document, Control held showing the original (Align's Ctrl Show original), any change to the edit
-dropping the preview. Rebuild
+document, Control held showing the original (Align's Ctrl Show original), any change to the edit's
+commands dropping the preview. While Align's preview is shown, its Analysis (G0, G1 or G2, each
+with its Scale, 10 by default — Plasticity's G0/G1/G2 Scale) is drawn along every aligned edge:
+`WorkspaceAlignAnalysis` evaluates the preview document off the main actor (incrementally from the
+current evaluation), takes the kernel's `SurfaceAlignAnalyzer.samples` of the alignments the
+preview adds, and keeps them apart from the drawn `ViewportEdgeAlignmentAnalysis`, so changing the
+measure or its scale redraws without evaluating or dropping the preview; each edge is labelled
+with its worst gap (display unit), angle (deg) or curvature difference (m⁻¹), ✓ within the
+kernel's limits and ⚠ beyond. `WorkspaceAlignAnalysisTests` own a curvature alignment within every
+measure with matching combs and a positional one's 45° turn hairs. Rebuild
 dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
 Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays
 the one selected face flat as a new sheet object.

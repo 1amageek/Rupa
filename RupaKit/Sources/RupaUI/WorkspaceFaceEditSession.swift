@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import SwiftCAD
 
 /// The dialog of a local face operation while it runs, on the faces selected when it started:
@@ -73,6 +74,11 @@ struct WorkspaceFaceEditSession: Equatable {
     var boundaryFlow = SquareFitOptions.BoundaryFlow.next
     /// Each aligned pair's own continuity, by its index, overriding `continuity`.
     var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
+    /// Align Surface's Analysis while the dialog is open: the continuity checked along the aligned
+    /// edges and each one's scale (Plasticity's G0, G1 and G2 Scale, 10 each). They change what is
+    /// drawn, never the commands.
+    var analysisMeasure = ViewportEdgeAlignmentAnalysis.Measure.position
+    var analysisScales: [ViewportEdgeAlignmentAnalysis.Measure: Double] = [.position: 10, .tangent: 10, .curvature: 10]
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
     /// Rebuild Face's method, which Tab steps: the explicit `layout`, a tolerance in meters, or

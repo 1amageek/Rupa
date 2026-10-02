@@ -337,6 +337,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let selection: SelectionModel
         let document: DesignDocument
         let options: ViewportSurfaceAnalysisOptions
+        /// Align Surface's Analysis along its aligned edges, drawn while its dialog is open.
+        var edgeAlignment: ViewportEdgeAlignmentAnalysis? = nil
     }
 
     /// Raw section inputs captured at the MainActor boundary.  Contour limits
@@ -391,6 +393,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let continuityItems: [ContinuityItem]
         /// The curvature combs' length relative to their automatic one.
         var combScale: Double = 1
+        var edgeAlignment: ViewportEdgeAlignmentAnalysis? = nil
     }
 
     struct Section: Sendable {
@@ -1181,7 +1184,8 @@ enum ViewportSpatialOverlayProducer {
         guard !overlay.items.isEmpty
                 || !overlay.principalDirectionItems.isEmpty
                 || !overlay.boundaryItems.isEmpty
-                || !continuity.items.isEmpty else {
+                || !continuity.items.isEmpty
+                || source.edgeAlignment?.edges.isEmpty == false else {
             return nil
         }
         var items: [ViewportSpatialOverlaySemanticSnapshot.Analysis.Item] = []
@@ -1236,7 +1240,8 @@ enum ViewportSpatialOverlayProducer {
             principalDirectionItems: principalDirectionItems,
             boundaryItems: boundaryItems,
             continuityItems: continuityItems,
-            combScale: source.options.combScale
+            combScale: source.options.combScale,
+            edgeAlignment: source.edgeAlignment
         )
     }
 
@@ -1337,7 +1342,8 @@ enum ViewportSpatialOverlayProducer {
         guard !analysis.items.isEmpty
                 || !analysis.principalDirectionItems.isEmpty
                 || !analysis.boundaryItems.isEmpty
-                || !analysis.continuityItems.isEmpty else {
+                || !analysis.continuityItems.isEmpty
+                || analysis.edgeAlignment?.edges.isEmpty == false else {
             throw RealityViewportSpatialBatch.invalid(
                 "The active surface-analysis route has no native world descriptors."
             )
@@ -1454,7 +1460,52 @@ enum ViewportSpatialOverlayProducer {
                 )
             ))
         }
+        if let alignment = analysis.edgeAlignment {
+            try appendEdgeAlignment(alignment, unit: diagonal / 10, meshes: &meshes, labels: &labels)
+        }
         activeFamilies.insert(.analysis)
+    }
+
+    /// Align Surface's Analysis: each edge's hairs or combs (a tenth of the model's diagonal per
+    /// radian, its square per m⁻¹) and its worst value beside its middle, green within its limit
+    /// and orange beyond.
+    private static func appendEdgeAlignment(
+        _ alignment: ViewportEdgeAlignmentAnalysis,
+        unit: Double,
+        meshes: inout [ViewportSpatialOverlayInput.Mesh],
+        labels: inout [ViewportSpatialOverlayInput.Label]
+    ) throws {
+        guard alignment.scale.isFinite, alignment.scale > 0 else {
+            throw RealityViewportSpatialBatch.invalid("An alignment analysis scale must be positive.")
+        }
+        for stroke in alignment.strokes(unit: unit) {
+            try Task.checkCancellation()
+            guard stroke.points.allSatisfy(isFinitePoint) else {
+                throw RealityViewportSpatialBatch.invalid("An alignment analysis stroke is not finite.")
+            }
+            let color: SIMD4<Float>
+            switch stroke.role {
+            case .gap: color = SIMD4<Float>(0.97, 0.60, 0.16, 0.90)
+            case .turn: color = SIMD4<Float>(0.26, 0.82, 0.47, 0.90)
+            case .sheetComb: color = SIMD4<Float>(0.55, 0.86, 0.33, 0.85)
+            case .referenceComb: color = SIMD4<Float>(0.40, 0.66, 0.30, 0.70)
+            }
+            meshes.append(.init(family: .analysis, value: try line(stroke.points, color: color, depth: .annotation)))
+        }
+        for edge in alignment.edges where !edge.samples.isEmpty {
+            let middle = edge.samples[edge.samples.count / 2].edgePoint
+            labels.append(.init(
+                family: .analysis,
+                value: try label(
+                    (edge.isWithin ? "✓ " : "⚠ ") + edge.label,
+                    anchor: middle,
+                    offset: CGPoint(x: 0, y: -18),
+                    color: edge.isWithin ? SIMD4<Float>(0.55, 0.86, 0.33, 1) : SIMD4<Float>(0.97, 0.60, 0.16, 1),
+                    alignment: .center,
+                    heightPoints: 10
+                )
+            ))
+        }
     }
 
     static func appendSection(

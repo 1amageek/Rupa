@@ -30,6 +30,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var surfaceAnalysis: SurfaceAnalysisResult?
     var surfaceAnalysisOptions = ViewportSurfaceAnalysisOptions()
     var surfaceContinuity: SurfaceContinuityResult?
+    var edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis?
     var sectionAnalysis: SectionAnalysisResult?
     var sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle?
     var snap: SnapResolutionResult?

@@ -209,6 +209,8 @@ private struct ProjectMainViewContent: View {
     @State private var showsOriginalOverPreview = false
     /// Whether the modeling preview shows the face edit's result, so a change to the edit drops it.
     @State private var previewsFaceEdit = false
+    /// Align Surface's Analysis of the previewed alignment, measured once per preview.
+    @State private var alignAnalysis: WorkspaceAlignAnalysis?
     /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
     @State private var faceLoopOffsetIsIndividual = true
     @State private var projectSession: WorkspaceProjectSession?
@@ -2097,6 +2099,13 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// The previewed alignment's Analysis as Align's dialog draws it: its measure at its scale.
+    private var previewedAlignAnalysis: ViewportEdgeAlignmentAnalysis? {
+        guard let alignAnalysis, let edit = faceEditSession, case .alignSurface = edit.kind else { return nil }
+        return alignAnalysis.drawn(measure: edit.analysisMeasure, scale: edit.analysisScales[edit.analysisMeasure] ?? 10,
+                                   displayUnit: snapshot.workspaceState.ruler.displayUnit)
+    }
+
     private var workArea: some View {
         CollapsibleView(isExpanded: $isPreviewExpanded) {
             WorkspaceCanvasOverlayHost(
@@ -2116,6 +2125,7 @@ private struct ProjectMainViewContent: View {
                             revision: snapshot.workspaceState.revision, ruler: snapshot.workspaceState.ruler
                         ),
                         objectSelectionIndex: ViewportObjectSelectionIndex(document: payload.document, selection: .empty),
+                        edgeAlignmentAnalysis: previewedAlignAnalysis,
                         canvasDragPreviewKind: nil,
                         allowsObjectAffordances: false,
                         selectedPresentationHasExactCADContext: false,
@@ -2457,12 +2467,16 @@ private struct ProjectMainViewContent: View {
         .onChange(of: slideCommandState.isActive) { _, isActive in
             slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)
         }
-        .onChange(of: faceEditSession) { _, _ in
-            // The face edit changed or ended: its preview no longer shows it.
-            guard previewsFaceEdit else { return }
+        .onChange(of: faceEditSession) { old, new in
+            // The face edit changed or ended: its preview no longer shows it. Options that only
+            // change what is drawn (Align's Analysis) keep it.
+            guard previewsFaceEdit, old?.commands() != new?.commands() else { return }
             previewsFaceEdit = false
             showsOriginalOverPreview = false
             invalidateModelingPreview()
+        }
+        .task(id: previewsFaceEdit && modelingPreview.phase == .ready ? modelingPreview.token : nil) {
+            await measureAlignAnalysis()
         }
         .onModifierKeysChanged(mask: .control) { _, keys in
             // A previewed face edit shows the original while Control is held.
@@ -10180,6 +10194,34 @@ private struct ProjectMainViewContent: View {
         } catch {
             invalidateModelingPreview()
             modelingPreview.errorMessage = recordFailure(error)
+        }
+    }
+
+    /// Measures the previewed alignment's edges for Align Surface's Analysis off the main actor;
+    /// cleared while there is no ready face-edit preview.
+    private func measureAlignAnalysis() async {
+        guard previewsFaceEdit, case .alignSurface = faceEditSession?.kind, let payload = modelingPreview.payload else {
+            alignAnalysis = nil
+            return
+        }
+        let base = snapshot.document.document
+        let current = snapshot.cadInteraction
+        let preview = payload.document
+        let measuring = Task.detached(priority: .userInitiated) {
+            try WorkspaceAlignAnalysis.evaluate(preview: preview, base: base, current: current)
+        }
+        do {
+            let analysis = try await withTaskCancellationHandler {
+                try await measuring.value
+            } onCancel: {
+                measuring.cancel()
+            }
+            guard !Task.isCancelled else { return }
+            alignAnalysis = analysis
+        } catch {
+            guard !Task.isCancelled else { return }
+            alignAnalysis = nil
+            reportToolStatus("Align Surface analysis: \(recordFailure(error))", severity: .warning, recordsFailure: false)
         }
     }
 
