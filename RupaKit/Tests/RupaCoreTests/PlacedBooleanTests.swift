@@ -167,9 +167,10 @@ import Testing
             boolean: SceneNodePlacementBoolean(operation: .slice, targetSceneNodeID: target)
         ))
         let pieces = session.document.productMetadata.sceneNodes.values.filter { $0.name.hasPrefix("Placed Slice ") && $0.isVisible }
-        #expect(pieces.count == 3)
-        // The target's volume is kept, cut into pieces; the original tool is untouched.
-        #expect(abs(try volume(session.document) - 2 * cube) < tolerance)
+        // Plasticity's Slice keeps every piece: the target's three and each copy's 75 mm outside it.
+        #expect(pieces.count == 5)
+        // The target's volume cut into pieces, the copies' parts outside it, the original tool untouched.
+        #expect(abs(try volume(session.document) - 3.5 * cube) < tolerance)
         #expect(session.evaluationStatus == .valid)
     }
 }

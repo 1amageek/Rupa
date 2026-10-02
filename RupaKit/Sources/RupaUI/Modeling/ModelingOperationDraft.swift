@@ -420,7 +420,13 @@ struct ModelingOperationDraft: Equatable {
     /// XNURBS: the operands that are guides (the rest frame it), the continuity edges take, and its
     /// options.
     var xnurbsGuideNodeIDs: Set<SceneNodeID> = []
+    /// Every boundary edge's continuity unless the edge has its own in `xnurbsEdgeContinuity`
+    /// (Plasticity's badge per edge).
     var xnurbsContinuity = LoftContinuityChoice.g0
+    var xnurbsEdgeContinuity: [SelectionTarget: LoftContinuityChoice] = [:]
+    func xnurbsContinuity(of target: SelectionTarget) -> LoftContinuityChoice {
+        xnurbsEdgeContinuity[target] ?? xnurbsContinuity
+    }
     var xnurbsQuadSided = false
     var xnurbsFlatness = "0.95"
     /// XNURBS's Tension as the dialog shows it (0.5 neutral, `DialogTensionScale`).
@@ -966,7 +972,7 @@ struct ModelingOperationDraft: Equatable {
             // curves; guides: curves marked as such.
             let boundaryTargets = targets.filter { !xnurbsGuideNodeIDs.contains($0.sceneNodeID) }
             guard boundaryTargets.count >= 2 else { throw invalid("XNURBS takes two or more boundary edges or curves.") }
-            let tension = xnurbsContinuity == .g0 ? 1 : DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
+            let tension = DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
             var edgeCurves: [EdgeCurveSource] = []
             let boundaries = try boundaryTargets.map { target -> SquareSide in
                 switch target.component {
@@ -976,7 +982,7 @@ struct ModelingOperationDraft: Equatable {
                     ))
                     edgeCurves.append(curve)
                     var continuity: SurfaceEdgeContinuity?
-                    if let order = xnurbsContinuity.order, let edge = curve.feature.edges.first {
+                    if let order = xnurbsContinuity(of: target).order, let edge = curve.feature.edges.first {
                         continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
                                                            edge: edge, order: order, tension: tension,
                                                            angularAllowance: try continuityAllowanceRadians(),

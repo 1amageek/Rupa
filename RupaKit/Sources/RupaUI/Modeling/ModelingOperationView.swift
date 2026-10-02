@@ -84,11 +84,23 @@ struct ModelingOperationView: View {
                                 if !draft.loftGuideNodeIDs.contains(id) { loftSectionFields(for: id) }
                             }
                             if draft.kind == .xnurbs {
-                                let id = draft.targets[index].sceneNodeID
+                                let target = draft.targets[index]
+                                let id = target.sceneNodeID
                                 Toggle("Use as guide", isOn: Binding(
                                     get: { draft.xnurbsGuideNodeIDs.contains(id) },
                                     set: { if $0 { draft.xnurbsGuideNodeIDs.insert(id) } else { draft.xnurbsGuideNodeIDs.remove(id) } }
                                 )).contentShape(Rectangle())
+                                if case .edge = target.component {
+                                    Picker("Edge continuity", selection: Binding(
+                                        get: { draft.xnurbsContinuity(of: target) },
+                                        set: { draft.xnurbsEdgeContinuity[target] = $0 }
+                                    )) {
+                                        ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .contentShape(Rectangle())
+                                    .help("This edge's continuity with the face beside it.")
+                                }
                             }
                             if draft.kind == .square, !draft.isFace(draft.targets[index]) {
                                 let target = draft.targets[index]
@@ -478,10 +490,14 @@ struct ModelingOperationView: View {
             Text("Two planar sheets meeting: the bridge meets each the width from where their planes meet. Curved or parallel sheets: the bridge spans their nearest boundary edges, G2 with both within the allowances, or chamfers across.")
                 .font(.caption).foregroundStyle(.secondary)
         case .xnurbs:
-            Picker("Continuity", selection: $draft.xnurbsContinuity) {
+            Picker("Continuity", selection: Binding(
+                get: { draft.xnurbsContinuity },
+                set: { draft.xnurbsContinuity = $0; draft.xnurbsEdgeContinuity = [:] }
+            )) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
+            .help("Every boundary edge's continuity; each edge's own picker overrides it.")
             Toggle("Quad sided", isOn: $draft.xnurbsQuadSided)
                 .contentShape(Rectangle())
                 // Plasticity moves Flatness to 1.00 with Quad sided on and back to 0.95 off,
@@ -491,8 +507,8 @@ struct ModelingOperationView: View {
                 }
                 .help("Two to four boundaries make Square's untrimmed sheet; otherwise one sheet trimmed by the closed boundary.")
             TextField("Flatness (0–1]", text: $draft.xnurbsFlatness)
-            if draft.xnurbsContinuity != .g0 {
-                TextField("Tension", text: $draft.xnurbsTension)
+            TextField("Tension", text: $draft.xnurbsTension)
+            if draft.xnurbsContinuity != .g0 || draft.xnurbsEdgeContinuity.values.contains(where: { $0 != .g0 }) {
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)
                 if draft.xnurbsContinuity == .g2 {
                     lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)

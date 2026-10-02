@@ -1411,6 +1411,34 @@ struct ModelingOperationDraftTests {
         #expect(quad.quadSided && quad.boundaries.count == 4)
     }
 
+    @Test func xnurbsTakesEachEdgesOwnContinuity() throws {
+        // The four top edges of a box as boundaries: one edge G2 with the side face beside it, the
+        // others the dialog's G0, as Plasticity's badges mix them.
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edges = topology.entries.filter { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9
+        }.compactMap { $0.selectionTarget() }
+        #expect(edges.count == 4)
+        var draft = makeDraft(.xnurbs, targets: edges)
+        draft.xnurbsEdgeContinuity[edges[0]] = .g2
+        guard case .createXNurbs(_, let xnurbs, let edgeCurves) = try draft.command(in: document) else {
+            Issue.record("Expected an XNURBS command.")
+            return
+        }
+        #expect(edgeCurves.count == 4)
+        #expect(xnurbs.boundaries.map { $0.continuity?.order } == [.curvature, nil, nil, nil])
+        // The dialog's continuity clears the edges' own.
+        #expect(draft.xnurbsContinuity(of: edges[1]) == .g0)
+    }
+
     @Test func aLineExtrudedWithAThicknessMakesASolidWall() throws {
         var document = DesignDocument.empty()
         let line = try document.createLineSketch(name: "Line", plane: .xy,
