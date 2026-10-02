@@ -1307,26 +1307,25 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
         )
     )
     let rightGuideID = try #require(session.document.cadDocument.designGraph.order.last)
-    do {
-        _ = try session.execute(
-            .createSweep(
-                name: "Measured Multiple Point Guided Sweep",
-                sections: [.profile(ProfileReference(featureID: profileID))],
-                path: SweepPathReference(featureID: pathID),
-                guides: [
-                    SweepGuideReference(featureID: topGuideID),
-                    SweepGuideReference(featureID: rightGuideID),
-                ],
-                targets: [],
-                options: SweepOptions(guideMethod: .point)
-            )
+    // Two Point guides deform the section by the linear map taking both contacts to their
+    // guides' ends: the 4 × 2 mm rectangle widens 1.5× across x and 2× across y over 20 mm.
+    _ = try session.execute(
+        .createSweep(
+            name: "Measured Multiple Point Guided Sweep",
+            sections: [.profile(ProfileReference(featureID: profileID))],
+            path: SweepPathReference(featureID: pathID),
+            guides: [
+                SweepGuideReference(featureID: topGuideID),
+                SweepGuideReference(featureID: rightGuideID),
+            ],
+            targets: [],
+            options: SweepOptions(guideMethod: .point)
         )
-        Issue.record("Exact kernel must reject multi-guide sweeps without exact guide-solved surfaces.")
-    } catch let error as EditorError {
-        #expect(error.code == .evaluationFailed)
-        // The kernel's own reason, which is what the refusal reads as (not a dump of its code).
-        #expect(error.message.contains("Guide-constrained sweep sections require exact guide-solved surfaces"))
-    }
+    )
+    let result = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    #expect(result.counts.solids == 1)
+    // ∫₀¹ 8 mm² (1 + t/2)(1 + t) · 20 mm dt = 306⅔ mm³.
+    #expect(abs(result.totals.solidVolumeCubicMeters - 306.0 * 1e-9 - 2e-9 / 3) < 3e-9, "\(result.totals.solidVolumeCubicMeters)")
 }
 
 @MainActor

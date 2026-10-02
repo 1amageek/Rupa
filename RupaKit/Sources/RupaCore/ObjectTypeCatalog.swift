@@ -105,7 +105,9 @@ public enum ObjectTypeCatalog {
             systemImage: "point.3.connected.trianglepath.dotted",
             representation: .threeDimensional,
             category: .body,
-            geometryRole: .surface,
+            // A PolySpline is a surface over an open mesh and a solid over a closed one, so the
+            // role is the one its feature declares.
+            geometryRole: nil,
             properties: polySplineProperties
         ),
         definition(

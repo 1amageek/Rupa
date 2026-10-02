@@ -744,6 +744,23 @@ public struct MeasurementService {
                 return
             }
             includedSourceFeatureIDs.insert(featureID)
+            // A closed mesh's PolySplines are a solid, measured as evaluated.
+            if polySpline.sourceMesh.isClosedSurface {
+                var evaluatedSkipReason: String?
+                guard let solid = try measureEvaluatedSolid(
+                    featureID: featureID, featureName: node.name, sourceFeatureID: featureID, sourceFeatureName: node.name,
+                    evaluatedDocument: evaluatedDocument(), unsupportedReason: &evaluatedSkipReason
+                ) else {
+                    diagnostics.append(EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement skipped PolySpline solid outside the supported evaluation subset.\(evaluatedSkipReason.map { " \($0)" } ?? "")"
+                    ))
+                    return
+                }
+                solids.append(solid)
+                bounds.include(solid.bounds)
+                return
+            }
             boundsOnlySources.append((featureID, polySpline.sourceMesh.positions))
             diagnostics.append(
                 EditorDiagnostic(

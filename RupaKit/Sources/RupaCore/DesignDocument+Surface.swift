@@ -109,19 +109,22 @@ extension DesignDocument {
             options: options,
             tolerance: modelingSettings.tolerance
         )
-        guard analysis.isSupported else {
+        // A rectangular grid of quads, or any other valid manifold mesh as a general patch network.
+        guard analysis.isSupported || analysis.buildsGeneralPatchNetwork else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline requires a supported source mesh: \(analysis.failureMessage ?? "No supported patch candidate.")"
             )
         }
 
+        // A closed mesh closes into a solid.
+        let closesIntoSolid = sourceMesh.isClosedSurface
         let featureID = FeatureID()
         let feature = FeatureNode(
             id: featureID,
             name: trimmedName,
             operation: .polySpline(polySpline),
-            outputs: [FeatureOutput(role: .sheet)]
+            outputs: [FeatureOutput(role: closesIntoSolid ? .body : .sheet)]
         )
 
         let previousCADDocument = cadDocument
@@ -143,7 +146,7 @@ extension DesignDocument {
                 documentID: cadDocument.id,
                 sourceSection: nil,
                 typeID: .polySpline,
-                geometryRole: .surface,
+                geometryRole: closesIntoSolid ? .solid : .surface,
                 properties: ObjectPropertySet(values: [
                     "patch.count": .integer(analysis.supportedPatchCount),
                     "control.point.u": .integer(4),

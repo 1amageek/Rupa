@@ -1695,6 +1695,15 @@ span in each direction and updates the degree and control-point properties.
 and surface subdivision cases. `GeneralSplineRefinementTests` owns arbitrary-degree,
 nonuniform-knot, closed-curve and atomic refusal coverage.
 
+### PolySplines of general meshes
+
+`createPolySplineSurface` admits a mesh the kernel's analysis supports as a rectangular quad grid
+or, `PolySplineMeshAnalysisResult.buildsGeneralPatchNetwork`, as a general patch network (any other
+valid manifold mesh). A closed mesh (`Mesh.isClosedSurface`) declares a body output and a solid
+role, an open one a sheet and a surface role; the PolySpline type leaves the role to its feature, as
+the cylinder does. Measurement takes a closed mesh's PolySplines as an evaluated solid and an open
+one's by its source bounds. `polySplineOfAClosedGeneralMeshIsASolid` owns a cube mesh's solid.
+
 ### Evaluated primitive measurement contract
 
 Every solid `PrimitiveDefinition` uses the same output-driven

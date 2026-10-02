@@ -3577,3 +3577,20 @@ private func removeTemporaryDirectory(_ url: URL) {
         Issue.record("Failed to remove temporary directory: \(error)")
     }
 }
+
+/// A cube's mesh, which no rectangular grid spans (every corner of valence three), makes a
+/// PolySpline solid of six bicubic patches; it measures as a solid.
+@Test func polySplineOfAClosedGeneralMeshIsASolid() async throws {
+    var document = DesignDocument.empty()
+    var positions: [Point3D] = []
+    for x in [-0.01, 0.01] { for y in [-0.01, 0.01] { for z in [-0.01, 0.01] { positions.append(Point3D(x: x, y: y, z: z)) } } }
+    let quads: [[UInt32]] = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]
+    let mesh = Mesh(positions: positions, indices: quads.flatMap { q in [q[0], q[1], q[2], q[0], q[2], q[3]] })
+    let featureID = try document.createPolySplineSurface(name: "Cube", sourceMesh: mesh, options: PolySplineOptions(mergePatches: false))
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == featureID })
+    #expect(node.object?.geometryRole == .solid)
+    let measurement = try MeasurementService().measure(document: document, ruler: .standard(for: .meter))
+    #expect(measurement.totals.solidVolumeCubicMeters > 0 && measurement.totals.solidVolumeCubicMeters < 0.02 * 0.02 * 0.02)
+}
