@@ -159,7 +159,10 @@ a solid among the targets and fewer than two sheets are refused as
 object (`patchHoles(name:target:)`) groups the sheet's open edges into loops by their shared ends,
 prepares one surface fill per loop on the sheet as it is, appends them, and joins the sheet with
 its fills, so a sheet whose every hole is filled becomes a solid in its object (Plasticity's "Holes
-are patched and made Solid"); a sheet with no hole is refused (`SurfaceFillCommandTests`).
+are patched and made Solid"); a sheet with no hole is refused. Insert Sheet
+(`insertSheet(name:hole:sheet:)`, Plasticity's Trim to hole) fills the hole through an edge with
+another sheet shown in the same frame — a surface fill taking that sheet's part the hole encloses —
+joins it in the same way and takes the inserted sheet's object away (`SurfaceFillCommandTests`).
 
 Unjoin on faces (`unjoinFaces(name:targets:)`) and on solids or sheets
 (`unjoinShells(name:targets:)`) append one Swift-CAD `unjoinFaces` feature per

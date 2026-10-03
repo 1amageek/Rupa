@@ -188,6 +188,7 @@ enum PreparedAutomationSourceCommandValidation {
              .duplicateBodyFaces,
              .joinSheets,
              .patchHoles,
+             .insertSheet,
              .unjoinFaces,
              .unjoinShells,
              .reverseSheets,

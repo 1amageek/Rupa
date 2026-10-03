@@ -274,6 +274,7 @@ enum ProductionMainViewActionManifest {
         "duplicateBodyFaces",
         "joinSheets",
         "patchHoles",
+        "insertSheet",
         "unjoinFaces",
         "unjoinShells",
         "reverseSheets",

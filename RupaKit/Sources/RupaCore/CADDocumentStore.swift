@@ -3168,6 +3168,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .insertSheet(name, hole, sheet):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.insertSheet(
+                name: name, hole: hole, sheet: sheet, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .unjoinFaces(name, targets):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.unjoinFaces(

@@ -34,6 +34,48 @@ struct SurfaceFillCommandTests {
     }
 
     @Test
+    func insertSheetTrimsASheetToTheHoleAndClosesTheBox() throws {
+        // Plasticity's Insert Sheet: the box's top taken out, a larger flat sheet at its height is
+        // trimmed to the hole and sewn in, the box solid again and the inserted sheet's object gone.
+        let session = EditorSession()
+        _ = try #require(session.createDefaultExtrudedRectangle())
+        let solidFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let solidSceneNodeID = try #require(sceneNodeID(for: solidFeatureID, in: session.document))
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        let entries = try TopologySnapshotService().snapshot(document: session.document).entries
+        let top = try #require(entries.first {
+            $0.kind == .face && $0.sceneNodeID == solidSceneNodeID.description && $0.generatedRole == "endFace"
+        }?.selectionTarget())
+        let zs: [Double] = entries.compactMap { $0.start?.z }
+        let topZ = try #require(zs.max())
+        let xs: [Double] = entries.compactMap { $0.start?.x }
+        let ys: [Double] = entries.compactMap { $0.start?.y }
+        let minX = try #require(xs.min()), maxX = try #require(xs.max())
+        let minY = try #require(ys.min()), maxY = try #require(ys.max())
+        let (lowX, highX, lowY, highY) = (minX - 0.01, maxX + 0.01, minY - 0.01, maxY + 0.01)
+        _ = try session.execute(.deleteBodyFaces(targets: [top]))
+        let openFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let open = try #require(sceneNodeID(for: openFeatureID, in: session.document))
+        _ = try session.execute(.createBSplineSurface(name: "Lid", surface: .bilinearPatch(
+            bottomLeft: Point3D(x: lowX, y: lowY, z: topZ), bottomRight: Point3D(x: highX, y: lowY, z: topZ),
+            topRight: Point3D(x: highX, y: highY, z: topZ), topLeft: Point3D(x: lowX, y: highY, z: topZ)
+        )))
+        let lidFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let lid = try #require(sceneNodeID(for: lidFeatureID, in: session.document))
+        let hole = try #require(try TopologySnapshotService().snapshot(document: session.document).entries.first {
+            $0.kind == .edge && $0.sceneNodeID == open.description
+                && abs(($0.start?.z ?? 0) - topZ) < 1e-9 && abs(($0.end?.z ?? 0) - topZ) < 1e-9
+        }?.selectionTarget())
+        _ = try session.execute(.insertSheet(name: "Patch", hole: hole, sheet: lid))
+        #expect(session.evaluationStatus == .valid)
+        #expect(session.document.productMetadata.sceneNodes[open]?.object?.geometryRole == .solid)
+        #expect(session.document.productMetadata.sceneNodes[lid] == nil)
+        let measured = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
+        #expect(measured.counts.solids == 1 && measured.counts.sheets == 0)
+        #expect(abs(measured.totals.solidVolumeCubicMeters - volume) < 1e-12)
+    }
+
+    @Test
     func deletedSolidFaceOpeningCreatesRetainedFillSheetAndSupportsUndoRedo() throws {
         let session = EditorSession()
         _ = try #require(session.createDefaultExtrudedRectangle())

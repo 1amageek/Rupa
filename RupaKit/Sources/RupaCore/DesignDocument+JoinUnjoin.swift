@@ -146,7 +146,7 @@ extension DesignDocument {
     }
 
     /// The object `target` names, when it shows a body of its own (not an instance of one).
-    private func bodyObject(
+    func bodyObject(
         _ target: SelectionTarget, operationName: String
     ) throws -> (nodeID: SceneNodeID, featureID: FeatureID) {
         guard let node = productMetadata.sceneNodes[target.sceneNodeID],

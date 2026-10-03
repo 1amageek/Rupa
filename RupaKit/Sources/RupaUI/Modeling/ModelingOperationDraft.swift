@@ -1283,6 +1283,13 @@ struct ModelingOperationDraft: Equatable {
             // A sheet object: every hole filled and joined with it, a solid when they close.
             return .patchHoles(name: name, target: targets[0].sceneNodeID)
         case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
+            && patchGuideTargets.count == 1 && patchHoleEdges.count + 1 == targets.count
+            && document.productMetadata.sceneNodes[patchGuideTargets[0].sceneNodeID]?.object?.geometryRole == .surface
+            && patchGuideTargets[0].sceneNodeID != patchHoleEdges[0].sceneNodeID:
+            // A hole's edges and another sheet: Insert Sheet, the sheet trimmed to the hole and
+            // sewn into it.
+            return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID)
+        case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
             && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:
             // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,

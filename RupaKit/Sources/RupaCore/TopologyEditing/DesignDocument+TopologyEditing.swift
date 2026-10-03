@@ -73,6 +73,7 @@ extension DesignDocument {
     public func prepareSurfaceFill(
         name: String,
         target: SelectionTarget,
+        insertedSheet: FeatureID? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -86,7 +87,8 @@ extension DesignDocument {
         )
         let operation = FeatureOperation.surfaceFill(SurfaceFillFeature(
             targetFeatureID: selection.sourceID,
-            boundarySeed: selection.reference
+            boundarySeed: selection.reference,
+            insertedSheet: insertedSheet
         ))
         let feature = try FeatureNodeFactory.make(
             operation: operation,
