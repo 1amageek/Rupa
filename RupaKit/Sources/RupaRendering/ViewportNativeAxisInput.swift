@@ -21,6 +21,7 @@ struct ViewportNativeAxisInput: Sendable {
         case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexDragTarget)
         case surfaceControlPoint(ViewportSurfaceControlPointDragTarget)
         case sectionAnalysisDistance(ViewportSectionAnalysisDistanceDragTarget)
+        case dialogValue(ViewportDialogValueDragTarget)
     }
 
     let record: ViewportSpatialInteractionRecord
@@ -56,6 +57,8 @@ struct ViewportNativeAxisInput: Sendable {
         case .sketchCornerTreatment(_, _, _, _, let value):
             axis = value
         case .sectionAnalysisDistance(let value):
+            axis = value
+        case .dialogValue(_, let value):
             axis = value
         case .patternArrayLinearAxis(let value):
             axis = try Self.patternAxis(origin: value.basePoint, direction: value.direction, value: value.distanceMeters)
@@ -140,7 +143,7 @@ struct ViewportNativeAxisInput: Sendable {
                 throw RealityViewportSpatialBatch.invalid("The native edge-offset value overflowed.")
             }
             return result
-        case .sectionAnalysisDistance, .sketchCornerTreatment:
+        case .sectionAnalysisDistance, .sketchCornerTreatment, .dialogValue:
             // A signed offset: the plane may move to either side of its source, and Fillet's
             // handle is a Fillet radius on its inside and a Chamfer distance outside.
             let result = axis.baseValue + sourceDelta
@@ -273,6 +276,10 @@ struct ViewportNativeAxisInput: Sendable {
         case .sectionAnalysisDistance:
             guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
             return .sectionAnalysisDistance(.init(distanceMeters: value))
+
+        case .dialogValue(let id, _):
+            guard abs(value - axis.baseValue) > 1.0e-12 else { return nil }
+            return .dialogValue(.init(id: id, valueMeters: value))
 
         case .independentCopyExtrudeDistance(let target):
             return .independentCopyExtrudeDistance(.init(

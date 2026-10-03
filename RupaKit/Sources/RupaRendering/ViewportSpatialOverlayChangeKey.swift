@@ -36,6 +36,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var analysisLabels: [ViewportAnalysisLabel] = []
     var sectionAnalysis: SectionAnalysisResult?
     var sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle?
+    var dialogValueHandles: [ViewportDialogValueHandle] = []
     var snap: SnapResolutionResult?
     var snapOptions: SnapResolutionOptions?
     var placement: ViewportPlacementHighlight?
@@ -54,7 +55,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback] = []
     var transformGizmo: ViewportTransformGizmoConfiguration?
     // The producer has a fixed set of callback routes; only availability matters.
-    var availableRoutes: UInt32 = 0
+    var availableRoutes: UInt64 = 0
 
     /// This key without what the pointer's hover decides: the hovered target and reference, the
     /// hovered handle and hit, the edge-treatment hover target, snap feedback and the placement

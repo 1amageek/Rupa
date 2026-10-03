@@ -907,7 +907,10 @@ Extrude, Revolve, Sweep or Pipe dialog (`ModelingOperationDraft.SolidDialogKey`)
 Shift+E choose Slice, Union, Difference and Intersect, B New body, T turns Keep tools, A types the
 angle (Extrude's Degrees, Revolve's and Pipe's Angle), Shift+T the thickness (not a sheet's, not
 Sweep's) and D Extrude's distance, Pipe's size or Sweep's twist; a key the dialog has no option for
-is ignored. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
+is ignored. Pipe's dialog shows its gizmo (`viewportDialogValueHandles`): the section size as a dot
+on the section's rim at the path's start, dragged across the path, and the signed Thickness as a
+square out from the rim, each drag written into its field (`setDialogValue`); a custom profile
+shows none. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
 through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the

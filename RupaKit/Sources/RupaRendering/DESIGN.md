@@ -396,6 +396,17 @@ the frame (`anOverlayOverItsLimitPublishesTheGeometryFrameAndReportsTheOverlay`,
 exhausted overlay was replaced by an empty one, which removed the curves and
 sketches along with the handles.
 
+A running dialog's values are offered through the `dialogValue` native axis
+route (`ViewportDialogValueHandle`, `onDialogValueDrag`), as Plasticity's
+yellow dot: each handle names its value, anchors at a point and direction or at
+the start of a curve object or body edge the scene draws (the guide square to
+the curve there, `resolvedDialogValueAnchor`; a handle whose anchor is not drawn
+is left out), and sits the value times `worldMetresPerValue` along the guide, a
+dot or a square for a second value. The axis value is the value itself, scaled
+by the handle's metres per value; a drag shows the handle at the value it would
+set and the release reports it. `ViewportDialogValueHandleTests` own the scaled
+drag, the registered handles and the curve-start anchor.
+
 While Section Analysis places its plane, the viewport offers the
 `sectionAnalysisDistance` native axis route: an arrow on the section plane along
 its source normal (the normal before Flip), registered as one spatial handle.

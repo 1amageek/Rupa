@@ -462,6 +462,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     var curveColors: [SceneNodeID: SIMD4<Float>] = [:]
     /// The open command's continuity badges, drawn only while their clicks are reported.
     var continuityBadges: [ViewportContinuityBadge] = []
+    /// The running dialog's value handles, drawn only while their drags are reported.
+    var dialogValues: [ViewportSpatialOverlayProducer.DialogValueSource] = []
     /// The scene the selection's identities belong to when it is not the scene drawn: a drag
     /// that previews an edit draws the preview, where the selected subshape may be gone.
     var selectionScene: ViewportScene?
@@ -694,6 +696,13 @@ enum ViewportSpatialOverlayProducer {
         try appendContinuityBadges(
             snapshot,
             labels: &labels,
+            markers: &markers,
+            interactionRecords: &interactionRecords,
+            activeFamilies: &activeFamilies
+        )
+        try appendDialogValues(
+            snapshot.dialogValues,
+            meshes: &meshes,
             markers: &markers,
             interactionRecords: &interactionRecords,
             activeFamilies: &activeFamilies

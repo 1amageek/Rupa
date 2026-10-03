@@ -64,6 +64,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
                            normal: Vector3D, normalEnd: Point3D, corners: [Point3D])
     /// The Section Analysis plane moved along its source normal; the axis value is the distance.
     case sectionAnalysisDistance(axis: Axis)
+    /// A running dialog's value moved along its handle's guide; the axis value is the value.
+    case dialogValue(id: String, axis: Axis)
     case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember],
                     groupEdit: ViewportObjectEditState?, placement: ViewportBodyPlacementBaseline?)
     case objectTransform(action: ViewportAffordanceAction, members: [ViewportObjectTransformMember], bounds: ViewportObjectEditState)
@@ -115,6 +117,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
             case .patternArrayOutputMode(let value): .patternArrayOutputMode(.init(sourceID: value.sourceID))
             case .constructionPlane(let identity, _, _, _, _): .constructionPlane(identity)
             case .sectionAnalysisDistance: .sectionAnalysisDistance
+            case .dialogValue(let id, _): .dialogValue(id)
             case .affordance(let target, _, _, _): .affordance(target)
             case .objectTransform(let action, let members, _):
                 .objectTransform(nodes: members.map(\.sceneNodeID), action: action)

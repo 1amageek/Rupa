@@ -2432,6 +2432,7 @@ private struct ProjectMainViewContent: View {
                     )
                 }
             },
+            dialogValueHandles: viewportDialogValueHandles,
             snapResolutionOptions: activeSnapResolutionOptions(),
             canvasDragPreviewKind: canvasDragPreviewKind,
             canvasPlacementPreviewKind: canvasPlacementPreviewKind,
@@ -2499,6 +2500,7 @@ private struct ProjectMainViewContent: View {
             onSectionAnalysisDistanceDrag: sectionAnalysisSession == nil ? nil : { target in
                 sectionAnalysisSession?.distanceMeters = target.distanceMeters
             },
+            onDialogValueDrag: viewportDialogValueDragHandler,
             onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
             onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
             onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
@@ -2801,6 +2803,64 @@ private struct ProjectMainViewContent: View {
             }
             beginTopologyMoveSession(.edges, targets: edges, mode: .move)
         }
+    }
+
+    /// The open dialog's values offered as viewport handles, as Plasticity's gizmo: Pipe's section
+    /// size as the dot on the section's rim at the path's start, its signed Thickness as a square
+    /// out from the rim. None for a custom profile, which carries its own size.
+    private var viewportDialogValueHandles: [ViewportDialogValueHandle] {
+        guard let draft = modelingDraft, draft.kind == .pipe, draft.pipeCustomProfile == false else { return [] }
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        guard let path = draft.targets.first(where: { target in
+            if case .edge = target.component { return true }
+            return target.component == .object && nodes[target.sceneNodeID]?.object?.geometryRole == .curve
+        }), let diameter = workspaceLengthMeters(fromFieldText: draft.pipeDiameter, defaultUnit: draft.unit), diameter.isFinite else {
+            return []
+        }
+        var handles = [ViewportDialogValueHandle(
+            id: Self.pipeDiameterHandleID, anchor: .curveStart(path, offsetMeters: 0), valueMeters: diameter, worldMetresPerValue: 0.5
+        )]
+        let thicknessText = draft.wallThickness.trimmingCharacters(in: .whitespaces)
+        if let thickness = thicknessText.isEmpty ? 0 : workspaceLengthMeters(fromFieldText: thicknessText, defaultUnit: draft.unit),
+           thickness.isFinite {
+            handles.append(ViewportDialogValueHandle(
+                id: Self.pipeThicknessHandleID, anchor: .curveStart(path, offsetMeters: diameter / 2), valueMeters: thickness, shape: .square
+            ))
+        }
+        return handles
+    }
+
+    static let pipeDiameterHandleID = "pipe.diameter"
+    static let pipeThicknessHandleID = "pipe.thickness"
+
+    private var viewportDialogValueDragHandler: ((ViewportDialogValueDragTarget) -> Void)? {
+        guard viewportDialogValueHandles.isEmpty == false else { return nil }
+        return { target in
+            setDialogValue(target)
+        }
+    }
+
+    /// A dialog value its viewport handle was dragged to, written into the dialog's field in its unit.
+    private func setDialogValue(_ target: ViewportDialogValueDragTarget) {
+        guard var draft = modelingDraft else { return }
+        func text(_ meters: Double) -> String {
+            let value = workspaceLengthFieldPresentation(fromMeters: meters, preferredUnit: draft.unit)
+            return value.text + " " + value.unit.symbol
+        }
+        switch target.id {
+        case Self.pipeDiameterHandleID:
+            guard target.valueMeters > 0 else {
+                reportToolStatus("Pipe: the section size stays above zero.", severity: .warning)
+                return
+            }
+            draft.pipeDiameter = text(target.valueMeters)
+        case Self.pipeThicknessHandleID:
+            // A wall of no thickness is a solid pipe.
+            draft.wallThickness = abs(target.valueMeters) < 1.0e-9 ? "" : text(target.valueMeters)
+        default:
+            return
+        }
+        modelingDraft = draft
     }
 
     private var viewportBoundarySurfaceHandler: ((SelectionTarget) -> Void)? {
