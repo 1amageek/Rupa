@@ -186,9 +186,13 @@ Surface Degree (`raiseSurfaceDegree(targets:)`) raises the B-spline surface
 behind each selected face or object by one degree in U and V through Swift-CAD's
 exact degree elevation, once per surface, keeping its shape, parameterization and
 trims; `recordSurfaceShape(of:_:)` keeps the objects' degree and control-point
-counts in step, as Subdivide does. A face of any other body has no control points
-to raise and is refused (a `FIXME(INCOMPLETE_IMPLEMENTATION)` records that
-Plasticity raises any face). `BoundaryEdgeSelectionService` answers Find Boundary
+counts in step, as Subdivide does. A face of any other body (Plasticity's Raise
+Degree on a box's face) is given its surface as an exact B-spline (Swift-CAD
+`FaceBSplineSurfaceConverter`), raised, and kept by a Rebuild Face giving it that
+surface (`FaceRebuildMethod.given`, appended as "Raise Degree"); raising that face
+again raises the given surface in place. A whole solid is refused, one face at a
+time being raised (`FIXME(INCOMPLETE_IMPLEMENTATION)`), and so is an analytic face
+other than a plane (the converter's refusal). `BoundaryEdgeSelectionService` answers Find Boundary
 Edges without changing the document: the open edges of the selected objects,
 every edge one face of the body uses (`OpenBoundaryLoopResolver.boundaryEdgeIDs`),
 as edge selections. Toggle Curvature (`toggleCurvatureMeasurement(targets:)`)

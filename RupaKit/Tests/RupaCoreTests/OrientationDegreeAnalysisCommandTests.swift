@@ -142,14 +142,46 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func raiseSurfaceDegreeRefusesAFaceWithoutControlPoints() throws {
+    func raiseSurfaceDegreeGivesAFaceOfASolidControlPointsAndRaisesThemAgain() throws {
+        // Plasticity's Shift+S on a box's face: its corners become control points, raised to a 3×3
+        // net, then 4×4 on the same face, the box keeping its shape.
         let (session, box) = try box()
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         let face = try #require(try entries(.face, of: box, in: session).first?.selectionTarget())
-        let before = session.document
-        #expect(throws: EditorError.self) {
-            _ = try session.execute(.raiseSurfaceDegree(targets: [face]))
+        _ = try session.execute(.raiseSurfaceDegree(targets: [face]))
+        func givenSurface() throws -> (BSplineSurface3D, SelectionTarget) {
+            let feature = try #require(session.document.productMetadata.sceneNodes[box]?.reference?.featureID)
+            guard case .faceRebuild(let rebuild)? = session.document.cadDocument.designGraph.nodes[feature]?.operation,
+                  case .given(let surface) = rebuild.method else {
+                throw EditorError(code: .referenceUnresolved, message: "The box shows no face given a surface.")
+            }
+            let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(document: session.document, failurePrefix: "test")
+            let keys = evaluated.subshapes.entries.compactMap { key, value -> String? in
+                guard key.featureID == feature, case .face(let id) = value, let face = evaluated.brep.faces[id],
+                      case .bSpline? = evaluated.brep.geometry.surfaces[face.surfaceID] else { return nil }
+                return GeneratedSubshapeIdentity.string(for: key)
+            }
+            let target = try #require(try entries(.face, of: box, in: session).first { keys.contains($0.subshapeID) }?.selectionTarget())
+            return (surface, target)
         }
+        let (first, raisedFace) = try givenSurface()
+        #expect(first.uDegree == 2 && first.vDegree == 2 && first.controlPoints.joined().count == 9)
+        _ = try session.execute(.raiseSurfaceDegree(targets: [raisedFace]))
+        let (second, _) = try givenSurface()
+        #expect(second.uDegree == 3 && second.vDegree == 3 && second.controlPoints.joined().count == 16)
+        let raisedVolume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(raisedVolume - volume) < 1e-12)
+        #expect(session.evaluationStatus == .valid)
+        // The whole box is not raised at once, nor a cylinder's side.
+        let before = session.document
+        #expect(throws: EditorError.self) { _ = try session.execute(.raiseSurfaceDegree(targets: [SelectionTarget(sceneNodeID: box)])) }
         #expect(unchanged(session, since: before))
+        let (drumSession, drum) = try cylinder()
+        let sides = try entries(.face, of: drum, in: drumSession).filter { $0.surfaceKind == "cylinder" }
+        let side = try #require(sides.first?.selectionTarget())
+        let drumBefore = drumSession.document
+        #expect(throws: EditorError.self) { _ = try drumSession.execute(.raiseSurfaceDegree(targets: [side])) }
+        #expect(unchanged(drumSession, since: drumBefore))
     }
 
     // MARK: Find Boundary Edges

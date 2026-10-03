@@ -655,6 +655,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             case .nominal: "Nominal surface removed"
             case let .square(refit):
                 "Square refit, \(refit.order == nil ? "G0" : refit.order == .tangent ? "G1" : "G2"), Degree \(refit.options.uDegree)×\(refit.options.vDegree), Spans \(refit.options.uSpans)×\(refit.options.vSpans)"
+            case let .given(surface):
+                "Control points, Degree \(surface.uDegree)×\(surface.vDegree), \(surface.controlPoints.first?.count ?? 0)×\(surface.controlPoints.count) points"
             }
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Rebuild Face"),
