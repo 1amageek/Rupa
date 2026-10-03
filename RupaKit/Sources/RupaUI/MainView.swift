@@ -12559,20 +12559,20 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// A selected curvature measurement's comb length.
+    /// The Curvature panel (Plasticity's sidebar CURVATURE): one Comb Scale every curvature comb
+    /// is drawn at, shown while the document has curvature measurements, with the curves of a
+    /// selected one.
     @ViewBuilder
     private func curvatureMeasurementInspectorSection(_ nodes: [SceneNode]) -> some View {
-        if nodes.count == 1, let node = nodes.first,
-           let measurement = snapshot.document.document.productMetadata.measurements.values.first(where: {
-               $0.sceneNodeID == node.id && $0.kind == .curvature
-           }) {
+        let document = snapshot.document.document
+        let curvatures = document.productMetadata.measurements.values.filter { $0.kind == .curvature }
+        if curvatures.isEmpty == false {
             inspectorSection("Curvature") {
-                inspectorRow("Curves", "\(measurement.anchors.count)")
-                workspaceScaleFactorControl(
-                    "Comb Scale",
-                    values: [measurement.combScale ?? DesignDocument.defaultCurvatureCombScale]
-                ) { value in
-                    submitSource(.setMeasurementCombScale(id: measurement.id, combScale: max(value, 1.0e-6)))
+                if nodes.count == 1, let node = nodes.first, let measurement = curvatures.first(where: { $0.sceneNodeID == node.id }) {
+                    inspectorRow("Curves", "\(measurement.anchors.count)")
+                }
+                workspaceScaleFactorControl("Comb Scale", values: [document.curvatureCombScale]) { value in
+                    submitSource(.setCurvatureCombScale(combScale: max(value, 1.0e-6)))
                 }
             }
         }

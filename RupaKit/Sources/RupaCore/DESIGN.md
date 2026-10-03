@@ -195,8 +195,10 @@ as edge selections. Toggle Curvature (`toggleCurvatureMeasurement(targets:)`)
 toggles each selected curve on its own, as Plasticity adds one measurement per
 edge: a curve with no curvature measurement gets a `.curvature` measurement
 annotation under Measurements whose one anchor names the whole generated edge or
-sketch curve and whose `combScale` sets the comb length
-(`setMeasurementCombScale(id:combScale:)`), and a curve already combed has its
+sketch curve and whose `combScale` sets the comb length — one scale shared by every
+curvature measurement (`curvatureCombScale`, set for all at once by
+`setCurvatureCombScale(_:)`, taken by a new one), as Plasticity's Curvature panel rescales all
+combs together — and a curve already combed has its
 measurement taken away; a measurement whose curve cannot be combed is refused. `CurvatureCombService` evaluates each anchored curve exactly
 through Swift-CAD under its object's placement, sampling several points per knot
 span, and `MeasurementAnnotationResolver` resolves a curvature measurement to

@@ -266,16 +266,22 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func combScaleIsAPositiveSettingOfACurvatureMeasurement() throws {
+    func combScaleIsOnePositiveSettingOfEveryCurvatureMeasurement() throws {
+        // Plasticity's Curvature panel: one Comb scale rescales every comb, and a new one takes it.
         let (session, drum) = try cylinder()
-        let rim = try #require(try entries(.edge, of: drum, in: session).first { ($0.curveRadius ?? 0) > 0 }?.selectionTarget())
-        _ = try session.execute(.toggleCurvatureMeasurement(targets: [rim]))
-        let id = try #require(session.document.productMetadata.measurements.keys.first)
-        _ = try session.execute(.setMeasurementCombScale(id: id, combScale: 0.3))
-        #expect(session.document.productMetadata.measurements[id]?.combScale == 0.3)
+        let rims = try entries(.edge, of: drum, in: session).filter { ($0.curveRadius ?? 0) > 0 }.compactMap { $0.selectionTarget() }
+        #expect(rims.count >= 2)
+        _ = try session.execute(.toggleCurvatureMeasurement(targets: [rims[0]]))
+        _ = try session.execute(.setCurvatureCombScale(combScale: 0.3))
+        _ = try session.execute(.toggleCurvatureMeasurement(targets: [rims[1]]))
+        let scales = session.document.productMetadata.measurements.values.filter { $0.kind == .curvature }.map(\.combScale)
+        #expect(scales == [0.3, 0.3])
+        _ = try session.execute(.setCurvatureCombScale(combScale: 0.12))
+        #expect(session.document.productMetadata.measurements.values.allSatisfy { $0.combScale == 0.12 })
+        #expect(session.document.curvatureCombScale == 0.12)
         let before = session.document
         #expect(throws: EditorError.self) {
-            _ = try session.execute(.setMeasurementCombScale(id: id, combScale: 0))
+            _ = try session.execute(.setCurvatureCombScale(combScale: 0))
         }
         #expect(unchanged(session, since: before))
         // A face is not a curve to comb.

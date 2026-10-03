@@ -497,7 +497,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Toggle Curvature: a curvature measurement on these edges and curves, or none where one was.
     case toggleCurvatureMeasurement(targets: [SelectionTarget])
     /// A curvature measurement's comb length.
-    case setMeasurementCombScale(id: MeasurementAnnotationID, combScale: Double)
+    /// Every curvature comb's scale at once (the Curvature panel's Comb scale).
+    case setCurvatureCombScale(combScale: Double)
     /// Offset Edge on edges of one object over their support face.
     case offsetEdges(name: String, targets: [SelectionTarget], supportFace: SelectionTarget, distance: CADExpression, isSymmetric: Bool, gapFill: OffsetCurveGapFill)
     /// Offset Face Loop on faces of one object.
@@ -1035,8 +1036,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "raiseSurfaceDegree"
         case .toggleCurvatureMeasurement:
             "toggleCurvatureMeasurement"
-        case .setMeasurementCombScale:
-            "setMeasurementCombScale"
+        case .setCurvatureCombScale:
+            "setCurvatureCombScale"
         case .offsetEdges:
             "offsetEdges"
         case .offsetFaceLoops:
@@ -1301,7 +1302,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .reverseSheets,
              .raiseSurfaceDegree,
              .toggleCurvatureMeasurement,
-             .setMeasurementCombScale,
+             .setCurvatureCombScale,
              .offsetEdges,
              .offsetFaceLoops,
              .imprintCurves,

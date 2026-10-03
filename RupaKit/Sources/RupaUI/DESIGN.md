@@ -864,8 +864,9 @@ Boundary Edges dispatch by selection in the Edit menu and the palette: sketch
 curves take Reverse Curve and Raise Curve Degree; sheet objects take Reverse
 Sheet; selected faces and objects take Raise Surface Degree; objects' open edges
 become the selection. Toggle Curvature saves or takes away a curvature measurement
-on the selected edges and sketch curves, and a selected curvature measurement's
-inspector sets its Comb Scale. Align Vertex's inspector sets one CV
+on the selected edges and sketch curves, and the inspector's Curvature section, shown
+while the document has curvature measurements (Plasticity's Curvature panel), sets the
+one Comb Scale every comb is drawn at. Align Vertex's inspector sets one CV
 distance for both aligned ends once G1 or G2 is chosen, or leaves their control
 points where they are. With one open sketch curve or a circle selected, O
 starts Offset Planar Curve: S makes it symmetric, V steps the gap fill at a

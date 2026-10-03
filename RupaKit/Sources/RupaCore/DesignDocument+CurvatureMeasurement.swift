@@ -3,8 +3,15 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    /// The comb scale a new curvature measurement starts with.
+    /// The comb scale the first curvature measurement starts with.
     public static let defaultCurvatureCombScale = CurveCurvatureDisplay.defaultCombScale
+
+    /// The one comb scale every curvature measurement is drawn at (Plasticity's Curvature panel
+    /// Comb scale): the measurements' shared scale, the default before there are any.
+    public var curvatureCombScale: Double {
+        productMetadata.measurements.values.filter { $0.kind == .curvature }.sorted { $0.id.description < $1.id.description }
+            .first?.combScale ?? Self.defaultCurvatureCombScale
+    }
 
     /// Toggle Curvature on generated edges and sketch curves, one curve at a time: a curvature
     /// measurement combing the curve is taken away when there is one; otherwise a new one combing
@@ -47,7 +54,7 @@ extension DesignDocument {
                 name: "Curvature \(count + 1)",
                 kind: .curvature,
                 anchors: [anchor],
-                combScale: Self.defaultCurvatureCombScale
+                combScale: updated.curvatureCombScale
             )
             // A measurement that cannot comb its curve is refused rather than saved unresolved.
             _ = try CurvatureCombService().combs(
@@ -60,21 +67,24 @@ extension DesignDocument {
         return added
     }
 
-    /// Sets how long a curvature measurement's comb teeth are drawn.
-    public mutating func setMeasurementCombScale(
-        id: MeasurementAnnotationID,
-        combScale: Double,
+    /// Sets how long every curvature comb's teeth are drawn (Plasticity's Curvature panel: one Comb
+    /// scale rescales all combs at once).
+    public mutating func setCurvatureCombScale(
+        _ combScale: Double,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        guard var measurement = productMetadata.measurements[id], measurement.kind == .curvature else {
-            throw EditorError(code: .referenceUnresolved, message: "Comb Scale applies to a curvature measurement.")
-        }
         guard combScale.isFinite, combScale > 0 else {
             throw EditorError(code: .commandInvalid, message: "Comb Scale must be positive.")
         }
-        measurement.combScale = combScale
         var metadata = productMetadata
-        metadata.measurements[id] = measurement
+        let curvatures = metadata.measurements.filter { $0.value.kind == .curvature }
+        guard curvatures.isEmpty == false else {
+            throw EditorError(code: .referenceUnresolved, message: "Comb Scale applies to curvature measurements; there are none.")
+        }
+        for (id, var measurement) in curvatures {
+            measurement.combScale = combScale
+            metadata.measurements[id] = measurement
+        }
         try metadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         productMetadata = metadata
     }

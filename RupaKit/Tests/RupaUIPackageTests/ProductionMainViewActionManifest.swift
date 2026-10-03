@@ -280,7 +280,7 @@ enum ProductionMainViewActionManifest {
         "reverseSheets",
         "raiseSurfaceDegree",
         "toggleCurvatureMeasurement",
-        "setMeasurementCombScale",
+        "setCurvatureCombScale",
         "offsetEdges",
         "offsetFaceLoops",
         "imprintCurves",

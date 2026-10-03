@@ -3220,9 +3220,9 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case let .setMeasurementCombScale(id, combScale):
+        case let .setCurvatureCombScale(combScale):
             var updatedDocument = document
-            try updatedDocument.setMeasurementCombScale(id: id, combScale: combScale, objectRegistry: objectRegistry)
+            try updatedDocument.setCurvatureCombScale(combScale, objectRegistry: objectRegistry)
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()

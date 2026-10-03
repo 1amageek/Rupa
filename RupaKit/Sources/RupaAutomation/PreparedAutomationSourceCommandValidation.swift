@@ -194,7 +194,7 @@ enum PreparedAutomationSourceCommandValidation {
              .reverseSheets,
              .raiseSurfaceDegree,
              .toggleCurvatureMeasurement,
-             .setMeasurementCombScale,
+             .setCurvatureCombScale,
              .offsetEdges,
              .offsetFaceLoops,
              .imprintCurves,
