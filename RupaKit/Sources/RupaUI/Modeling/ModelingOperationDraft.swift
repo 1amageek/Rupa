@@ -229,6 +229,25 @@ struct ModelingOperationDraft: Equatable {
             }
         }
     }
+    /// Patch's Continuity on a hole: Planar and G0 fill it exactly from its edges (a plane or a
+    /// Coons patch); G1 and G2 fit the fill tangent or curvature continuous with the sheet
+    /// around, through XNURBS over the whole loop of the hole's edges.
+    enum PatchContinuityChoice: String, CaseIterable, Identifiable {
+        case planar = "Planar"
+        case g0 = "G0"
+        case g1 = "G1"
+        case g2 = "G2"
+        var id: Self { self }
+        var order: SurfaceEdgeContinuity.Order? {
+            switch self {
+            case .planar, .g0: nil
+            case .g1: .tangent
+            case .g2: .curvature
+            }
+        }
+    }
+    var patchContinuity = PatchContinuityChoice.g0
+
     /// Every side's continuity unless the side has its own in `squareSideContinuity`.
     var squareContinuity = SquareContinuityChoice.g0
     var squareSideContinuity: [SelectionTarget: SquareContinuityChoice] = [:]
@@ -1237,6 +1256,52 @@ struct ModelingOperationDraft: Equatable {
             }
             do { try CurvePatchFeature(curves: curves).validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createCurvePatch(name: name, curves: curves, edgeCurves: edgeCurves)
+        case .patch where patchContinuity.order != nil && targets.isEmpty == false
+            && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
+            && Set(targets.map(\.sceneNodeID)).count == 1:
+            // G1 or G2 on a hole: XNURBS over every edge of the hole's loop, each continuous with
+            // the sheet beside it.
+            guard let order = patchContinuity.order else { throw invalid("Patch's continuity is missing.") }
+            let loop: [SelectionTarget]
+            do {
+                loop = targets.count > 1 ? targets : try OpenBoundaryLoopService().loop(through: targets[0], in: document)
+            } catch {
+                throw invalid("Patch: \(error.localizedDescription)")
+            }
+            let tension = DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
+            var edgeCurves: [EdgeCurveSource] = []
+            let boundaries = try loop.map { edge -> SquareSide in
+                let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                    for: edge, operationName: "Patch", currentEvaluation: nil
+                ))
+                edgeCurves.append(curve)
+                guard let reference = curve.feature.edges.first else { throw invalid("A hole's edge has no curve.") }
+                let continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                                                       edge: reference, order: order, tension: tension,
+                                                       angularAllowance: try continuityAllowanceRadians(),
+                                                       curvatureAllowance: try curvatureAllowance(for: order))
+                return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
+            }
+            let xnurbs = XNurbsFeature(
+                boundaries: boundaries, guides: [], quadSided: false,
+                flatness: try number(xnurbsFlatness, label: "Flatness"), boundaryFlow: xnurbsBoundaryFlow, quality: xnurbsQuality,
+                satisfiesTolerances: xnurbsSatisfiesTolerances,
+                positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
+                angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180
+            )
+            do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
+            return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)
+        case .patch where targets.count > 1 && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
+            && Set(targets.map(\.sceneNodeID)).count == 1
+            && document.productMetadata.sceneNodes[targets[0].sceneNodeID]?.object?.geometryRole == .solid:
+            // A loop of a solid's edges: a sheet of the faces it encloses, the solid kept.
+            let faces: [SelectionTarget]
+            do {
+                faces = try EnclosedFaceResolver().faces(enclosedBy: targets, in: document)
+            } catch {
+                throw invalid("Patch: \(error.localizedDescription)")
+            }
+            return .duplicateBodyFaces(name: name, targets: faces)
         case .patch where targets.count > 1 && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
             && Set(targets.map(\.sceneNodeID)).count == 1:
             // The opening's edges selected together (Plasticity selects the whole loop): the loop

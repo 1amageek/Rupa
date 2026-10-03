@@ -605,7 +605,9 @@ Both are measured as their evaluated sheets.
 `createSquare` adds a native Square sheet framed by two to four side curves and fitted by its
 `SquareFitOptions` (edge curves it carries are added first), admitting a continuous side's body
 only where it was built; it is measured as its evaluated sheet. `createXNurbs` adds a native
-XNURBS sheet over its boundary curves and guides the same way.
+XNURBS sheet over its boundary curves and guides the same way. Edge curves and continuity edges
+(Square, XNURBS, Loft) read their source as the kind of body it is, a solid or a sheet, so a sheet's
+hole is filled continuous with the sheet (Patch at G1/G2).
 
 `createPipe` adds a native Pipe feature along a curve source (one per curve in `createPipes`, in
 one transaction, after the edge curves it carries for pipes along edges: kernel edge-curve

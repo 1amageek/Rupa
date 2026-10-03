@@ -455,7 +455,11 @@ extension DesignDocument {
         } catch {
             throw EditorError(code: .commandInvalid, message: "Edge curve is invalid: \(error).")
         }
-        try requireSweepTargetBodyFeature(edgeCurve.feature.source, owner: "Edge curve")
+        // An edge of a solid or of a sheet: its port is the one the edge curve reads it from.
+        let port = try bodyOrSheetPort(of: edgeCurve.feature.source, owner: "Edge curve")
+        guard (port == .sheet) == (edgeCurve.feature.bodyRole == .sheet) else {
+            throw EditorError(code: .commandInvalid, message: "An edge curve reads its source as the kind of body it is.")
+        }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         if let node = hierarchy.presentingSceneNodeID(for: edgeCurve.feature.source),
            try hierarchy.worldTransform(of: node) != .identity {
@@ -690,7 +694,7 @@ extension DesignDocument {
         for side in sides {
             try requireSweepSourceCurveFeature(side.curve.featureID, owner: "Square side")
             if let continuity = side.continuity {
-                try requireSweepTargetBodyFeature(continuity.source, owner: "Square continuity edge")
+                try requireContinuitySource(continuity, owner: "Square continuity edge")
             }
         }
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
@@ -743,7 +747,7 @@ extension DesignDocument {
         for boundary in xnurbs.boundaries {
             try requireSweepSourceCurveFeature(boundary.curve.featureID, owner: "XNURBS boundary")
             if let continuity = boundary.continuity {
-                try requireSweepTargetBodyFeature(continuity.source, owner: "XNURBS continuity edge")
+                try requireContinuitySource(continuity, owner: "XNURBS continuity edge")
             }
         }
         for guide in xnurbs.guides {
@@ -811,7 +815,7 @@ extension DesignDocument {
                 try requireSweepTargetBodyFeature(face.featureID, owner: "Loft face section")
             }
             if let continuity = section.continuity {
-                try requireSweepTargetBodyFeature(continuity.source, owner: "Loft continuity edge")
+                try requireContinuitySource(continuity, owner: "Loft continuity edge")
             }
         }
         for guide in guides {
@@ -1294,6 +1298,14 @@ extension DesignDocument {
                 code: .referenceUnresolved,
                 message: "\(owner) must reference an existing body-producing feature."
             )
+        }
+    }
+
+    /// A continuity edge's source: a solid or a sheet, read as the kind of body it is.
+    private func requireContinuitySource(_ continuity: SurfaceEdgeContinuity, owner: String) throws {
+        let port = try bodyOrSheetPort(of: continuity.source, owner: owner)
+        guard port == continuity.bodyRole else {
+            throw EditorError(code: .commandInvalid, message: "\(owner) reads its source as the kind of body it is.")
         }
     }
 

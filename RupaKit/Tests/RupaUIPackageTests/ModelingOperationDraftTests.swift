@@ -1432,6 +1432,74 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - (0.04 * 0.03 + 0.03 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
+    @Test func aG1PatchFillsAHoleOfAPlateTangentToIt() throws {
+        // A 40 mm plate with a 10 mm square hole through it: a box less a smaller box, then every
+        // face but the top taken out, leaving the top as a sheet with a hole.
+        var document = DesignDocument.empty()
+        let plate = try document.createExtrudedRectangle(name: "Plate", plane: .xy, width: .length(0.04, .meter),
+                                                          height: .length(0.04, .meter), depth: .length(0.01, .meter), direction: .normal)
+        let tool = try document.createExtrudedRectangle(name: "Tool", plane: .xy, width: .length(0.01, .meter),
+                                                         height: .length(0.01, .meter), depth: .length(0.03, .meter), direction: .symmetric)
+        let holed = try document.createBoolean(name: "Holed", targets: [BooleanTargetReference(featureID: plate)],
+                                               tools: [BooleanToolReference(featureID: tool)], operation: .difference)
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(holed) })
+        let faces = try TopologySnapshotService().snapshot(document: document).entries.filter { $0.kind == .face && $0.sceneNodeID == node.id.description }
+        let top = faces.max { ($0.center?.z ?? 0) < ($1.center?.z ?? 0) }
+        _ = try document.deleteBodyFaces(targets: faces.filter { $0 != top }.compactMap { $0.selectionTarget() })
+        let sheetNode = try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body && $0.object?.geometryRole == .surface
+        })
+        let loops = try OpenBoundaryLoopService().loops(of: sheetNode.id, in: document)
+        #expect(loops.count == 2)
+        // The hole's loop is the one near the plate's middle (both loops have four edges).
+        let entries = try TopologySnapshotService().snapshot(document: document).entries
+        func reach(_ loop: [SelectionTarget]) -> Double {
+            loop.compactMap { edge in entries.first { $0.selectionTarget() == edge }?.start }.map { max(abs($0.x), abs($0.y)) }.max() ?? .infinity
+        }
+        let hole = try #require(loops.min { reach($0) < reach($1) })
+        var draft = makeDraft(.patch, targets: [try #require(hole.first)])
+        draft.isSurfaceCreation = true
+        draft.patchContinuity = .g1
+        guard case .createXNurbs(_, let xnurbs, _) = try draft.command(in: document) else {
+            Issue.record("A G1 patch is an XNURBS over the hole's loop.")
+            return
+        }
+        #expect(xnurbs.boundaries.count == 4 && xnurbs.boundaries.allSatisfy { $0.continuity?.order == .tangent })
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 2)
+        // Tangent to the flat plate, the fill is the flat square of the hole.
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.04 * 0.04) < 1e-8, "\(measurement.totals.sheetAreaSquareMeters)")
+    }
+
+    @Test func aPatchOnASolidsEdgeLoopMakesASheetOfTheFacesItEncloses() throws {
+        // A box's four top edges: the loop encloses the top face, which becomes a sheet of its
+        // own while the box stays a solid.
+        var document = DesignDocument.empty()
+        let box = try document.createExtrudedRectangle(name: "Box", plane: .xy, width: .length(0.02, .meter),
+                                                        height: .length(0.02, .meter), depth: .length(0.01, .meter), direction: .normal)
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(box) })
+        let top = try TopologySnapshotService().snapshot(document: document).entries.filter {
+            $0.kind == .edge && $0.sceneNodeID == node.id.description
+                && abs(($0.start?.z ?? 0) - 0.01) < 1e-9 && abs(($0.end?.z ?? 0) - 0.01) < 1e-9
+        }.compactMap { $0.selectionTarget() }
+        #expect(top.count == 4)
+        var draft = makeDraft(.patch, targets: top)
+        draft.isSurfaceCreation = true
+        guard case .duplicateBodyFaces(_, let faces) = try draft.command(in: document) else {
+            Issue.record("A loop of a solid's edges duplicates the faces it encloses.")
+            return
+        }
+        #expect(faces.count == 1)
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        let objects = store.document.productMetadata.sceneNodes.values.filter { $0.reference?.kind == .body }
+        #expect(objects.filter { $0.object?.geometryRole == .solid }.count == 1)
+        #expect(objects.filter { $0.object?.geometryRole == .surface }.count == 1)
+        #expect(store.evaluationStatus == .valid)
+    }
+
     @Test func fourCurvesFrameAFlatSquare() throws {
         var document = DesignDocument.empty()
         let ends = [(0.0, 0.0, 0.02, 0.0), (0.02, 0.0, 0.02, 0.02), (0.02, 0.02, 0.0, 0.02), (0.0, 0.02, 0.0, 0.0)]

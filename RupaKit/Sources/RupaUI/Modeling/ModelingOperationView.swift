@@ -505,7 +505,17 @@ struct ModelingOperationView: View {
                 Toggle("Tangent edges", isOn: $draft.tangentEdges)
         case .g2Blend:
             lengthField("Distance", text: $draft.distance)
-        case .patch, .bridge:
+        case .patch:
+            Picker("Continuity", selection: $draft.patchContinuity) {
+                ForEach(ModelingOperationDraft.PatchContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .contentShape(Rectangle())
+            .help("On a hole: Planar or G0 fill it from its edges; G1 and G2 fit it tangent or curvature continuous with the sheet around.")
+            if draft.patchContinuity.order != nil {
+                TextField("Tension", text: $draft.xnurbsTension)
+            }
+        case .bridge:
             EmptyView()
         case .bridgeSurface:
             lengthField("Width", text: $draft.distance)

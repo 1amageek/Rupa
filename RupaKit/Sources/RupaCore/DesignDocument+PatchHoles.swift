@@ -16,42 +16,14 @@ extension DesignDocument {
     ) throws -> FeatureID {
         let operationName = "Patch"
         let sheet = SelectionTarget(sceneNodeID: target)
-        let open = try BoundaryEdgeSelectionService().boundaryEdges(
-            of: [sheet], in: self, objectRegistry: objectRegistry,
+        let loops = try OpenBoundaryLoopService().loops(
+            of: target, in: self, objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
         )
-        guard open.isEmpty == false else {
+        guard loops.isEmpty == false else {
             throw EditorError(code: .commandInvalid, message: "\(operationName): the sheet has no holes to fill.")
         }
-        // One seed edge per loop: open edges joined end to end into loops.
-        let topology = try TopologySnapshotService().snapshot(
-            document: self, objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
-        )
-        let tolerance = modelingSettings.tolerance.distance
-        var ends: [(SelectionTarget, Point3D, Point3D)] = []
-        for edge in open {
-            guard let entry = topology.entries.first(where: { $0.kind == .edge && $0.selectionTarget() == edge }),
-                  let start = entry.start, let end = entry.end else {
-                throw EditorError(code: .referenceUnresolved, message: "\(operationName) cannot read an open edge's ends.")
-            }
-            ends.append((edge, Point3D(x: start.x, y: start.y, z: start.z), Point3D(x: end.x, y: end.y, z: end.z)))
-        }
-        var loopOf = Array(ends.indices)
-        func find(_ index: Int) -> Int {
-            var root = index
-            while loopOf[root] != root { root = loopOf[root] }
-            return root
-        }
-        for a in ends.indices {
-            for b in ends.indices where b > a {
-                let touches = [ends[a].1, ends[a].2].contains { p in [ends[b].1, ends[b].2].contains { ($0 - p).length <= tolerance } }
-                if touches { loopOf[find(b)] = find(a) }
-            }
-        }
-        var seeds: [SelectionTarget] = []
-        var seen = Set<Int>()
-        for index in ends.indices where seen.insert(find(index)).inserted { seeds.append(ends[index].0) }
+        let seeds = loops.compactMap(\.first)
         // Every fill prepared on the sheet as it is, then appended and joined in one step.
         let transactions = try seeds.map { seed in
             try prepareSurfaceFill(name: "\(name) Fill", target: seed, objectRegistry: objectRegistry,
