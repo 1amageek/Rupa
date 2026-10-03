@@ -840,3 +840,8 @@ private func keyboardContext(
     context.isLoftDialogActive = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .cycleLoftContinuity)
 }
+
+@Test func workspaceKeyboardRouterStartsSweepOnShiftP() {
+    let router = WorkspaceKeyboardRouter()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "P", modifiers: [.shift]), context: keyboardContext()) == .beginSweep)
+}

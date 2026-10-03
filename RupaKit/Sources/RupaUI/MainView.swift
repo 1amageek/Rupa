@@ -6808,6 +6808,12 @@ private struct ProjectMainViewContent: View {
             modelingDraft?.tangentEdges.toggle()
             reportToolStatus("Fillet: tangent edges \(modelingDraft?.tangentEdges == true ? "on" : "off").")
             return .handled
+        case .beginSweep:
+            let targets = snapshot.selection.selectedTargets
+            beginModelingOperation(.sweep)
+            modelingDraft?.targets = targets
+            reportToolStatus("Sweep: the section first, any guides next and the path last; Preview then Apply.")
+            return .handled
         case .beginPolySplines:
             let document = snapshot.document.document
             guard selectedBodyObjectIDs.isEmpty, snapshot.selection.wholeSceneNodeIDs.count == 1,

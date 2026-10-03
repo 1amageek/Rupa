@@ -275,6 +275,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginPatch
     /// PolySplines on the selected mesh object (palette).
     case beginPolySplines
+    /// Shift-P: Sweep on the selection, its section, guides and path in order (palette too).
+    case beginSweep
     /// Remove Nominal Surface on the selected faces, at once (palette).
     case removeNominalSurface
     /// Hollow on the selected solid or its faces, and Thicken on the selected sheet or faces
@@ -1016,6 +1018,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if input.modifiers == [.option], key == "w" || key == "∑" {
             return context.hasBodyFaceSelection ? .beginMatchFace : nil
+        }
+        if input.modifiers == [.shift], key == "p" {
+            return .beginSweep
         }
         if input.modifiers == [.shift], key == "s" {
             let raises = context.selectedSketchTargetCount > 0
