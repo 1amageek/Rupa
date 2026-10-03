@@ -515,7 +515,8 @@ struct ModelingOperationView: View {
             if draft.bridgeShape == .g2 {
                 TextField("Tension", text: $draft.bridgeTension)
             }
-            Toggle("Reverse sense", isOn: $draft.bridgeReversesSense)
+            Toggle("Sense (first sheet)", isOn: $draft.bridgeReversesFirstSense)
+            Toggle("Sense (second sheet)", isOn: $draft.bridgeReversesSecondSense)
             Picker("Trim walls", selection: $draft.bridgeTrim) {
                 ForEach(ModelingOperationDraft.BridgeTrimChoice.allCases) { Text($0.rawValue).tag($0) }
             }

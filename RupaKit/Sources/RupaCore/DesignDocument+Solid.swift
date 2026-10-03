@@ -591,7 +591,8 @@ extension DesignDocument {
             )
             do {
                 bridge.trimWalls = try SheetBridgeWallReach().trimWalls(
-                    wallByReach, first: bridge.first, second: bridge.second, reversesSense: bridge.reversesSense, in: evaluated
+                    wallByReach, first: bridge.first, second: bridge.second, reversesFirstSense: bridge.reversesFirstSense,
+                    reversesSecondSense: bridge.reversesSecondSense, in: evaluated
                 )
             } catch let error as KernelError {
                 throw EditorError(code: .commandInvalid, message: "Bridge Surface: \(error.message)")

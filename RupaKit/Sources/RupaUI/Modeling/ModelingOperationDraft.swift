@@ -314,7 +314,9 @@ struct ModelingOperationDraft: Equatable {
     }
     var bridgeShape = BridgeShapeChoice.g2
     var bridgeTension = "1"
-    var bridgeReversesSense = false
+    /// Bridge Surface's two Senses: each sheet crossing where they meet bridges from its other side.
+    var bridgeReversesFirstSense = false
+    var bridgeReversesSecondSense = false
     /// Bridge Surface's Trim walls: none, both, or the sheet reaching less (Short) or more (Long)
     /// far from where the sheets meet.
     enum BridgeTrimChoice: String, CaseIterable, Identifiable {
@@ -1069,7 +1071,7 @@ struct ModelingOperationDraft: Equatable {
             let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
                 width: try topologyLength(distance, label: "Width", in: document), tension: tension,
                 shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrim == .both ? .both : .none,
-                reversesSense: bridgeReversesSense,
+                reversesFirstSense: bridgeReversesFirstSense, reversesSecondSense: bridgeReversesSecondSense,
                 angularAllowance: try continuityAllowanceRadians(),
                 curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
