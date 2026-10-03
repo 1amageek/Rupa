@@ -190,9 +190,12 @@ counts in step, as Subdivide does. A face of any other body (Plasticity's Raise
 Degree on a box's face) is given its surface as an exact B-spline (Swift-CAD
 `FaceBSplineSurfaceConverter`), raised, and kept by a Rebuild Face giving it that
 surface (`FaceRebuildMethod.given`, appended as "Raise Degree"); raising that face
-again raises the given surface in place. A whole solid is refused, one face at a
-time being raised (`FIXME(INCOMPLETE_IMPLEMENTATION)`), and so is an analytic face
-other than a plane (the converter's refusal). Such a face's control points are edited
+again raises the given surface in place. An object raises every face of its solid:
+faces already given surfaces (traced back through the lineage of the Rebuild Faces
+under the object) are raised in place, and every other face is given its raised
+surface by its own Rebuild Face naming the face as the body under them made it,
+appended one after another. An analytic face other than a plane is refused (the
+converter's refusal). Such a face's control points are edited
 like a B-spline source's: `surfaceControlSourceFeatureID` answers the Rebuild Face,
 `SurfaceSourceSummaryService` lists the given surface's control points named on the
 face as the Rebuild Face took it (`rebuild.faces[0]`, stable while they move),

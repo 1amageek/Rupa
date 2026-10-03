@@ -10,7 +10,7 @@ extension DesignDocument {
     /// box's plane, Plasticity's Raise Degree on a face of a solid) is given its surface as an exact
     /// B-spline first (Swift-CAD `FaceBSplineSurfaceConverter`), raised and kept by a Rebuild Face
     /// with that surface (`FaceRebuildMethod.given`); raising that face again raises the surface
-    /// the Rebuild Face gives it.
+    /// the Rebuild Face gives it. An object of such a body has every face raised so.
     public mutating func raiseSurfaceDegree(
         targets: [SelectionTarget],
         objectRegistry: ObjectTypeRegistry = .builtIn,
@@ -23,6 +23,7 @@ extension DesignDocument {
         }
         var sources: [FeatureID] = []
         var bodyFaces: [SelectionTarget] = []
+        var bodyObjects: [SceneNodeID] = []
         for target in targets {
             switch target.component {
             case .object, .face: break
@@ -37,11 +38,9 @@ extension DesignDocument {
                 continue
             }
             guard case .face = target.component else {
-                // FIXME(INCOMPLETE_IMPLEMENTATION): Plasticity's page also raises a whole solid,
-                // every face given control points; Rupa raises one face of a solid at a time and
-                // refuses the object here from the palette and Shift-S. Complete when a solid's
-                // faces are raised together, verified by a box raised whole keeping its volume.
-                throw EditorError(code: .commandInvalid, message: "\(operationName) raises a face of a solid; select its face.")
+                // A whole solid: every face of it (Plasticity's Raise Degree on a solid).
+                if bodyObjects.contains(target.sceneNodeID) == false { bodyObjects.append(target.sceneNodeID) }
+                continue
             }
             if bodyFaces.contains(target) == false { bodyFaces.append(target) }
         }
@@ -104,8 +103,94 @@ extension DesignDocument {
                 currentEvaluation: sources.isEmpty ? currentEvaluation : nil, currentGeneration: sources.isEmpty ? currentGeneration : nil
             )
         }
+        for nodeID in bodyObjects {
+            try raiseEveryFace(
+                of: nodeID, raised: raised, operationName: operationName, objectRegistry: objectRegistry,
+                currentEvaluation: sources.isEmpty && bodyFaces.isEmpty ? currentEvaluation : nil,
+                currentGeneration: sources.isEmpty && bodyFaces.isEmpty ? currentGeneration : nil
+            )
+        }
         try validate(objectRegistry: objectRegistry)
         didCommit = true
+    }
+
+    /// Every face of a solid raised at once: a face a Rebuild Face already gives a surface has that
+    /// surface raised in place; every other face is given its own surface raised, each by a Rebuild
+    /// Face naming the face as the body under those Rebuild Faces made it (found through them by
+    /// lineage), appended one after another.
+    private mutating func raiseEveryFace(
+        of nodeID: SceneNodeID,
+        raised: (BSplineSurface3D) throws -> BSplineSurface3D,
+        operationName: String,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws {
+        guard let tip = productMetadata.sceneNodes[nodeID]?.reference?.featureID else {
+            throw EditorError(code: .referenceUnresolved, message: "\(operationName) found no body behind the object.")
+        }
+        let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "\(operationName) requires the solid evaluated"
+        )
+        let topology = try TopologySnapshotService().snapshot(
+            document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+        )
+        // The Rebuild Faces giving faces surfaces, from the tip back to the body under them.
+        var given: [SubshapeID: FeatureID] = [:]
+        var base = tip
+        while case .faceRebuild(let rebuild)? = cadDocument.designGraph.nodes[base]?.operation,
+              case .given = rebuild.method, rebuild.faces.count == 1 {
+            given[rebuild.faces[0].subshapeID] = base
+            base = rebuild.target.featureID
+        }
+        var inPlace: [FeatureID] = []
+        var added: [(reference: StableSubshapeReference, surface: BSplineSurface3D)] = []
+        for entry in topology.entries where entry.kind == .face && entry.sceneNodeID == nodeID.description {
+            guard let current = entry.stableReference else {
+                throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not name a face of the solid.")
+            }
+            // Back through the lineage to a face given a surface, or to the face as the body made it.
+            var subshape = current.subshapeID
+            var raisedBy = given[subshape]
+            var visited = Set<SubshapeID>()
+            while raisedBy == nil, subshape.featureID != base, visited.insert(subshape).inserted,
+                  let parent = evaluated.lineage[subshape]?.parents.first {
+                subshape = parent
+                raisedBy = given[subshape]
+            }
+            if let raisedBy {
+                if inPlace.contains(raisedBy) == false { inPlace.append(raisedBy) }
+                continue
+            }
+            guard subshape.featureID == base else {
+                throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not trace a face of the solid to its body.")
+            }
+            let surface: BSplineSurface3D
+            do {
+                surface = try FaceBSplineSurfaceConverter().surface(of: current, in: evaluated)
+            } catch {
+                throw EditorError(code: .commandInvalid, message: "\(operationName): \(error)")
+            }
+            added.append((StableSubshapeReference(subshapeID: subshape, geometrySignature: current.geometrySignature), try raised(surface)))
+        }
+        let tolerance = modelingSettings.tolerance
+        for featureID in inPlace {
+            guard var feature = cadDocument.designGraph.nodes[featureID], case .faceRebuild(var rebuild) = feature.operation,
+                  case let .given(surface) = rebuild.method else {
+                throw EditorError(code: .referenceUnresolved, message: "\(operationName) lost a face's surface it raises.")
+            }
+            rebuild.method = .given(try raised(surface))
+            feature.operation = .faceRebuild(rebuild)
+            try cadDocument.replaceFeature(feature, tolerance: tolerance)
+        }
+        var target = tip
+        for face in added {
+            target = try appendFeatureShownByObject(
+                .faceRebuild(FaceRebuildFeature(target: PatternTargetReference(featureID: target), faces: [face.reference], method: .given(face.surface))),
+                name: "Raise Degree", object: nodeID, objectRegistry: objectRegistry
+            )
+        }
     }
 
     /// Keeps the degree and control-point counts the objects of `featureID` list in step with its

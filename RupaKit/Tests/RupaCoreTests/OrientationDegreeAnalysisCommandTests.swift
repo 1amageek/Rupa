@@ -172,16 +172,34 @@ import Testing
         let raisedVolume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         #expect(abs(raisedVolume - volume) < 1e-12)
         #expect(session.evaluationStatus == .valid)
-        // The whole box is not raised at once, nor a cylinder's side.
-        let before = session.document
-        #expect(throws: EditorError.self) { _ = try session.execute(.raiseSurfaceDegree(targets: [SelectionTarget(sceneNodeID: box)])) }
-        #expect(unchanged(session, since: before))
+        // A cylinder's side is not given control points.
         let (drumSession, drum) = try cylinder()
         let sides = try entries(.face, of: drum, in: drumSession).filter { $0.surfaceKind == "cylinder" }
         let side = try #require(sides.first?.selectionTarget())
         let drumBefore = drumSession.document
         #expect(throws: EditorError.self) { _ = try drumSession.execute(.raiseSurfaceDegree(targets: [side])) }
         #expect(unchanged(drumSession, since: drumBefore))
+    }
+
+    @Test(.timeLimit(.minutes(2)))
+    func raiseSurfaceDegreeOnASolidRaisesEveryFaceAndThenRaisesThemAgain() throws {
+        // Plasticity's page: Shift+S on a solid gives every face control points; again raises them.
+        let (session, box) = try box()
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        func givenDegrees() -> [Int] {
+            session.document.cadDocument.designGraph.nodes.values.compactMap { node -> Int? in
+                guard case .faceRebuild(let rebuild) = node.operation, case .given(let surface) = rebuild.method else { return nil }
+                return surface.uDegree
+            }
+        }
+        _ = try session.execute(.raiseSurfaceDegree(targets: [SelectionTarget(sceneNodeID: box)]))
+        #expect(givenDegrees().sorted() == Array(repeating: 2, count: 6))
+        #expect(session.evaluationStatus == .valid)
+        _ = try session.execute(.raiseSurfaceDegree(targets: [SelectionTarget(sceneNodeID: box)]))
+        #expect(givenDegrees().sorted() == Array(repeating: 3, count: 6))
+        let raised = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(raised - volume) < 1e-12)
+        #expect(session.evaluationStatus == .valid)
     }
 
     @Test(.timeLimit(.minutes(2)))
