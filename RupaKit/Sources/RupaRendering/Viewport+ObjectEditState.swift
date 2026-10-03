@@ -194,7 +194,7 @@ struct ViewportObjectEditState: Equatable, Sendable {
             try next.moveProfileCorner(vertex, start: start, current: current, measure: measure)
         case .profileFaceMove(_, let face):
             try next.moveFace(face, start: start, current: current, measure: measure)
-        case .profileEdgeChamfer, .profileEdgeFillet, .boundarySurface:
+        case .profileEdgeChamfer, .profileEdgeFillet, .boundarySurface, .continuityBadge:
             break
         case .translatePlane, .translateScreen, .uniformScale, .rotateScreen, .scalePlane:
             // These handles belong to the placement gizmo, which measures them in its frame.

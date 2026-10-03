@@ -62,6 +62,9 @@ enum WorkspaceViewportAffordance: CaseIterable, Sendable {
     case featureParameters
     /// The selected construction plane's move and rotate handles.
     case constructionPlane
+    /// The open dialog's continuity badges on its boundaries: a click steps one boundary's
+    /// continuity. Align Surface takes its clicks as a picking command, which owns them.
+    case continuityBadge
 
     /// The selection scopes the affordance edits in.
     var scopes: Set<WorkspaceSelectionScope> {
@@ -80,7 +83,7 @@ enum WorkspaceViewportAffordance: CaseIterable, Sendable {
             return [.edge]
         case .slotWidth, .sketchEntityEditing:
             return [.sketchEntity]
-        case .featureParameters, .constructionPlane:
+        case .featureParameters, .constructionPlane, .continuityBadge:
             return Set(WorkspaceSelectionScope.allCases)
         }
     }
@@ -91,8 +94,9 @@ enum WorkspaceViewportAffordance: CaseIterable, Sendable {
         switch self {
         case .slotWidth:
             return .freestyleOffset
-        case .faceOffset:
-            // Push Face's arrow sets its dialog's Distance.
+        case .faceOffset, .continuityBadge:
+            // Push Face's arrow sets its dialog's Distance; Align Surface's badges its edges'
+            // continuities.
             return .faceEdit
         case .objectSelection, .objectPlacement, .objectHandles, .edgeTreatment,
              .boundarySurface, .bodyVertexEditing, .regionOffset, .edgeOffset,

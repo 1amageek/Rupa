@@ -457,6 +457,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     /// The color and opacity a curve or sketch object draws with when its node names a material;
     /// objects without one keep the canvas's curve and sketch colors.
     var curveColors: [SceneNodeID: SIMD4<Float>] = [:]
+    /// The open command's continuity badges, drawn only while their clicks are reported.
+    var continuityBadges: [ViewportContinuityBadge] = []
     /// The scene the selection's identities belong to when it is not the scene drawn: a drag
     /// that previews an edit draws the preview, where the selected subshape may be gone.
     var selectionScene: ViewportScene?
@@ -683,6 +685,13 @@ enum ViewportSpatialOverlayProducer {
             section,
             paths: &paths,
             meshes: &meshes,
+            interactionRecords: &interactionRecords,
+            activeFamilies: &activeFamilies
+        )
+        try appendContinuityBadges(
+            snapshot,
+            labels: &labels,
+            markers: &markers,
             interactionRecords: &interactionRecords,
             activeFamilies: &activeFamilies
         )

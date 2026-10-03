@@ -118,7 +118,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                 switch value.action {
                 case .profileCornerMove(let value, _), .profileFaceMove(let value, _),
                      .profileEdgeChamfer(let value, _), .profileEdgeFillet(let value, _),
-                     .boundarySurface(let value): try target(value)
+                     .boundarySurface(let value), .continuityBadge(let value): try target(value)
                 case .translate, .oneSidedScale, .centerScale, .rotate, .translatePlane, .translateScreen,
                      .uniformScale, .rotateScreen, .scalePlane, .vertexMove, .faceMove: break
                 }

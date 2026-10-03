@@ -1704,6 +1704,44 @@ struct ModelingOperationDraftTests {
         #expect(none == nil)
     }
 
+    @Test func aBadgeClickStepsItsOwnBoundary() {
+        // Plasticity's round badges: one per boundary edge, a click stepping that edge alone
+        // (Square G0, G1, G2, Free; XNURBS G0, G1, G2); a curve side and a guide carry none; Patch's
+        // hole has one continuity, which any of its badges steps.
+        let node = SceneNodeID()
+        let edges = (0..<2).map { _ in SelectionTarget(sceneNodeID: node, component: .edge(.init(rawValue: UUID().uuidString))) }
+        let curve = SelectionTarget(sceneNodeID: SceneNodeID())
+        var square = makeDraft(.square, targets: edges + [curve])
+        #expect(square.continuityBadges.map(\.target) == edges)
+        #expect(square.continuityBadges.map(\.label) == ["G0", "G0"])
+        var labels: [String] = []
+        for _ in 0..<4 {
+            let stepped = square.stepContinuity(of: edges[0])
+            #expect(stepped)
+            labels.append(square.continuityBadges[0].label)
+        }
+        #expect(labels == ["G1", "G2", "Free", "G0"])
+        #expect(square.continuityBadges[1].label == "G0")
+        let curveStepped = square.stepContinuity(of: curve)
+        #expect(curveStepped == false)
+
+        let guide = SelectionTarget(sceneNodeID: SceneNodeID(), component: .edge(.init(rawValue: UUID().uuidString)))
+        var xnurbs = makeDraft(.xnurbs, targets: edges + [guide])
+        xnurbs.xnurbsGuideNodeIDs = [guide.sceneNodeID]
+        #expect(xnurbs.continuityBadges.map(\.target) == edges)
+        let firstStep = xnurbs.stepContinuity(of: edges[1])
+        let secondStep = xnurbs.stepContinuity(of: edges[1])
+        #expect(firstStep && secondStep)
+        #expect(xnurbs.continuityBadges.map(\.label) == ["G0", "G2"])
+        let guideStepped = xnurbs.stepContinuity(of: guide)
+        #expect(guideStepped == false)
+
+        var patch = makeDraft(.patch, targets: edges)
+        let patchStepped = patch.stepContinuity(of: edges[0])
+        #expect(patchStepped)
+        #expect(patch.continuityBadges.map(\.label) == ["G1", "G1"])
+    }
+
     @Test func xnurbsTakesEachEdgesOwnContinuity() throws {
         // The four top edges of a box as boundaries: one edge G2 with the side face beside it, the
         // others the dialog's G0, as Plasticity's badges mix them.

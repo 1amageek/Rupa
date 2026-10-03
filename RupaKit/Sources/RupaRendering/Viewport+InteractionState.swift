@@ -469,10 +469,24 @@ enum ViewportAffordanceAction: Equatable, Sendable {
     case profileEdgeChamfer(SelectionTarget, ViewportEdgeTreatmentDragFrame)
     case profileEdgeFillet(SelectionTarget, ViewportEdgeTreatmentDragFrame)
     case boundarySurface(SelectionTarget)
+    /// A continuity badge on a boundary of the open command, clicked to step its continuity.
+    case continuityBadge(SelectionTarget)
     case faceMove(ViewportBodyFace)
 
-    var directClickSelectionTarget: SelectionTarget? {
-        guard case .boundarySurface(let target) = self else { return nil }
-        return target
+    /// What a click on the affordance reports, for the actions a click rather than a drag
+    /// completes; nil for every handle a drag moves.
+    var directClick: ViewportAffordanceClick? {
+        switch self {
+        case .boundarySurface(let target): .boundarySurface(target)
+        case .continuityBadge(let target): .continuityBadge(target)
+        default: nil
+        }
     }
+}
+
+/// A click on an affordance that a click completes: an open boundary edge's surface affordance
+/// starts a boundary surface on it; a continuity badge steps its edge's continuity.
+enum ViewportAffordanceClick: Equatable, Sendable {
+    case boundarySurface(SelectionTarget)
+    case continuityBadge(SelectionTarget)
 }

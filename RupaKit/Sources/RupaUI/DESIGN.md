@@ -310,6 +310,7 @@ picks to the Boolean's list.
 | `slotWidth` | Curve | the selected curve while Slot or Offset Planar Curve runs, Freestyle included | drag sets the width or distance |
 | `sketchEntityEditing` | Curve | the selected sketch entities | curve and point handles, dimensions, spline control points, bridge-curve ends, Offset Vertex's distance |
 | `featureParameters` | every scope | a selected independent copy or pattern array | extrusion distance, body dimensions, array spacing, count, extent, path, output mode |
+| `continuityBadge` | every scope; under Align Surface's picking command | the open dialog's boundary edges: Square's sides, XNURBS's boundaries, Patch's hole edges (`ModelingOperationDraft.continuityBadges`), Align Surface's aligned edges (`WorkspaceFaceEditSession.continuityBadges`) | click steps that edge's continuity (`stepContinuity(of:)`; Patch's one hole continuity) |
 | `constructionPlane` | every scope | the selected construction plane | move and rotate its frame |
 
 Each row's own preconditions (an exact CAD context, the running value command,

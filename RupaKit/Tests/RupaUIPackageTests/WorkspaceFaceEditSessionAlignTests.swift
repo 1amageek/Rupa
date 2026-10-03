@@ -6,6 +6,23 @@ import SwiftCAD
 /// Align Surface's dialog aligns several pairs at once, each with its own continuity.
 @Suite("Face edit session align")
 struct WorkspaceFaceEditSessionAlignTests {
+    /// Each aligned edge carries a badge with its pair's continuity; a click steps that pair alone.
+    @Test func aBadgeClickStepsItsPairsContinuity() {
+        let targets = (0..<4).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [
+            .init(edge: targets[0], reference: targets[1]), .init(edge: targets[2], reference: targets[3]),
+        ]))
+        #expect(session.continuityBadges.map(\.target) == [targets[0], targets[2]])
+        #expect(session.continuityBadges.map(\.label) == ["G0", "G0"])
+        let firstStep = session.stepContinuity(of: targets[2])
+        let secondStep = session.stepContinuity(of: targets[2])
+        #expect(firstStep && secondStep)
+        #expect(session.continuityBadges.map(\.label) == ["G0", "G2"])
+        #expect(session.pairContinuity[1] == .curvature && session.pairContinuity[0] == nil)
+        let referenceStepped = session.stepContinuity(of: targets[1])
+        #expect(referenceStepped == false)
+    }
+
     @Test func everyPairIsItsOwnAlignmentWithItsOwnContinuity() throws {
         let targets = (0..<4).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
         var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [

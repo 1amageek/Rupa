@@ -182,6 +182,7 @@ public struct Viewport: View {
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis?
+    private let continuityBadges: [ViewportContinuityBadge]
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
     /// The Section Analysis distance handle, while the section plane is being placed.
@@ -237,6 +238,7 @@ public struct Viewport: View {
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
     private let onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)?
     private let onBoundarySurface: ((SelectionTarget) -> Void)?
+    private let onContinuityBadge: ((SelectionTarget) -> Void)?
     private let onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)?
     private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
@@ -390,6 +392,7 @@ public struct Viewport: View {
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis? = nil,
+        continuityBadges: [ViewportContinuityBadge] = [],
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle? = nil,
@@ -442,6 +445,7 @@ public struct Viewport: View {
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
         onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)? = nil,
         onBoundarySurface: ((SelectionTarget) -> Void)? = nil,
+        onContinuityBadge: ((SelectionTarget) -> Void)? = nil,
         onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)? = nil,
         onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
@@ -529,6 +533,7 @@ public struct Viewport: View {
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
         self.edgeAlignmentAnalysis = edgeAlignmentAnalysis
+        self.continuityBadges = continuityBadges
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
         self.sectionAnalysisHandle = sectionAnalysisHandle
@@ -587,6 +592,7 @@ public struct Viewport: View {
         self.onEdgeChamferDrag = onEdgeChamferDrag
         self.onEdgeFilletDrag = onEdgeFilletDrag
         self.onBoundarySurface = onBoundarySurface
+        self.onContinuityBadge = onContinuityBadge
         self.onRegionOffsetDrag = onRegionOffsetDrag
         self.onEdgeOffsetDrag = onEdgeOffsetDrag
         self.onSlotWidthDrag = onSlotWidthDrag
@@ -1648,6 +1654,7 @@ public struct Viewport: View {
         key.surfaceAnalysisOptions = surfaceAnalysisOptions
         key.surfaceContinuity = surfaceContinuity
         key.edgeAlignmentAnalysis = edgeAlignmentAnalysis
+        key.continuityBadges = onContinuityBadge != nil ? continuityBadges : []
         key.sectionAnalysis = sectionAnalysis
         key.sectionAnalysisHandle = sectionAnalysisHandle
         key.snap = displayedSnapOverlayResult
@@ -1699,6 +1706,7 @@ public struct Viewport: View {
         if onBoundarySurface != nil { key.availableRoutes |= 1 << 28 }
         if onSketchCornerTreatmentDrag != nil { key.availableRoutes |= 1 << 29 }
         if onTopologyTransformCommit != nil { key.availableRoutes |= 1 << 30 }
+        if onContinuityBadge != nil { key.availableRoutes |= 1 << 31 }
         return key
     }
 
@@ -4953,8 +4961,10 @@ public struct Viewport: View {
             clearAffordanceGhostEdits()
             activeAffordanceDrag = nil
             pendingNativeAffordance = nil
-            if let selectionTarget = affordance.action.directClickSelectionTarget {
-                onBoundarySurface?(selectionTarget)
+            switch affordance.action.directClick {
+            case .boundarySurface(let selectionTarget): onBoundarySurface?(selectionTarget)
+            case .continuityBadge(let selectionTarget): onContinuityBadge?(selectionTarget)
+            case nil: break
             }
         }
     }
@@ -5932,6 +5942,7 @@ extension Viewport {
             drawsLegacyBodies: drawsLegacyBodies,
             drawsDragPreviewBodies: rendersDragPreviewDocument
         )
+        if onContinuityBadge != nil { semantic.continuityBadges = continuityBadges }
         // A curve or sketch whose node names a material draws in its color and opacity.
         for item in scene.items {
             switch item.kind {

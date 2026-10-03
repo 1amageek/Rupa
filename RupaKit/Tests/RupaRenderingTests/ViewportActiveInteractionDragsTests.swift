@@ -82,8 +82,9 @@ import Testing
         component: .edge(SelectionComponentID(rawValue: "generatedTopology:edge"))
     )
 
-    #expect(ViewportAffordanceAction.boundarySurface(selectionTarget).directClickSelectionTarget == selectionTarget)
-    #expect(ViewportAffordanceAction.translate(.x).directClickSelectionTarget == nil)
+    #expect(ViewportAffordanceAction.boundarySurface(selectionTarget).directClick == .boundarySurface(selectionTarget))
+    #expect(ViewportAffordanceAction.continuityBadge(selectionTarget).directClick == .continuityBadge(selectionTarget))
+    #expect(ViewportAffordanceAction.translate(.x).directClick == nil)
 }
 
 @Test func viewportInteractionDragFinishResolverReturnsNoneWithoutPendingOrActiveDrag() {

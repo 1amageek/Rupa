@@ -2196,9 +2196,11 @@ private struct ProjectMainViewContent: View {
                         ),
                         objectSelectionIndex: ViewportObjectSelectionIndex(document: payload.document, selection: .empty),
                         edgeAlignmentAnalysis: previewedAlignAnalysis,
+                        continuityBadges: viewportContinuityBadges,
                         canvasDragPreviewKind: nil,
                         allowsObjectAffordances: false,
                         selectedPresentationHasExactCADContext: false,
+                        onContinuityBadge: viewportContinuityBadgeHandler,
                         onPresentationFailure: reportViewportPresentationFailure
                     )
                     .overlay(alignment: .topLeading) {
@@ -2387,6 +2389,7 @@ private struct ProjectMainViewContent: View {
             surfaceAnalysis: selectedSurfaceAnalysisSummary,
             surfaceAnalysisOptions: surfaceAnalysisOptions,
             surfaceContinuity: selectedSurfaceContinuitySummary,
+            continuityBadges: viewportContinuityBadges,
             sectionAnalysis: sectionAnalysis,
             sectionClippingPlan: sectionClippingPlan,
             sectionAnalysisHandle: sectionAnalysisSession.flatMap { placing in
@@ -2454,6 +2457,7 @@ private struct ProjectMainViewContent: View {
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
             onEdgeFilletDrag: viewportEdgeFilletDragHandler,
             onBoundarySurface: viewportBoundarySurfaceHandler,
+            onContinuityBadge: viewportContinuityBadgeHandler,
             onRegionOffsetDrag: viewportRegionOffsetDragHandler,
             onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
             onSlotWidthDrag: viewportSlotWidthDragHandler,
@@ -2725,6 +2729,25 @@ private struct ProjectMainViewContent: View {
         }
         return { target in
             handleViewportEdgeFilletDrag(target)
+        }
+    }
+
+    /// The open dialog's continuity badges: Square's, XNURBS's and Patch's boundary edges, Align
+    /// Surface's aligned edges.
+    private var viewportContinuityBadges: [ViewportContinuityBadge] {
+        (modelingDraft?.continuityBadges ?? []) + (faceEditSession?.continuityBadges ?? [])
+    }
+
+    /// A badge's click steps that boundary's continuity in the dialog that owns it.
+    private var viewportContinuityBadgeHandler: ((SelectionTarget) -> Void)? {
+        guard viewportPointerOwner.allows(.continuityBadge), viewportContinuityBadges.isEmpty == false else { return nil }
+        return { target in
+            guard viewportPointerOwner.allows(.continuityBadge) else { return }
+            if var draft = modelingDraft, draft.stepContinuity(of: target) {
+                modelingDraft = draft
+            } else if var faceEdit = faceEditSession, faceEdit.stepContinuity(of: target) {
+                faceEditSession = faceEdit
+            }
         }
     }
 

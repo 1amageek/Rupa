@@ -353,6 +353,12 @@ times unit × scale, G2 both surfaces' curvature combs across the edge (tooth cu
 scale, with an outline through the tips); each edge's worst value is labelled at its middle,
 green within its limit and orange beyond. A non-positive or non-finite scale or stroke is a typed
 refusal; `alignmentAnalysisDrawsEachGapAtItsScale` owns the G0 hairs and label.
+Continuity badges (`ViewportContinuityBadge`, the open dialog's boundaries with the continuity each
+takes, drawn only while `onContinuityBadge` is set) put each label beside its edge's middle in the
+scene drawn, with a dot on the middle; the label carries a hit rectangle and the handle of an
+affordance whose action is `.continuityBadge(edge)`, whose click calls `onContinuityBadge` with the
+edge. A boundary the drawn scene lacks (a preview that rebuilt its body) draws no badge;
+`continuityBadgesLabelEachEdgeAtItsMiddleAndReportItOnClick` owns placement, handle and omission.
 The original pure builder algorithms are shared with a nonescaping `rethrows`
 checkpoint `(items, positions, visits)`. Legacy nonthrowing wrappers supply an
 explicit no-op checkpoint; the native worker supplies cooperative cancellation
