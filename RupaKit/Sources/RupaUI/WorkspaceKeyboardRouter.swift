@@ -277,6 +277,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginPolySplines
     /// Shift-P: Sweep on the selection, its section, guides and path in order (palette too).
     case beginSweep
+    /// P: Pipe along the selected curves (palette too).
+    case beginPipe
+    /// Revolve on the selection (palette).
+    case beginRevolve
     /// Remove Nominal Surface on the selected faces, at once (palette).
     case removeNominalSurface
     /// Hollow on the selected solid or its faces, and Thicken on the selected sheet or faces
@@ -1047,6 +1051,7 @@ struct WorkspaceKeyboardRouter: Sendable {
         case "f": return .openCommandPalette
         case "t": return .activateTrimCommand
         case "l": return .loftSelection
+        case "p": return .beginPipe
         case "b": return context.selectedSketchTargetCount > 0 || context.hasBodyEdgeSelection ? .beginFillet : nil
         case "j": return context.selectedSketchTargetCount >= 2 || context.selectedSheetObjectCount >= 2 ? .join : nil
         case "i": return context.hasProjectableSelection ? .projectCurvesOntoFace : nil

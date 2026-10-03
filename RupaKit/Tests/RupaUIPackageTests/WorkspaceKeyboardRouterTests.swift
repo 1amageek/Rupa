@@ -845,3 +845,8 @@ private func keyboardContext(
     let router = WorkspaceKeyboardRouter()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "P", modifiers: [.shift]), context: keyboardContext()) == .beginSweep)
 }
+
+@Test func workspaceKeyboardRouterStartsPipeOnP() {
+    let router = WorkspaceKeyboardRouter()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "p"), context: keyboardContext()) == .beginPipe)
+}

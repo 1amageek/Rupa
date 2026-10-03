@@ -6808,6 +6808,14 @@ private struct ProjectMainViewContent: View {
             modelingDraft?.tangentEdges.toggle()
             reportToolStatus("Fillet: tangent edges \(modelingDraft?.tangentEdges == true ? "on" : "off").")
             return .handled
+        case .beginPipe, .beginRevolve:
+            let targets = snapshot.selection.selectedTargets
+            beginModelingOperation(action == .beginPipe ? .pipe : .revolve)
+            modelingDraft?.targets = targets
+            reportToolStatus(action == .beginPipe
+                ? "Pipe: along the selected curves; Preview then Apply."
+                : "Revolve: the selected profiles about the axis; Preview then Apply.")
+            return .handled
         case .beginSweep:
             let targets = snapshot.selection.selectedTargets
             beginModelingOperation(.sweep)

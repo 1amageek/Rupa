@@ -36,6 +36,8 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Curve Array", invocation: .edit(.curveArray)),
         Command(title: "Loft", shortcut: "L", invocation: .keyboard(.loftSelection)),
         Command(title: "Sweep", shortcut: "⇧P", invocation: .keyboard(.beginSweep)),
+        Command(title: "Pipe", shortcut: "P", invocation: .keyboard(.beginPipe)),
+        Command(title: "Revolve", invocation: .keyboard(.beginRevolve)),
         Command(title: "Bridge", aliases: ["Bridge Curve", "Bridge Vertex"], invocation: .keyboard(.bridgeSelection)),
         Command(title: "Boolean", aliases: ["Union", "Difference", "Intersect", "Slice", "Region"], shortcut: "Q", invocation: .keyboard(.beginBoolean)),
         Command(title: "Cut", shortcut: "C", invocation: .keyboard(.beginBodyCut)),
