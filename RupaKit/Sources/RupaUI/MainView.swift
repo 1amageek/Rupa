@@ -2171,11 +2171,13 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// The previewed Square's Analysis as its dialog draws it: each side at the checked continuity.
+    /// The previewed Square's Analysis as its dialog draws it: each side at the checked continuity,
+    /// each edge of a refit face at G0.
     private var previewedSquareAnalysisLabels: [ViewportAnalysisLabel] {
-        guard let squareAnalysis, let draft = modelingDraft, draft.kind == .square, draft.refitsFaces == false else { return [] }
+        guard let squareAnalysis, let draft = modelingDraft, draft.kind == .square else { return [] }
+        // Refit Face's dialog has no Analysis choice: its edges are checked at G0, as it shows them.
         let level: Int
-        switch draft.squareAnalysisLevel {
+        switch draft.refitsFaces ? .g0 : draft.squareAnalysisLevel {
         case .g0: level = 0
         case .g1: level = 1
         case .g2: level = 2
@@ -10748,7 +10750,7 @@ private struct ProjectMainViewContent: View {
     /// Measures the previewed Square's sides for its Analysis off the main actor; cleared while
     /// there is no ready Square preview.
     private func measureSquareAnalysis() async {
-        guard let draft = modelingDraft, draft.kind == .square, draft.refitsFaces == false,
+        guard let draft = modelingDraft, draft.kind == .square,
               modelingPreview.phase == .ready, let payload = modelingPreview.payload else {
             squareAnalysis = nil
             return

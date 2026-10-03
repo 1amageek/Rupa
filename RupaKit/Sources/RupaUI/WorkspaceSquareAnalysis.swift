@@ -16,29 +16,44 @@ struct WorkspaceSquareAnalysis: Equatable, Sendable {
 
     let sides: [Side]
 
-    /// The analysis of the Squares `preview` adds to `base`, its evaluation reusing `current`; nil
-    /// when it adds none.
+    /// The analysis of the Squares and Square refits `preview` adds to `base`, its evaluation
+    /// reusing `current`; nil when it adds none. A refit face's sides are its edges, each held at
+    /// the refit's continuity (`FaceRefitAnalyzer`).
     static func evaluate(preview: DesignDocument, base: DesignDocument, current: DocumentEvaluationContext?) throws -> WorkspaceSquareAnalysis? {
         let existing = Set(base.cadDocument.designGraph.nodes.keys)
-        let squares = preview.cadDocument.designGraph.nodes.values.compactMap { node -> (FeatureID, SquareSurfaceFeature)? in
-            guard case let .squareSurface(square) = node.operation, !existing.contains(node.id) else { return nil }
-            return (node.id, square)
-        }.sorted { $0.0.description < $1.0.description }
-        guard !squares.isEmpty else { return nil }
+        let added = preview.cadDocument.designGraph.nodes.values.filter { node in
+            guard !existing.contains(node.id) else { return false }
+            switch node.operation {
+            case .squareSurface: return true
+            case let .faceRebuild(rebuild):
+                if case .square = rebuild.method { return true }
+                return false
+            default: return false
+            }
+        }.sorted { $0.id.description < $1.id.description }
+        guard !added.isEmpty else { return nil }
         let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
             document: preview, currentEvaluation: current, failurePrefix: "The Square analysis could not evaluate the preview"
         )
-        let analyzer = SquareSideAnalyzer()
-        return WorkspaceSquareAnalysis(sides: try squares.flatMap { featureID, square in
-            try analyzer.analyze(featureID, in: evaluated).map { analysis in
-                let side = square.sides[analysis.side]
-                let order: Int?
-                switch side.continuity?.order {
-                case .tangent: order = 1
-                case .curvature: order = 2
-                case nil: order = side.isFree ? nil : 0
+        func order(_ continuity: SurfaceEdgeContinuity.Order?) -> Int {
+            switch continuity {
+            case .tangent: 1
+            case .curvature: 2
+            case nil: 0
+            }
+        }
+        return WorkspaceSquareAnalysis(sides: try added.flatMap { node -> [Side] in
+            switch node.operation {
+            case let .squareSurface(square):
+                return try SquareSideAnalyzer().analyze(node.id, in: evaluated).map { analysis in
+                    let side = square.sides[analysis.side]
+                    return Side(analysis: analysis, order: side.isFree ? nil : order(side.continuity?.order))
                 }
-                return Side(analysis: analysis, order: order)
+            case let .faceRebuild(rebuild):
+                guard case let .square(refit) = rebuild.method else { return [] }
+                return try FaceRefitAnalyzer().analyze(node.id, in: evaluated).map { Side(analysis: $0, order: order(refit.order)) }
+            default:
+                return []
             }
         })
     }

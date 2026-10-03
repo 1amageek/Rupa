@@ -957,7 +957,8 @@ measure with matching combs and a positional one's 45° turn hairs. Square's Ana
 (`SquareSideAnalyzer`, each side with the order it holds) and drawn as `ViewportAnalysisLabel`s at
 each side's middle at the dialog's checked continuity (`squareAnalysisLevel`, G1 by default): ✓
 within the limit, ⊘ beyond it, ⚠ where the side holds less than the check; a side beside no face
-is checked at G0. Refit Face shows none (its sides are the face's own edges).
+is checked at G0. Refit Face's edges (`FaceRefitAnalyzer`) are shown at G0, its dialog having no
+Analysis choice: ✓ on the new boundary, ⊘ off it.
 `WorkspaceSquareAnalysisTests` own the verdicts and the G0 fallback. Rebuild
 dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
 Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays

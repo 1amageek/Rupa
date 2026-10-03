@@ -33,4 +33,14 @@ struct WorkspaceSquareAnalysisTests {
         #expect(g0.map(\.verdict) == [.within, .within, .unconstrained])
         #expect(g0[2].text.hasPrefix("G0 ⚠ 1.5"))
     }
+
+    /// A refit face's edges at G0: on the new boundary ✓, off it ⊘, as Plasticity's REFIT FACE shows.
+    @Test func aRefitsEdgesAreCheckedAtG0() {
+        let refit = WorkspaceSquareAnalysis(sides: [
+            .init(analysis: SquareSideAnalysis(side: 0, position: 0, positionLimit: 1e-6, point: .origin), order: 0),
+            .init(analysis: SquareSideAnalysis(side: 1, position: 1.486e-5, positionLimit: 1e-6, point: .origin), order: 0),
+        ])
+        #expect(refit.drawn(level: 0, displayUnit: .centimeter).map(\.verdict) == [.within, .beyond])
+        #expect(refit.drawn(level: 0, displayUnit: .centimeter)[1].text.hasPrefix("G0 ⊘"))
+    }
 }
