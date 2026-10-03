@@ -103,6 +103,18 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func removeFilletsNamesTheRoundsItWouldTakeOff() throws {
+        let session = EditorSession()
+        let target = try box(session, "Box")
+        let sketch = try #require(session.document.productMetadata.sceneNodes[target]?.childIDs.first)
+        _ = try session.execute(.setSceneNodeObjectProperty(id: sketch, propertyID: PropertyID(rawValue: "corner.radius"), value: .length(0.01)))
+        // The four 10 mm corner rounds, faces of the box itself, until the radius leaves them out.
+        let rounds = try session.document.removableFilletTargets(target: target, maximumRadius: nil, convexity: .any)
+        #expect(rounds.count == 4 && rounds.allSatisfy { $0.sceneNodeID == target })
+        #expect(try session.document.removableFilletTargets(target: target, maximumRadius: 0.005, convexity: .any).isEmpty)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func removeFilletsSharpensARoundedBox() throws {
         let session = EditorSession()
         let target = try box(session, "Box")

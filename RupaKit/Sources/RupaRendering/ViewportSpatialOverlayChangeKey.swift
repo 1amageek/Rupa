@@ -12,6 +12,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
 
     var selection = SelectionModel()
     var selectionPreview: [SelectionTarget] = []
+    var removalPreview: [SelectionTarget] = []
     var meshSelection: ViewportMeshSelectionOverlay?
     var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     var activeDrags = ViewportActiveInteractionDrags()

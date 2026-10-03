@@ -205,6 +205,8 @@ private struct ProjectMainViewContent: View {
     @State private var deformSession: WorkspaceDeformSession?
     @State private var imprintSession: WorkspaceImprintSession?
     @State private var faceEditSession: WorkspaceFaceEditSession?
+    /// The faces Remove Fillets' dialog would take off, drawn red while it runs.
+    @State private var removalPreviewTargets: [SelectionTarget] = []
     /// The pending live preview of a dialog that previews as it is edited.
     @State private var liveModelingPreviewTask: Task<Void, Never>?
     /// Set when a right-click confirmed such a dialog before its preview was ready.
@@ -2364,6 +2366,7 @@ private struct ProjectMainViewContent: View {
             selection: displaySelection,
             objectSelectionIndex: viewportObjectSelectionIndex,
             selectionDragPreviewTargets: selectionDragPreviewTargets,
+            removalPreviewTargets: removalPreviewTargets,
             presentationPreviewSceneNodeIDs: selectionDragPreviewSceneNodeIDs,
             patternArrayCurvePathReplacementPreviewRequest: patternArrayCurvePathReplacementPreviewRequest,
             surfaceAnalysis: selectedSurfaceAnalysisSummary,
@@ -2519,6 +2522,9 @@ private struct ProjectMainViewContent: View {
         )
         .onChange(of: slideCommandState.isActive) { _, isActive in
             slideComparison.slideActivityChanged(isActive: isActive, current: snapshot)
+        }
+        .onChange(of: faceEditSession, initial: true) { _, new in
+            updateRemovalPreview(new)
         }
         .onChange(of: faceEditSession) { old, new in
             // A face's arrow set Push Face's Distance: the dialog previews it at once.
@@ -10480,6 +10486,24 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Fillet: the round's radius copied into Distance.")
         } catch {
             reportToolStatus("Fillet: the clicked face cannot be read: \(error.localizedDescription)", severity: .warning)
+        }
+    }
+
+    /// Remove Fillets' red preview: the fillets the dialog's radius and convexity take, from Core,
+    /// while it runs; nothing otherwise.
+    private func updateRemovalPreview(_ edit: WorkspaceFaceEditSession?) {
+        guard let edit, case let .removeFillets(object) = edit.kind else {
+            if removalPreviewTargets.isEmpty == false { removalPreviewTargets = [] }
+            return
+        }
+        do {
+            removalPreviewTargets = try snapshot.document.document.removableFilletTargets(
+                target: object, maximumRadius: edit.limitsRadius ? edit.maximumRadiusMeters : nil, convexity: edit.convexity,
+                objectRegistry: objectRegistry, currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+        } catch {
+            removalPreviewTargets = []
+            reportToolStatus("Remove Fillets: \(error.localizedDescription)", severity: .warning)
         }
     }
 

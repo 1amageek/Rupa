@@ -224,6 +224,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let selectedSketchRegions: [SketchRegion]
         let previewSketchRegions: [SketchRegion]
         let hoveredSketchRegion: SketchRegion?
+        /// Faces a running command is about to take off, drawn red (Remove Fillets' preview).
+        let removalPreviewTargets: [SelectionTarget]
 
         init(
             selectedFeatureIDs: Set<FeatureID>,
@@ -242,7 +244,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
             hoveredSketchEntity: ViewportSketchEntitySelectionTarget?,
             selectedSketchRegions: [SketchRegion],
             previewSketchRegions: [SketchRegion],
-            hoveredSketchRegion: SketchRegion?
+            hoveredSketchRegion: SketchRegion?,
+            removalPreviewTargets: [SelectionTarget] = []
         ) {
             self.selectedFeatureIDs = selectedFeatureIDs
             self.selectedSceneNodeIDs = selectedSceneNodeIDs
@@ -261,6 +264,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
             self.selectedSketchRegions = selectedSketchRegions
             self.previewSketchRegions = previewSketchRegions
             self.hoveredSketchRegion = hoveredSketchRegion
+            self.removalPreviewTargets = removalPreviewTargets
         }
     }
 
@@ -2008,6 +2012,19 @@ enum ViewportSpatialOverlayProducer {
         if let edgeTreatmentHoverTarget, !topologyTargets.contains(edgeTreatmentHoverTarget) {
             topologyTargets.append(edgeTreatmentHoverTarget)
         }
+        // Faces about to be taken off, red beneath any selection drawn over them.
+        for target in snapshot.interaction.removalPreviewTargets {
+            guard case .face(let componentID) = target.component, componentID.generatedTopologySubshapeID != nil,
+                  let item = sceneItem(for: target, in: snapshot.selectionResolutionScene),
+                  case .body(let component) = item.kind else {
+                continue
+            }
+            let color = removalPreviewColor
+            meshes.append(.init(family: .transform, value: try selectedFaceMesh(
+                componentID, item: item, component: component,
+                color: SIMD4<Float>(color.x, color.y, color.z, 0.4))))
+            emitted = true
+        }
         for target in topologyTargets {
             guard let item = sceneItem(for: target, in: snapshot.selectionResolutionScene),
                   case .body(let component) = item.kind,
@@ -2664,6 +2681,10 @@ extension ViewportSpatialOverlayProducer {
     }
 
     static let selectionColor = SIMD4<Float>(0.14, 0.66, 0.95, 1.0)
+
+    /// Faces a command is about to take off (Remove Fillets' preview).
+
+    static let removalPreviewColor = SIMD4<Float>(0.95, 0.22, 0.20, 1.0)
     static let hoverColor = SIMD4<Float>(0.24, 0.88, 0.82, 1.0)
     static let edgeHoverColor = SIMD4<Float>(1.0, 0.82, 0.12, 1.0)
     static let sketchColor = SIMD4<Float>(0.34, 0.62, 1.0, 0.92)

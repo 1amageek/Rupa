@@ -77,6 +77,33 @@ extension DesignDocument {
 }
 
 extension DesignDocument {
+    /// The faces Remove Fillets would take off the solid object `target` — its fillets within
+    /// `maximumRadius` (any, when nil) of `convexity` — as face targets of that object, for the
+    /// dialog's red preview.
+    public func removableFilletTargets(
+        target: SceneNodeID,
+        maximumRadius: Double?,
+        convexity: FilletConvexity,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [SelectionTarget] {
+        let object = try offsetObject(for: [SelectionTarget(sceneNodeID: target)], operationName: "Remove Fillets")
+        let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
+            document: self, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Remove Fillets requires its solid evaluated")
+        let faces: [SubshapeID]
+        do {
+            faces = try RemovableFillets().faces(target: object.featureID, maximumRadius: maximumRadius, convexity: convexity, in: evaluated)
+        } catch let error as KernelError {
+            throw EditorError(code: .evaluationFailed, message: "Remove Fillets: \(error.message)")
+        }
+        return faces.map { SelectionTarget(sceneNodeID: object.nodeID, component: .face(.generatedTopology($0))) }
+    }
+}
+
+extension DesignDocument {
     /// Delete Redundant Topology on solid and sheet objects: each merges faces on one surface
     /// across the edges between them and edges on one curve across the vertices between them
     /// (Swift-CAD `removeRedundantTopology`), shown in its place, as one step.

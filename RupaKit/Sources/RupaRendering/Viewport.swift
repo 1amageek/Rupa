@@ -175,6 +175,8 @@ public struct Viewport: View {
     private let selection: SelectionModel
     private let objectSelectionIndex: ViewportObjectSelectionIndex
     private let selectionDragPreviewTargets: [SelectionTarget]
+    /// Faces a running command is about to take off, drawn red.
+    private let removalPreviewTargets: [SelectionTarget]
     private let patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest?
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
@@ -381,6 +383,7 @@ public struct Viewport: View {
         selection: SelectionModel = .empty,
         objectSelectionIndex: ViewportObjectSelectionIndex,
         selectionDragPreviewTargets: [SelectionTarget] = [],
+        removalPreviewTargets: [SelectionTarget] = [],
         presentationPreviewSceneNodeIDs: Set<SceneNodeID> = [],
         patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest? = nil,
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
@@ -520,6 +523,7 @@ public struct Viewport: View {
         self.selection = selection
         self.objectSelectionIndex = objectSelectionIndex
         self.selectionDragPreviewTargets = selectionDragPreviewTargets
+        self.removalPreviewTargets = removalPreviewTargets
         self.patternArrayCurvePathReplacementPreviewRequest = patternArrayCurvePathReplacementPreviewRequest
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
@@ -1615,6 +1619,7 @@ public struct Viewport: View {
         var key = ViewportSpatialOverlayChangeKey()
         key.selection = selection
         key.selectionPreview = selectionDragPreviewTargets
+        key.removalPreview = removalPreviewTargets
         key.meshSelection = meshSelectionOverlay
         key.editedBodies = editedBodies
         key.activeDrags = activeInteractionDrags
@@ -5755,7 +5760,8 @@ extension Viewport {
             hoveredSketchEntity: hoveredSketchEntityTarget(),
             selectedSketchRegions: selectedSketchRegions,
             previewSketchRegions: previewSketchRegions,
-            hoveredSketchRegion: hoveredSketchRegion
+            hoveredSketchRegion: hoveredSketchRegion,
+            removalPreviewTargets: removalPreviewTargets
         )
 
         let meshSelection = try semanticMeshSelectionSnapshot()

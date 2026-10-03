@@ -1207,6 +1207,10 @@ as spheres elsewhere.
    | `profileEdgeChamfer`, `profileEdgeFillet` | two view plane points with horizontal screen travel | generated edge midpoint; inverse occurrence transform |
    | `rotate` | two world plane points | box centre; normal the rotation axis |
 
+   `removalPreviewTargets` (faces a command is about to take off, Remove
+   Fillets' preview) are drawn as red translucent face meshes in the transform
+   family, beneath the selection, and enter the overlay change key.
+
    `profileEdgeFillet`'s distance is signed: dragged below zero it previews and
    commits a chamfer of that distance instead, as Plasticity's Fillet turns
    into Chamfer.
