@@ -17,6 +17,8 @@ struct ModelingOperationView: View {
     let onPreview: () -> Void
     let onApply: () -> Void
     let onCancel: () -> Void
+    /// Revolve's Two Points axis picked by two clicks in the viewport, start then end.
+    var onPickRevolveAxis: (() -> Void)? = nil
 
     /// The reason the draft names no command for this document, or `nil` when
     /// it names one.
@@ -313,6 +315,12 @@ struct ModelingOperationView: View {
                 vectorFields("Axis origin", values: $draft.origin, unit: draft.unit.symbol)
                 vectorFields("Axis direction", values: $draft.axis, unit: "")
             case .twoPoints:
+                if let onPickRevolveAxis {
+                    Button("Pick axis in viewport", action: onPickRevolveAxis)
+                        .contentShape(Rectangle())
+                        .help("Click the axis's start, then its end.")
+                        .accessibilityIdentifier("Modeling.revolve.pickAxis")
+                }
                 vectorFields("Axis start", values: $draft.origin, unit: draft.unit.symbol)
                 vectorFields("Axis end", values: $draft.axisEnd, unit: draft.unit.symbol)
             case .normal, .binormal, .tangent:

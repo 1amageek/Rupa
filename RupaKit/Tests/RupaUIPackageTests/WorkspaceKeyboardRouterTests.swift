@@ -1,4 +1,5 @@
 import RupaCore
+import SwiftCAD
 import Testing
 @testable import RupaUI
 
@@ -857,6 +858,14 @@ private func keyboardContext(
     for key in ["d", "c", "a"] {
         #expect(router.action(for: WorkspaceKeyboardInput(characters: key), context: context) == .focusEdgeTreatmentField(Character(key)))
     }
+}
+
+@Test func revolvesAxisPointsPickedInTheViewportFillTheTwoPointsAxis() {
+    var draft = ModelingOperationDraft(kind: .revolve, selection: SelectionModel(), ruler: .standard(for: .millimeter))
+    draft.setRevolveAxisPoint(Point3D(x: 0.01, y: 0, z: -0.0025), isEnd: false)
+    draft.setRevolveAxisPoint(Point3D(x: 0.01, y: 0.02, z: 0), isEnd: true)
+    #expect(draft.revolveAxisChoice == .twoPoints)
+    #expect(draft.origin == ["10", "0", "-2.5"] && draft.axisEnd == ["10", "20", "0"])
 }
 
 @Test func filletsCAndAKeysSwitchTheEdgeFormToChamferAndDBackToFillet() {

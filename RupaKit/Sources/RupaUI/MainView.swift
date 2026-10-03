@@ -2078,7 +2078,12 @@ private struct ProjectMainViewContent: View {
                     onUseSelection: { modelingDraft?.targets = snapshot.selection.selectedTargets },
                     onPreview: previewModelingOperation,
                     onApply: applyModelingOperation,
-                    onCancel: cancelModelingOperation
+                    onCancel: cancelModelingOperation,
+                    onPickRevolveAxis: {
+                        let request = WorkspacePointPickRequest.revolveAxisPoint(isEnd: false)
+                        pointPickRequest = request
+                        reportToolStatus(request.prompt)
+                    }
                 )
             } else if let title = historyPreviewTitle {
                 VStack(alignment: .leading, spacing: 16) {
@@ -11103,6 +11108,15 @@ private struct ProjectMainViewContent: View {
             case .isoparam:
                 // Placed before the generic point resolution above.
                 break
+            case .revolveAxisPoint(let isEnd):
+                modelingDraft?.setRevolveAxisPoint(point, isEnd: isEnd)
+                if isEnd == false {
+                    let next = WorkspacePointPickRequest.revolveAxisPoint(isEnd: true)
+                    pointPickRequest = next
+                    reportToolStatus(next.prompt)
+                } else {
+                    reportToolStatus("Revolve: the axis runs between the two points; Preview then Apply.")
+                }
             case .radialArrayCenter(let ids):
                 do {
                     let axis: Vector3D

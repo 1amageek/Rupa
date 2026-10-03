@@ -263,6 +263,13 @@ struct ModelingOperationDraft: Equatable {
         focusRequest = FocusRequest(field: .tension, serial: (focusRequest?.serial ?? 0) + 1)
     }
 
+    /// Revolve's Two Points axis: a picked point as the axis's start or end, in the display unit.
+    mutating func setRevolveAxisPoint(_ point: Point3D, isEnd: Bool) {
+        let values = [point.x, point.y, point.z].map { String(format: "%.6g", $0 / unit.metersPerUnit) }
+        revolveAxisChoice = .twoPoints
+        if isEnd { axisEnd = values } else { origin = values }
+    }
+
     /// Whether Square refits the selected faces (Plasticity's Refit Face) rather than framing a sheet.
     var refitsFaces: Bool { kind == .square && targets.isEmpty == false && targets.allSatisfy(isFace) }
 
