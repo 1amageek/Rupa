@@ -34,6 +34,9 @@ struct WorkspaceFaceEditSessionAlignTests {
         var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [.init(edge: targets[0], reference: targets[1])]))
         #expect(session.continuity == .positional && session.tension == 0.5)
         #expect(session.inputShapeInfluence == 0 && session.boundaryFlow == .adjacent)
+        // Analysis opens on G0 with Scales 10, 10.0 and 0.1.
+        #expect(session.analysisMeasure == .position)
+        #expect(session.analysisScales == [.position: 10, .tangent: 10, .curvature: 0.1])
         guard case let .alignSurface(_, _, neutral, _, _, _, _, _, _) = session.commands()[0] else {
             Issue.record("Expected an alignment.")
             return

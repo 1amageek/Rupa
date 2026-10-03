@@ -265,6 +265,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleFilletTangentEdges
     /// Tab while Loft's dialog runs: both ends' continuity steps.
     case cycleLoftContinuity
+    /// Tab while Square's or XNURBS's dialog runs: every side's continuity steps together.
+    case cycleSideContinuity
     /// D while Loft's dialog runs: the tension both ends take.
     case focusLoftTension
     /// Tab while Isoparam waits for a click: U and V switch.
@@ -433,6 +435,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isFilletDialogActive: Bool = false
     /// Whether Loft's dialog runs.
     var isLoftDialogActive: Bool = false
+    /// Whether Square's or XNURBS's dialog runs (Tab steps its sides' continuity).
+    var isSideContinuityDialogActive: Bool = false
     /// Whether Isoparam waits for a click on a face (Tab switches its direction).
     var isIsoparamPickActive: Bool = false
     /// Whether Extrude's dialog runs (D types its distance).
@@ -483,7 +487,7 @@ struct WorkspaceKeyboardContext: Sendable {
             || isMirrorSessionActive || isArrayCreationSessionActive || isSectionAnalysisSessionActive
             || isCurvePickCommandActive || isCutCurveSessionActive || isBooleanSessionActive || isBodyCutSessionActive
             || isFilletSessionActive || isRebuildSessionActive || isDeformSessionActive || isImprintSessionActive
-            || isFaceEditSessionActive || isFilletDialogActive || isLoftDialogActive || isProjectSessionActive
+            || isFaceEditSessionActive || isFilletDialogActive || isLoftDialogActive || isSideContinuityDialogActive || isProjectSessionActive
             || isBridgeEdgeSessionActive || isCommandPaletteOpen || isCurveOffsetCommandActive)
     }
 
@@ -557,6 +561,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.isTab {
             return .cycleLoftContinuity
+        }
+        if context.isSideContinuityDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.isTab {
+            return .cycleSideContinuity
         }
         if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {

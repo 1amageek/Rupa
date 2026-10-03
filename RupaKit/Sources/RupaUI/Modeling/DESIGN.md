@@ -384,6 +384,13 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
 - While Loft's dialog runs its clicks are Plasticity's "Select guides" slot (the `loftGuide`
   picking command): a body edge, or a curve's object, becomes a guide (added to the operands when
   new), and clicked again is dropped.
+- Pipe's, Sweep's and XNURBS's dialogs have Plasticity's pick slots (`ModelingOperandSlot`:
+  Pipe's profile, curves and target bodies; Sweep's section, spine, guides and target bodies;
+  XNURBS's boundaries and guides). A slot's button puts the current selection in it, whatever
+  was picked before; the operands keep their slot (`operandSlotRoles`) and `command(in:)` reads
+  them in the slots' order (Sweep: section, guides, spine), refusing while a slot the operation
+  needs is empty. "Use Current Selection" still takes one ordered selection, each operand's role
+  coming from its place.
 - L with one edge of a body selected is continuous lofting: the open edges of the scene's
   bodies leaving each of its ends (exactly one at each, from Core's boundary edges and topology)
   become its guides; the form takes one section with two guides, the kernel building the far

@@ -2075,7 +2075,10 @@ private struct ProjectMainViewContent: View {
                     isBusy: modelingPreview.isBusy,
                     hasMatchingPreview: modelingPreview.phase == .ready,
                     errorMessage: modelingPreview.errorMessage,
-                    onUseSelection: { modelingDraft?.targets = snapshot.selection.selectedTargets },
+                    onUseSelection: {
+                        modelingDraft?.targets = snapshot.selection.selectedTargets
+                        modelingDraft?.operandSlotRoles = [:]
+                    },
                     onPreview: previewModelingOperation,
                     onApply: applyModelingOperation,
                     onCancel: cancelModelingOperation,
@@ -2083,6 +2086,9 @@ private struct ProjectMainViewContent: View {
                         let request = WorkspacePointPickRequest.revolveAxisPoint(isEnd: false)
                         pointPickRequest = request
                         reportToolStatus(request.prompt)
+                    },
+                    onUseSelectionForSlot: { slot in
+                        modelingDraft?.use(snapshot.selection.selectedTargets, for: slot, document: snapshot.document.document)
                     }
                 )
             } else if let title = historyPreviewTitle {
@@ -5436,9 +5442,8 @@ private struct ProjectMainViewContent: View {
                 "Distance", meters: $edgeOffsetDistanceMeters, field: .edgeOffset,
                 accessibilityIdentifier: "WorkspaceEdgeOffset.distance"
             ),
-            gapFillTitle: regionOffsetGapFillTitle(edgeOffsetGapFill),
-            inputModeTitle: edgeOffsetCommandState.inputModeTitle,
-            lockedDistanceTitle: edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
+            gapFill: $edgeOffsetGapFill,
+            locksDistances: $edgeOffsetCommandState.usesLockedDistance,
             supportTitle: edgeOffsetSupportStateResolver.supportTitle(for: supportResolution),
             offset: {
                 offsetSelectedEdges(
@@ -6369,6 +6374,7 @@ private struct ProjectMainViewContent: View {
             isFaceEditSessionActive: faceEditSession != nil,
             isFilletDialogActive: modelingDraft?.kind == .fillet || modelingDraft?.kind == .chamfer,
             isLoftDialogActive: modelingDraft?.kind == .loft,
+            isSideContinuityDialogActive: modelingDraft?.kind == .square || modelingDraft?.kind == .xnurbs,
             isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
             isExtrudeDialogActive: modelingDraft?.kind == .extrude,
             isPatchDialogActive: modelingDraft?.kind == .patch,
@@ -6855,6 +6861,10 @@ private struct ProjectMainViewContent: View {
             modelingDraft?.cycleLoftContinuity()
             reportToolStatus("Loft: continuity \(modelingDraft?.loftStartContinuity.rawValue ?? "").")
             return .handled
+        case .cycleSideContinuity:
+            guard let title = modelingDraft?.cycleSideContinuity() else { return .ignored }
+            reportToolStatus("\(modelingDraft?.kind.rawValue ?? ""): every side \(title).")
+            return .handled
         case .focusEdgeTreatmentField(let key):
             modelingDraft?.focusEdgeTreatmentField(key)
             return .handled
@@ -6930,7 +6940,7 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Hollow: select the faces to open, or one solid to hollow closed.", severity: .warning)
                 return .handled
             }
-            reportToolStatus("Hollow: set the wall thickness; OK, Return or right-click hollows the solid.")
+            reportToolStatus("Hollow: drag an opened face's arrow or press D for the Thickness, outward positive; OK, Return or right-click hollows the solid.")
             return .handled
         case .beginThicken:
             let faces = selectedBodyFaceTargets
@@ -6943,7 +6953,7 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Thicken: select one sheet, or faces of a body.", severity: .warning)
                 return .handled
             }
-            reportToolStatus("Thicken: set Front and Back, S locks them together; OK, Return or right-click thickens.")
+            reportToolStatus("Thicken: drag a face's arrow or set Front and Back, S locks them together; OK, Return or right-click thickens.")
             return .handled
         case .beginExtend:
             let nodes = snapshot.document.document.productMetadata.sceneNodes
@@ -8424,14 +8434,15 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// A face's arrow sets Push Face's Distance, as Plasticity's yellow dot does: in the running
-    /// Push Face dialog, else in one it opens on the selected faces; OK applies it.
+    /// A face's arrow sets the running dialog's value, as Plasticity's yellow dot does (Push
+    /// Face's Distance, Hollow's Thickness, Thicken's Front), else Push Face's Distance in a dialog
+    /// it opens on the selected faces; OK applies it.
     private func handleViewportFaceDrag(_ target: ViewportFaceDragTarget) {
         guard viewportPointerOwner.allows(.faceOffset) else {
             return
         }
-        if case .push = faceEditSession?.kind {
-            faceEditSession?.setPushDistance(target.distance)
+        if faceEditSession?.setArrowDistance(target.distance) == true {
+            // The running dialog took the arrow's distance.
         } else {
             var faces = selectedBodyFaceTargets
             if faces.contains(target.target) == false { faces = [target.target] }

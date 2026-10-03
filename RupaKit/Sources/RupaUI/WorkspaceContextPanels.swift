@@ -297,9 +297,10 @@ struct WorkspaceEdgeOffsetContextPanel<DistanceInput: View>: View {
     var isSupported: Bool
     /// The typed distance, which D focuses.
     var distanceInput: DistanceInput
-    var gapFillTitle: String
-    var inputModeTitle: String
-    var lockedDistanceTitle: String
+    /// Plasticity's Gap fill row, Round | Linear | Natural, which V also steps.
+    @Binding var gapFill: OffsetCurveGapFill
+    /// Lock distances, which S also toggles: the edges offset over both their faces.
+    @Binding var locksDistances: Bool
     var supportTitle: String
     var offset: () -> Void
 
@@ -311,21 +312,16 @@ struct WorkspaceEdgeOffsetContextPanel<DistanceInput: View>: View {
         )
 
         distanceInput
-        workspaceValuePill(
-            "Gap",
-            gapFillTitle,
-            accessibilityIdentifier: "WorkspaceEdgeOffset.gapFill"
-        )
-        workspaceValuePill(
-            "Input",
-            inputModeTitle,
-            accessibilityIdentifier: "WorkspaceEdgeOffset.inputMode"
-        )
-        workspaceValuePill(
-            "Lock",
-            lockedDistanceTitle,
-            accessibilityIdentifier: "WorkspaceEdgeOffset.lockedDistance"
-        )
+        Picker("Gap fill", selection: $gapFill) {
+            ForEach(OffsetCurveGapFill.allCases, id: \.self) { fill in
+                Text(fill.rawValue.capitalized).tag(fill)
+            }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .accessibilityIdentifier("WorkspaceEdgeOffset.gapFill")
+        Toggle("Lock", isOn: $locksDistances)
+            .accessibilityIdentifier("WorkspaceEdgeOffset.lockedDistance")
         workspaceValuePill(
             "Support",
             supportTitle,

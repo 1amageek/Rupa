@@ -97,10 +97,10 @@ struct WorkspaceFaceEditSession: Equatable {
     var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
     var pairTension: [Int: Double] = [:]
     /// Align Surface's Analysis while the dialog is open: the continuity checked along the aligned
-    /// edges and each one's scale (Plasticity's G0, G1 and G2 Scale, 10 each). They change what is
-    /// drawn, never the commands.
+    /// edges and each one's scale (Plasticity's G0, G1 and G2 Scale, opening at 10, 10 and 0.1).
+    /// They change what is drawn, never the commands.
     var analysisMeasure = ViewportEdgeAlignmentAnalysis.Measure.position
-    var analysisScales: [ViewportEdgeAlignmentAnalysis.Measure: Double] = [.position: 10, .tangent: 10, .curvature: 10]
+    var analysisScales: [ViewportEdgeAlignmentAnalysis.Measure: Double] = [.position: 10, .tangent: 10, .curvature: 0.1]
     var refitsLayout = false
     var layout = SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 4)
     /// Rebuild Face's method, which Tab steps: the explicit `layout`, a tolerance in meters, or
@@ -224,6 +224,24 @@ struct WorkspaceFaceEditSession: Equatable {
         guard case let .push(faces, _) = kind else { return }
         kind = .push(faces: faces)
         distanceMeters = meters
+    }
+
+    /// A selected face's arrow dragged while the dialog runs, as Plasticity's yellow dot on the
+    /// face's normal: Push Face's Distance, Hollow's Thickness (outward positive, so a drag into
+    /// the body walls it inward) and Thicken's Front. False for a command whose dialog has no
+    /// value the arrow sets.
+    mutating func setArrowDistance(_ meters: Double) -> Bool {
+        switch kind {
+        case .push:
+            setPushDistance(meters)
+        case .hollow:
+            wallThicknessMeters = meters
+        case .thicken:
+            frontMeters = meters
+        case .draft, .match, .removeFillets, .extendSheet, .alignSurface, .rebuildFace, .polySplines:
+            return false
+        }
+        return true
     }
 
     /// What OK still needs, as the status bar says it; nil once the command can run.

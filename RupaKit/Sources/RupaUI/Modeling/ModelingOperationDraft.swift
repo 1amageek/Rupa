@@ -322,6 +322,26 @@ struct ModelingOperationDraft: Equatable {
         squareSideContinuity[target] ?? squareContinuity
     }
 
+    /// Tab in Square's or XNURBS's dialog, as Plasticity's steps every badge: every side takes the
+    /// continuity after the dialog's (Square G0, G1, G2, Free; XNURBS G0, G1, G2), dropping any
+    /// side's own. The new continuity's title, or nil for another operation.
+    mutating func cycleSideContinuity() -> String? {
+        switch kind {
+        case .square:
+            let all = SquareContinuityChoice.allCases
+            squareContinuity = all[((all.firstIndex(of: squareContinuity) ?? 0) + 1) % all.count]
+            squareSideContinuity = [:]
+            return squareContinuity.rawValue
+        case .xnurbs:
+            let all = LoftContinuityChoice.allCases
+            xnurbsContinuity = all[((all.firstIndex(of: xnurbsContinuity) ?? 0) + 1) % all.count]
+            xnurbsEdgeContinuity = [:]
+            return xnurbsContinuity.rawValue
+        default:
+            return nil
+        }
+    }
+
     /// The Square's fit options from the form.
     func squareFitOptions() throws -> SquareFitOptions {
         func count(_ text: String, _ label: String) throws -> Int {
@@ -562,6 +582,9 @@ struct ModelingOperationDraft: Equatable {
         if targets.contains(target) == false { targets.append(target) }
         if case .edge = target.component { loftGuideEdges.insert(target) } else { loftGuideNodeIDs.insert(target.sceneNodeID) }
     }
+    /// The operands put in the dialog's pick slots, by the slot (`operandSlots`); an operand not
+    /// in it takes the role its place in the selection gives it.
+    var operandSlotRoles: [SelectionTarget: ModelingOperandSlot] = [:]
     /// XNURBS: the operands that are guides (the rest frame it), the continuity edges take, and its
     /// options.
     var xnurbsGuideNodeIDs: Set<SceneNodeID> = []
@@ -637,6 +660,16 @@ struct ModelingOperationDraft: Equatable {
         }
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw invalid("Enter an operation name.")
+        }
+        if let slot = missingOperandSlot(document: document) {
+            throw invalid("\(kind.rawValue): \(slot.prompt.lowercased()) in the dialog.")
+        }
+        // Operands put in slots are read in the slots' order, however the list was rearranged.
+        let slotOrdered = slotOrderedTargets(document: document)
+        if slotOrdered != targets {
+            var ordered = self
+            ordered.targets = slotOrdered
+            return try ordered.command(in: document)
         }
         if kind == .constrainedSurface {
             guard constrainedPoints.count >= 3 else {
@@ -1512,10 +1545,7 @@ struct ModelingOperationDraft: Equatable {
             let isGuide = isLoftGuide(targets[index])
             let ordinal = targets.prefix(index + 1).filter { isLoftGuide($0) == isGuide }.count
             role = "\(isGuide ? "Guide" : "Section") \(ordinal)"
-        case .sweep: role = index == targets.count - 1 ? "Path" : "Section / guide"
-        case .pipe:
-            let isBody = document.productMetadata.sceneNodes[targets[index].sceneNodeID]?.object?.geometryRole == .solid
-            role = isBody ? "Body" : "Path"
+        case .sweep, .pipe, .xnurbs: role = slot(ofOperandAt: index, document: document)?.rawValue ?? "Operand"
         case .fillet, .chamfer, .g2Blend: role = "Edge \(index + 1)"
         case .surfaceOffset, .surfaceExtend, .thicken: role = "Sheet face"
         case .shell: role = "Opening face"

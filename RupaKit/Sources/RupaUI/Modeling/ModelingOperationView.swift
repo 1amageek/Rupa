@@ -19,6 +19,8 @@ struct ModelingOperationView: View {
     let onCancel: () -> Void
     /// Revolve's Two Points axis picked by two clicks in the viewport, start then end.
     var onPickRevolveAxis: (() -> Void)? = nil
+    /// The current selection put in one of the dialog's pick slots (`operandSlots`).
+    var onUseSelectionForSlot: ((ModelingOperandSlot) -> Void)? = nil
 
     /// The reason the draft names no command for this document, or `nil` when
     /// it names one.
@@ -125,6 +127,18 @@ struct ModelingOperationView: View {
                                 .pickerStyle(.segmented)
                                 .contentShape(Rectangle())
                                 .help("Free follows the side loosely by the Weight; G1 and G2 meet the face beside an edge.")
+                            }
+                        }
+                        if let onUseSelectionForSlot {
+                            ForEach(draft.operandSlots) { slot in
+                                HStack {
+                                    Text("\(slot.rawValue): \(draft.operands(in: slot, document: document).count)")
+                                    Spacer()
+                                    Button(slot.prompt) { onUseSelectionForSlot(slot) }
+                                        .contentShape(Rectangle())
+                                        .help("Put the current selection in this slot.")
+                                        .accessibilityIdentifier("Modeling.slot.\(slot.id)")
+                                }
                             }
                         }
                         Button("Use Current Selection", action: onUseSelection)

@@ -889,7 +889,8 @@ value.
 
 With faces selected, O starts Offset Face Loop, and I there toggles Individual
 (each face's own outline rather than their shared one); with edges it starts
-Offset Edge over the selected face or the one cap the edges bound. Shift-I starts
+Offset Edge over the selected face or the one cap the edges bound, its panel taking the
+Distance, Plasticity's Gap fill row (Round | Linear | Natural, V stepping it) and the Lock toggle (S). Shift-I starts
 Imprint on what is selected (`WorkspaceImprintSession`): one solid or sheet object
 with sketch curves or curve objects imprints the curves (Method Normal or Vector
 with its direction, Bidirectional and Hide occlusion, and Completion); two objects
@@ -915,8 +916,9 @@ and the faces after it are drafted, Control-click taking one back off; Match Fac
 selected faces (Option-W) and its reference is the face clicked in the dialog, Control-click
 adding or taking off a face to match. OK reports what is still to pick or set. Return, right-click or OK applies as one source command, a refused one
 leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
-push through the same `pushFaces`. A face's arrow sets Push Face's Distance (which opens at 0),
-opening the dialog on the selected faces when none runs, and previews it; a face clicked in Push
+push through the same `pushFaces`. A face's arrow sets the running dialog's value — Push Face's
+Distance (which opens at 0), Hollow's signed Thickness (into the body walls inward), Thicken's
+Front — opening Push Face on the selected faces when no such dialog runs, and previews it; a face clicked in Push
 Face's dialog is Plasticity's dependant offset, the faces put onto it (`matchFaces`). The palette's Remove Fillets From Shell
 opens the same dialog on one selected solid, with its Max Radius (a checkbox, off by default, enabling the value) and the Convexity Tab steps, the fillets those take tinted red while it runs (Core's `removableFilletTargets`, the viewport's `removalPreviewTargets`);
 Hollow on the selected faces or one solid, with its Thickness; and Thicken (alias Thicken Face)
@@ -936,7 +938,7 @@ measured once per document generation; curve ends align through Align Vertex. Fa
 offer Preview: the edit's commands previewed through the modeling preview in place of the
 document, Control held showing the original (Align's Ctrl Show original), any change to the edit's
 commands dropping the preview. While Align's preview is shown, its Analysis (G0, G1 or G2, each
-with its Scale, 10 by default — Plasticity's G0/G1/G2 Scale) is drawn along every aligned edge:
+with its Scale, opening at 10, 10 and 0.1 — Plasticity's G0/G1/G2 Scale) is drawn along every aligned edge:
 `WorkspaceAlignAnalysis` evaluates the preview document off the main actor (incrementally from the
 current evaluation), takes the kernel's `SurfaceAlignAnalyzer.samples` of the alignments the
 preview adds, and keeps them apart from the drawn `ViewportEdgeAlignmentAnalysis`, so changing the

@@ -846,6 +846,13 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .cycleLoftContinuity)
 }
 
+@Test func workspaceKeyboardRouterCyclesSquareAndXNurbsSideContinuityOnTab() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isSideContinuityDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .cycleSideContinuity)
+}
+
 @Test func workspaceKeyboardRouterStartsSweepOnShiftP() {
     let router = WorkspaceKeyboardRouter()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "P", modifiers: [.shift]), context: keyboardContext()) == .beginSweep)

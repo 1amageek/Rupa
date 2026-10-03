@@ -77,4 +77,25 @@ struct WorkspaceFaceEditSessionPickTests {
         }
         #expect(pushed == [faces[0]] && distance == .length(0.002, .meter))
     }
+
+    @Test func aFacesArrowSetsTheRunningDialogsValue() throws {
+        // Plasticity's yellow dot on the opened face's normal: a drag into the body gives Hollow a
+        // negative Thickness (walls inward), out of it a positive one (walls outward).
+        let face = SelectionTarget(sceneNodeID: SceneNodeID())
+        var hollow = WorkspaceFaceEditSession(kind: .hollow(targets: [face]))
+        let inward = hollow.setArrowDistance(-0.06986)
+        #expect(inward)
+        #expect(hollow.commands() == [.hollow(targets: [face], thickness: .length(-0.06986, .meter))])
+        let outward = hollow.setArrowDistance(0.1053)
+        #expect(outward)
+        #expect(hollow.commands() == [.hollow(targets: [face], thickness: .length(0.1053, .meter))])
+        // Thicken's arrow sets the Front.
+        var thicken = WorkspaceFaceEditSession(kind: .thicken(targets: [face]))
+        let front = thicken.setArrowDistance(0.02)
+        #expect(front && thicken.frontMeters == 0.02)
+        // A dialog without such a value leaves the arrow to open Push Face.
+        var draft = WorkspaceFaceEditSession(kind: .draft(faces: [], neutral: nil))
+        let taken = draft.setArrowDistance(0.02)
+        #expect(taken == false)
+    }
 }

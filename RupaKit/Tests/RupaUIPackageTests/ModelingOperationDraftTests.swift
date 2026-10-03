@@ -325,6 +325,68 @@ struct ModelingOperationDraftTests {
         #expect(throws: EditorError.self) { try draft.command(in: document) }
     }
 
+    @Test func pipeSweepAndXNurbsTakeTheirOperandsBySlot() throws {
+        // Plasticity's dialogs pick into slots: Pipe's target bodies may be picked before its
+        // curves, Sweep's spine before its guides, XNURBS's guides after its boundaries.
+        var document = DesignDocument.empty()
+        let box = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(-0.01, .meter), y: .length(-0.01, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.01, .meter), y: .length(0.01, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let lines = try [0.0, 0.003, 0.006].map { x in
+            try document.createLineSketch(name: "Line", plane: .zx,
+                start: SketchPoint(x: .length(0, .meter), y: .length(x, .meter)),
+                end: SketchPoint(x: .length(0.05, .meter), y: .length(x, .meter)))
+        }
+        let boxNode = try #require(document.productMetadata.sceneNodes.values.first { $0.object?.sourceFeatureID == box })
+        let lineNodes = try lines.map { line in try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .sketch(line) }) }
+        let body = SelectionTarget(sceneNodeID: boxNode.id)
+        let curves = lineNodes.map { SelectionTarget(sceneNodeID: $0.id) }
+
+        var pipe = makeDraft(.pipe, targets: [])
+        pipe.pipeDiameter = "2 mm"
+        pipe.solidBoolean = .union
+        #expect(pipe.operandSlots == [.paths, .targetBodies])
+        // A curve is not a target body.
+        pipe.use([body, curves[0]], for: .targetBodies, document: document)
+        #expect(pipe.operands(in: .targetBodies, document: document) == [body] && pipe.targets == [body])
+        #expect(throws: EditorError.self) { try pipe.command(in: document) }
+        pipe.use([curves[0]], for: .paths, document: document)
+        #expect(pipe.targets == [curves[0], body])
+        guard case .createPipes(_, let sources, _) = try pipe.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(sources.count == 1 && sources[0].path.featureID == lines[0] && sources[0].targets == [SweepTargetReference(featureID: box)])
+        // Rearranging the list keeps each operand in its slot.
+        pipe.targets.swapAt(0, 1)
+        guard case .createPipes(_, let swapped, _) = try pipe.command(in: document) else {
+            Issue.record("Expected native Pipe source intent.")
+            return
+        }
+        #expect(swapped == sources)
+        #expect(pipe.operandTitle(at: 0, in: document).hasPrefix("Target bodies"))
+
+        var sweep = makeDraft(.sweep, targets: [])
+        sweep.use([curves[0]], for: .section, document: document)
+        sweep.use([curves[2]], for: .spine, document: document)
+        sweep.use([curves[1]], for: .guides, document: document)
+        // Read as the section, the guides, then the spine.
+        #expect(sweep.targets == [curves[0], curves[1], curves[2]])
+        #expect(sweep.operands(in: .spine, document: document) == [curves[2]])
+        // Putting the spine in the section's slot moves it there, leaving the spine to pick.
+        sweep.use([curves[2]], for: .section, document: document)
+        #expect(sweep.missingOperandSlot(document: document) == .spine)
+        #expect(throws: EditorError.self) { try sweep.command(in: document) }
+
+        var xnurbs = makeDraft(.xnurbs, targets: [])
+        xnurbs.use([curves[0], curves[1]], for: .boundaries, document: document)
+        xnurbs.use([curves[2]], for: .guides, document: document)
+        #expect(xnurbs.xnurbsGuideNodeIDs == [lineNodes[2].id] && xnurbs.operands(in: .boundaries, document: document) == [curves[0], curves[1]])
+    }
+
     @Test func aPipeCarriesACustomProfileAlongEachCurve() throws {
         var document = DesignDocument.empty()
         // A 4 mm square drawn away from the path, then a 50 mm line up the Z axis.
@@ -1618,6 +1680,26 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(quad.quadSided && quad.boundaries.count == 4)
+    }
+
+    @Test func tabStepsEverySidesContinuityInSquareAndXNurbs() {
+        // Plasticity's Tab steps every badge: Square G0, G1, G2, Free; XNURBS G0, G1, G2.
+        let side = SelectionTarget(sceneNodeID: SceneNodeID())
+        var square = makeDraft(.square, targets: [side])
+        square.squareSideContinuity[side] = .g2
+        var steps: [String?] = []
+        for _ in 0..<4 { steps.append(square.cycleSideContinuity()) }
+        #expect(steps == ["G1", "G2", "Free", "G0"] && square.squareSideContinuity.isEmpty)
+        var xnurbs = makeDraft(.xnurbs, targets: [side])
+        xnurbs.xnurbsEdgeContinuity[side] = .g2
+        let first = xnurbs.cycleSideContinuity()
+        #expect(first == "G1" && xnurbs.xnurbsContinuity(of: side) == .g1)
+        steps = []
+        for _ in 0..<2 { steps.append(xnurbs.cycleSideContinuity()) }
+        #expect(steps == ["G2", "G0"])
+        var loft = makeDraft(.loft, targets: [])
+        let none = loft.cycleSideContinuity()
+        #expect(none == nil)
     }
 
     @Test func xnurbsTakesEachEdgesOwnContinuity() throws {
