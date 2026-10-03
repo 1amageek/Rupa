@@ -114,6 +114,27 @@ extension DesignDocument {
         didCommit = true
     }
 
+    /// The Rebuild Face giving the face `subshape` (a face of the object under `tip`) its surface:
+    /// the face traced back through the lineage of the Rebuild Faces giving surfaces under the
+    /// object to the one that names it; nil when none does.
+    func givenSurfaceFeature(for subshape: SubshapeID, under tip: FeatureID, in evaluated: EvaluatedDocument) -> FeatureID? {
+        var given: [SubshapeID: FeatureID] = [:]
+        var base = tip
+        while case .faceRebuild(let rebuild)? = cadDocument.designGraph.nodes[base]?.operation,
+              case .given = rebuild.method, rebuild.faces.count == 1 {
+            given[rebuild.faces[0].subshapeID] = base
+            base = rebuild.target.featureID
+        }
+        var current = subshape
+        var visited = Set<SubshapeID>()
+        while visited.insert(current).inserted {
+            if let feature = given[current] { return feature }
+            guard current.featureID != base, let parent = evaluated.lineage[current]?.parents.first else { return nil }
+            current = parent
+        }
+        return nil
+    }
+
     /// Every face of a solid raised at once: a face a Rebuild Face already gives a surface has that
     /// surface raised in place; every other face is given its own surface raised, each by a Rebuild
     /// Face naming the face as the body under those Rebuild Faces made it (found through them by

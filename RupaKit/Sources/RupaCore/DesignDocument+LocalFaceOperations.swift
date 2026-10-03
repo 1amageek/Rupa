@@ -431,6 +431,52 @@ extension DesignDocument {
         guard FaceRebuildFeature.extensions.contains(extendU), FaceRebuildFeature.extensions.contains(extendV) else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) extends each way by 0 to 1 of the face's extent.")
         }
+        // Remove Nominal Surface on faces given control points: each one's given surface becomes
+        // its surface cut to its edges — the hidden spans it reached them by made its own control
+        // points — still edited in place.
+        if case .nominal = method {
+            var remaining: [SelectionTarget] = []
+            var updated: FeatureID?
+            let evaluated = try DocumentEvaluationContextResolver().evaluatedDocument(
+                document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                failurePrefix: "Remove Nominal Surface requires the faces evaluated"
+            )
+            let topology = try TopologySnapshotService().snapshot(
+                document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
+            var replacements: [FeatureID: BSplineSurface3D] = [:]
+            for target in targets {
+                guard let tip = productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID,
+                      case .face(let componentID) = target.component, let subshapeID = componentID.generatedTopologySubshapeID,
+                      let given = givenSurfaceFeature(for: subshapeID, under: tip, in: evaluated) else {
+                    remaining.append(target)
+                    continue
+                }
+                let reference = try stableReference(of: target, kind: .face, in: topology, operationName: "Remove Nominal Surface")
+                do {
+                    replacements[given] = try FaceBSplineSurfaceConverter().nominalSurface(of: reference, in: evaluated)
+                } catch {
+                    throw EditorError(code: .commandInvalid, message: "Remove Nominal Surface: \(error)")
+                }
+            }
+            for (featureID, surface) in replacements.sorted(by: { $0.key.description < $1.key.description }) {
+                guard var feature = cadDocument.designGraph.nodes[featureID], case .faceRebuild(var rebuild) = feature.operation else {
+                    throw EditorError(code: .referenceUnresolved, message: "Remove Nominal Surface lost a face's surface.")
+                }
+                rebuild.method = .given(surface)
+                feature.operation = .faceRebuild(rebuild)
+                try cadDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
+                updated = featureID
+            }
+            if remaining.isEmpty, let updated {
+                try validate(objectRegistry: objectRegistry)
+                return updated
+            }
+            if replacements.isEmpty == false {
+                return try rebuildFaces(name: name, targets: remaining, method: method, extendU: extendU, extendV: extendV,
+                                        shrinks: shrinks, objectRegistry: objectRegistry)
+            }
+        }
         let object = try offsetObject(for: targets, operationName: operationName)
         let topology = try TopologySnapshotService().snapshot(
             document: self, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration

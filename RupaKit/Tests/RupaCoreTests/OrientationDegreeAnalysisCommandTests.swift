@@ -172,8 +172,7 @@ import Testing
         let raisedVolume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         #expect(abs(raisedVolume - volume) < 1e-12)
         #expect(session.evaluationStatus == .valid)
-        // A drum's side, closing round its seam, is given control points too; a ball's octant,
-        // reaching a pole, is refused.
+        // A drum's side, closing round its seam, is given control points too.
         let (drumSession, drum) = try cylinder()
         let sides = try entries(.face, of: drum, in: drumSession).filter { $0.surfaceKind == "cylinder" }
         let side = try #require(sides.first?.selectionTarget())
@@ -182,13 +181,21 @@ import Testing
         #expect(drumSession.evaluationStatus == .valid)
         let raisedDrum = try MeasurementService().measure(document: drumSession.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         #expect(abs(raisedDrum - drumVolume) < drumVolume * 1e-6)
+    }
+
+    /// A ball's face reaching its pole is given control points too: its exact rational surface
+    /// collapses to the pole along one side.
+    @Test(.timeLimit(.minutes(5)))
+    func raiseSurfaceDegreeGivesABallsFaceReachingItsPoleControlPoints() throws {
+        let clock = ContinuousClock()
+        let started = clock.now
         let ballSession = EditorSession()
         _ = try ballSession.execute(.createAnalyticSphere(name: "Ball", center: .origin, radius: 0.01))
         let ball = try #require(ballSession.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body }).id
         let octant = try #require(try entries(.face, of: ball, in: ballSession).first?.selectionTarget())
-        let ballBefore = ballSession.document
-        #expect(throws: EditorError.self) { _ = try ballSession.execute(.raiseSurfaceDegree(targets: [octant])) }
-        #expect(unchanged(ballSession, since: ballBefore))
+        _ = try ballSession.execute(.raiseSurfaceDegree(targets: [octant]))
+        #expect(ballSession.evaluationStatus == .valid)
+        print("RAISE ball took \(clock.now - started)")
     }
 
     @Test(.timeLimit(.minutes(2)))
@@ -210,6 +217,52 @@ import Testing
         let raised = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         #expect(abs(raised - volume) < 1e-12)
         #expect(session.evaluationStatus == .valid)
+    }
+
+    @Test(.timeLimit(.minutes(3)))
+    func controlPointsDrawnInKeepTheFaceAndRemoveNominalSurfaceMakesItsHiddenSpansControlPoints() throws {
+        // Plasticity's video: a box face's control points scaled in leave the face and the box as
+        // they were (hidden spans reach the edges); Remove Nominal Surface makes those spans control
+        // points reaching the edges, still edited on the face.
+        let (session, box) = try box()
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        let face = try #require(try entries(.face, of: box, in: session).first?.selectionTarget())
+        _ = try session.execute(.raiseSurfaceDegree(targets: [face]))
+        let feature = try #require(session.document.productMetadata.sceneNodes[box]?.reference?.featureID)
+        guard case .faceRebuild(let rebuild)? = session.document.cadDocument.designGraph.nodes[feature]?.operation,
+              case .given(let raised) = rebuild.method else {
+            Issue.record("The box shows no Raise Degree.")
+            return
+        }
+        let points = raised.controlPoints.joined()
+        let middle = Point3D.origin + points.reduce(Vector3D.zero) { $0 + ($1 - .origin) } / Double(points.count)
+        // Every control point scaled halfway to the middle at once (Plasticity's S on them).
+        var document = session.document
+        var scaled = raised
+        scaled.controlPoints = raised.controlPoints.map { row in row.map { middle + ($0 - middle) * 0.5 } }
+        var drawnInRebuild = rebuild
+        drawnInRebuild.method = .given(scaled)
+        var node = try #require(document.cadDocument.designGraph.nodes[feature])
+        node.operation = .faceRebuild(drawnInRebuild)
+        try document.cadDocument.replaceFeature(node, tolerance: document.modelingSettings.tolerance)
+        let drawnIn = try MeasurementService().measure(document: document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(drawnIn - volume) < 1e-12)
+        // Remove Nominal Surface on the face: its given surface now reaches its edges.
+        let raisedFace = try #require(try TopologySnapshotService().snapshot(document: document).entries.first {
+            $0.kind == .face && $0.sceneNodeID == box.description && $0.surfaceKind != "plane"
+        }?.selectionTarget())
+        try document.rebuildFaces(targets: [raisedFace], method: .nominal, extendU: 0, extendV: 0, shrinks: true)
+        guard case .faceRebuild(let nominal)? = document.cadDocument.designGraph.nodes[feature]?.operation,
+              case .given(let reaching) = nominal.method else {
+            Issue.record("Remove Nominal Surface left no given surface.")
+            return
+        }
+        let corners = [reaching.controlPoints.first?.first, reaching.controlPoints.first?.last, reaching.controlPoints.last?.first, reaching.controlPoints.last?.last]
+        let spread = corners.compactMap { $0 }.map { ($0 - middle).length }
+        let original = points.map { ($0 - middle).length }.max() ?? 0
+        #expect(spread.count == 4 && spread.allSatisfy { abs($0 - original) < 1e-9 })
+        let after = try MeasurementService().measure(document: document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(after - volume) < 1e-12)
     }
 
     @Test(.timeLimit(.minutes(2)))

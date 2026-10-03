@@ -195,8 +195,8 @@ faces already given surfaces (traced back through the lineage of the Rebuild Fac
 under the object) are raised in place, and every other face is given its raised
 surface by its own Rebuild Face naming the face as the body under them made it,
 appended one after another. Cylinder, cone, sphere and torus faces are given their
-exact rational surfaces of revolution; a face reaching a pole of its surface (a ball's
-octant) is refused (the converter's refusal). Such a face's control points are edited
+exact rational surfaces of revolution, a face reaching a pole of its surface (a ball's
+octant) too. Such a face's control points are edited
 like a B-spline source's: `surfaceControlSourceFeatureID` answers the Rebuild Face,
 `SurfaceSourceSummaryService` lists the given surface's control points named on the
 face as the Rebuild Face took it (`rebuild.faces[0]`, stable while they move),
@@ -204,7 +204,11 @@ face as the Rebuild Face took it (`rebuild.faces[0]`, stable while they move),
 face to the latest Rebuild Face giving it a surface, and moves, slides and weights
 read and write the given surface through `editableControlSurface(of:)` and
 `withControlSurface(_:in:)`; the kernel then keeps the face's edges when they still
-lie on it and otherwise re-solves them with the faces beside it.
+lie on it and otherwise re-solves them with the faces beside it. Remove Nominal Surface (`rebuildFaces`
+with `.nominal`) on such a face replaces its given surface with the face's surface cut to its edges
+(Swift-CAD `FaceBSplineSurfaceConverter.nominalSurface`): control points drawn in leave the face on
+its surface's hidden continuation, which then become control points reaching the edges, still edited
+in place; other faces take a Remove Nominal Rebuild Face as before.
 `OrientationDegreeAnalysisCommandTests` own a raised box face listing nine control
 points and its middle one moved 5 mm out bulging the box by d·area/9. `BoundaryEdgeSelectionService` answers Find Boundary
 Edges without changing the document: the open edges of the selected objects,
