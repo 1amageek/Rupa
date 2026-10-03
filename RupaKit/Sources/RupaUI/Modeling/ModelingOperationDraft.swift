@@ -317,17 +317,26 @@ struct ModelingOperationDraft: Equatable {
     /// Bridge Surface's two Senses: each sheet crossing where they meet bridges from its other side.
     var bridgeReversesFirstSense = false
     var bridgeReversesSecondSense = false
-    /// Bridge Surface's Trim walls: none, both, or the sheet reaching less (Short) or more (Long)
-    /// far from where the sheets meet.
-    enum BridgeTrimChoice: String, CaseIterable, Identifiable {
-        case none = "None"
+    /// Bridge Surface's Trim walls (on by default: Plasticity cuts both walls back to the bridge and
+    /// joins them with it) and, apart from it, how far the bridge runs along where the sheets meet:
+    /// Both (their shared stretch), Short or Long (the shorter or longer sheet's), None (untrimmed).
+    var bridgeTrimsWalls = true
+    enum BridgeExtentChoice: String, CaseIterable, Identifiable {
         case both = "Both"
         case short = "Short"
         case long = "Long"
+        case none = "None"
         var id: Self { self }
+        var extent: SheetBridgeFeature.Extent {
+            switch self {
+            case .both: .both
+            case .short: .short
+            case .long: .long
+            case .none: .none
+            }
+        }
     }
-    /// Both by default: Plasticity joins the trimmed walls with the bridge.
-    var bridgeTrim = BridgeTrimChoice.both
+    var bridgeExtent = BridgeExtentChoice.both
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -1070,17 +1079,12 @@ struct ModelingOperationDraft: Equatable {
             let tension = try number(bridgeTension, label: "Tension")
             let bridge = SheetBridgeFeature(first: sheets[0], second: sheets[1],
                 width: try topologyLength(distance, label: "Width", in: document), tension: tension,
-                shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrim == .both ? .both : .none,
-                reversesFirstSense: bridgeReversesFirstSense, reversesSecondSense: bridgeReversesSecondSense,
+                shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrimsWalls ? .both : .none,
+                extent: bridgeExtent.extent, reversesFirstSense: bridgeReversesFirstSense, reversesSecondSense: bridgeReversesSecondSense,
                 angularAllowance: try continuityAllowanceRadians(),
                 curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
-            let wallByReach: SheetBridgeWallReach.Wall? = switch bridgeTrim {
-            case .short: .short
-            case .long: .long
-            case .none, .both: nil
-            }
-            return .createBridgeSurface(name: name, bridge: bridge, wallByReach: wallByReach)
+            return .createBridgeSurface(name: name, bridge: bridge, wallByReach: nil)
         case .xnurbs:
             // Boundaries: edges of bodies (their curves added with it, taking the continuity) or
             // curves; guides: curves marked as such.

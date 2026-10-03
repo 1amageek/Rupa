@@ -517,11 +517,14 @@ struct ModelingOperationView: View {
             }
             Toggle("Sense (first sheet)", isOn: $draft.bridgeReversesFirstSense)
             Toggle("Sense (second sheet)", isOn: $draft.bridgeReversesSecondSense)
-            Picker("Trim walls", selection: $draft.bridgeTrim) {
-                ForEach(ModelingOperationDraft.BridgeTrimChoice.allCases) { Text($0.rawValue).tag($0) }
+            Toggle("Trim walls", isOn: $draft.bridgeTrimsWalls)
+                .help("Cut both sheets back to the bridge and join them with it into one sheet.")
+            Picker("Bridge extent", selection: $draft.bridgeExtent) {
+                ForEach(ModelingOperationDraft.BridgeExtentChoice.allCases) { Text($0.rawValue).tag($0) }
             }
+            .pickerStyle(.segmented)
             .contentShape(Rectangle())
-            .help("Cut both sheets, or the one reaching less (Short) or more (Long) far from where they meet, back to the bridge and join them with it into one sheet.")
+            .help("How far the bridge runs along where the sheets meet: their shared stretch (Both), the shorter or longer sheet's (Short, Long), or untrimmed past both (None).")
             TextField("Angle allowance beside curved sheets (degrees)", text: $draft.continuityAllowance)
             if draft.bridgeShape == .g2 {
                 lengthField("Curvature allowance radius beside curved sheets", text: $draft.curvatureAllowanceRadius)

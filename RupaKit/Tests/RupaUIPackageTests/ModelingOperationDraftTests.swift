@@ -1329,7 +1329,7 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.bridgeSurface, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.isSurfaceCreation = true
         draft.distance = "10 mm"
-        draft.bridgeTrim = .none
+        draft.bridgeTrimsWalls = false
         guard case .createBridgeSurface(_, let bridge, _) = try draft.command(in: document) else {
             Issue.record("Expected a Bridge Surface.")
             return
@@ -1340,7 +1340,7 @@ struct ModelingOperationDraftTests {
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(measurement.counts.sheets == 3)
         // The default, Both, joins the trimmed sheets with the bridge.
-        draft.bridgeTrim = .both
+        draft.bridgeTrimsWalls = true
         let trimmed = CADDocumentStore(document: document)
         _ = try trimmed.apply(draft.command(in: document))
         #expect(try MeasurementService().measure(document: trimmed.document, ruler: .standard(for: .meter)).counts.sheets == 1)
@@ -1368,8 +1368,8 @@ struct ModelingOperationDraftTests {
         draft.isSurfaceCreation = true
         draft.distance = "20 mm"
         // Trim walls opens on Both.
-        #expect(draft.bridgeTrim == .both)
-        draft.bridgeTrim = .none
+        #expect(draft.bridgeTrimsWalls && draft.bridgeExtent == .both)
+        draft.bridgeTrimsWalls = false
         guard case .createBridgeSurface(_, let bridge, let wallByReach) = try draft.command(in: document) else {
             Issue.record("Expected a Bridge Surface.")
             return
@@ -1388,7 +1388,7 @@ struct ModelingOperationDraftTests {
         #expect(abs(strips.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
 
         // Trimming the walls joins what is left of them with the strip into one sheet.
-        draft.bridgeTrim = .both
+        draft.bridgeTrimsWalls = true
         let trimmed = CADDocumentStore(document: document)
         _ = try trimmed.apply(draft.command(in: document))
         let joined = try MeasurementService().measure(document: trimmed.document, ruler: .standard(for: .meter))
@@ -1396,7 +1396,7 @@ struct ModelingOperationDraftTests {
         #expect(abs(joined.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.02 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
-    @Test func aShortBridgeTrimsOnlyTheSheetReachingLess() throws {
+    @Test func longAndShortSetHowFarTheBridgeRunsApartFromTrimmingTheWalls() throws {
         var document = DesignDocument.empty()
         func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {
             let lines = try corners.indices.map { index in
@@ -1407,10 +1407,9 @@ struct ModelingOperationDraftTests {
             }
             return try document.createCurvePatch(name: "Sheet", curves: lines.map { CurveSectionReference(featureID: $0) })
         }
-        // The floor reaches 40 mm from where the planes meet, the wall 30 mm (sketch x is world z
-        // on the ZX plane).
+        // The floor runs 40 mm along x, the wall 30 mm (sketch x is world z on the ZX plane).
         let floor = try sheet(on: .xy, [(0, 0.01), (0.04, 0.01), (0.04, 0.04), (0, 0.04)])
-        let wall = try sheet(on: .zx, [(0.01, 0), (0.01, 0.04), (0.03, 0.04), (0.03, 0)])
+        let wall = try sheet(on: .zx, [(0.01, 0), (0.01, 0.03), (0.04, 0.03), (0.04, 0)])
         let nodes = try [floor, wall].map { feature in
             try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(feature) })
         }
@@ -1418,27 +1417,19 @@ struct ModelingOperationDraftTests {
         draft.isSurfaceCreation = true
         draft.distance = "20 mm"
         draft.bridgeShape = .chamfer
-        draft.bridgeTrim = .short
+        draft.bridgeTrimsWalls = false
+        draft.bridgeExtent = .long
         guard case .createBridgeSurface(_, let bridge, let wallByReach) = try draft.command(in: document) else {
             Issue.record("Expected a Bridge Surface.")
             return
         }
-        #expect(wallByReach == .short && bridge.trimWalls == .none)
+        #expect(wallByReach == nil && bridge.trimWalls == .none && bridge.extent == .long)
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
-        // The wall is trimmed and joined with the strip; the floor keeps its object.
-        let feature = try #require(store.document.cadDocument.designGraph.nodes.values.first { node in
-            if case .sheetBridge = node.operation { return true }
-            return false
-        })
-        guard case let .sheetBridge(resolved) = feature.operation else { return }
-        #expect(resolved.trimWalls == .second)
-        let nodesShown = store.document.productMetadata.sceneNodes.values
-        #expect(nodesShown.contains { $0.reference == .body(floor) } && nodesShown.contains { $0.reference == .body(wall) } == false)
+        // Long: the strip runs the floor's 40 mm, 20√2 mm across; both walls stay whole.
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
-        #expect(measurement.counts.sheets == 2)
-        // The floor 40 × 30 mm, the wall above z = 20 mm 40 × 10 mm and the strip 20√2 × 40 mm.
-        #expect(abs(measurement.totals.sheetAreaSquareMeters - (0.04 * 0.03 + 0.04 * 0.01 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
+        #expect(measurement.counts.sheets == 3)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - (0.04 * 0.03 + 0.03 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
     @Test func fourCurvesFrameAFlatSquare() throws {
