@@ -891,6 +891,16 @@ private func keyboardContext(
     #expect(hollowTakesAngle == false)
 }
 
+@Test func workspaceKeyboardRouterStepsPatchContinuityOnTab() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isPatchDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "\t", isTab: true), context: context) == .cyclePatchContinuity)
+    var draft = ModelingOperationDraft(kind: .patch, selection: SelectionModel(), ruler: .standard(for: .millimeter))
+    draft.cyclePatchContinuity()
+    #expect(draft.patchContinuity == .g1)
+}
+
 @Test func workspaceKeyboardRouterStartsExtrudeOnEAndTypesItsDistanceOnD() {
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()

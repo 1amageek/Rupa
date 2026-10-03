@@ -247,6 +247,12 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var patchContinuity = PatchContinuityChoice.g0
+    /// Tab in Patch's dialog: Planar → G0 → G1 → G2 → Planar.
+    mutating func cyclePatchContinuity() {
+        let all = PatchContinuityChoice.allCases
+        patchContinuity = all[((all.firstIndex(of: patchContinuity) ?? 0) + 1) % all.count]
+    }
+
     /// A hole patch's operands: the hole's edges, and whole curves after them as guides it passes
     /// through (Plasticity's Select guides).
     var patchHoleEdges: [SelectionTarget] {

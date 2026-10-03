@@ -273,6 +273,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginExtrude
     /// D while Extrude's dialog runs: its distance.
     case focusExtrudeDistance
+    /// Tab while Patch's dialog runs: its continuity steps.
+    case cyclePatchContinuity
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -435,6 +437,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isIsoparamPickActive: Bool = false
     /// Whether Extrude's dialog runs (D types its distance).
     var isExtrudeDialogActive: Bool = false
+    /// Whether Patch's dialog runs (Tab steps its continuity).
+    var isPatchDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -557,6 +561,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {
             return .focusLoftTension
+        }
+        if context.isPatchDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.isTab {
+            return .cyclePatchContinuity
         }
         if context.isExtrudeDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {

@@ -6370,6 +6370,7 @@ private struct ProjectMainViewContent: View {
             isLoftDialogActive: modelingDraft?.kind == .loft,
             isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
             isExtrudeDialogActive: modelingDraft?.kind == .extrude,
+            isPatchDialogActive: modelingDraft?.kind == .patch,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6831,6 +6832,10 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .focusExtrudeDistance:
             modelingDraft?.focusExtrudeDistance()
+            return .handled
+        case .cyclePatchContinuity:
+            modelingDraft?.cyclePatchContinuity()
+            reportToolStatus("Patch: continuity \(modelingDraft?.patchContinuity.rawValue ?? "").")
             return .handled
         case .toggleIsoparamPickDirection:
             guard case .isoparam(let direction) = pointPickRequest else { return .ignored }

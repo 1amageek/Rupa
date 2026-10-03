@@ -515,6 +515,8 @@ struct ModelingOperationView: View {
             if draft.patchContinuity.order != nil {
                 TextField("Tension", text: $draft.xnurbsTension)
             }
+            lengthField("Tolerance", text: $draft.xnurbsPositionTolerance)
+                .help("How far a fitted fill (G1, G2 or through guides) may stray from its edges and guides.")
         case .bridge:
             EmptyView()
         case .bridgeSurface:
