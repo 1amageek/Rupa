@@ -432,6 +432,9 @@ struct WorkspaceKeyboardContext: Sendable {
     var isImprintSessionActive: Bool = false
     /// Whether Push Face's, Draft Face's or Match Face's dialog runs.
     var isFaceEditSessionActive: Bool = false
+    /// Whether the running face dialog is the selection's default command, which keys of other
+    /// commands still reach as if nothing ran.
+    var isFaceEditFollowingSelection: Bool = false
     /// Whether Fillet's dialog runs.
     var isFilletDialogActive: Bool = false
     /// Whether Loft's dialog runs.
@@ -490,7 +493,7 @@ struct WorkspaceKeyboardContext: Sendable {
             || isMirrorSessionActive || isArrayCreationSessionActive || isSectionAnalysisSessionActive
             || isCurvePickCommandActive || isCutCurveSessionActive || isBooleanSessionActive || isBodyCutSessionActive
             || isFilletSessionActive || isRebuildSessionActive || isDeformSessionActive || isImprintSessionActive
-            || isFaceEditSessionActive || isFilletDialogActive || isLoftDialogActive || isSideContinuityDialogActive || isProjectSessionActive
+            || (isFaceEditSessionActive && !isFaceEditFollowingSelection) || isFilletDialogActive || isLoftDialogActive || isSideContinuityDialogActive || isProjectSessionActive
             || isBridgeEdgeSessionActive || isCommandPaletteOpen || isCurveOffsetCommandActive)
     }
 

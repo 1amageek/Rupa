@@ -46,6 +46,10 @@ struct WorkspaceFaceEditSession: Equatable {
     }
 
     private(set) var kind: Kind
+    /// Whether the selection started this dialog as its default command
+    /// (`WorkspaceSelectionDefaultCommand`), so it follows the selection and gives way to any
+    /// other command.
+    var followsSelection = false
     /// Push Face's and Extend Sheet's distance, in meters; Push Face opens at 0 as Plasticity's
     /// does, set by the face's arrow or the field.
     var distanceMeters = 0.0

@@ -956,6 +956,13 @@ private func keyboardContext(
     context.isTransformSessionActive = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) != .deleteSelection)
     context.isTransformSessionActive = false
+    // The selection's default Push Face does not stop it; a Push Face started as a command does.
+    context.isFaceEditSessionActive = true
+    context.isFaceEditFollowingSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) == .deleteSelection)
+    context.isFaceEditFollowingSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) != .deleteSelection)
+    context.isFaceEditSessionActive = false
     context.hasBodyFaceSelection = false
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) == .beginSnapCandidateKindBypass)
 }

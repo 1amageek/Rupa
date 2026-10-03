@@ -2322,6 +2322,12 @@ private struct ProjectMainViewContent: View {
         // Move Edges, Faces or Vertices ends when other things are selected; a move empties the
         // selection until the moved targets are selected again.
         .onChange(of: snapshot.selection.selectedTargets) { _, targets in
+            // The selection's default command ends once the selection is something else; a
+            // selection made in the viewport starts the command for it again.
+            if let faceEditSession, faceEditSession.followsSelection,
+               WorkspaceSelectionDefaultCommand.targets(of: faceEditSession).map({ Set($0) != Set(targets) }) ?? true {
+                self.faceEditSession = nil
+            }
             if let transformSession, !transformSession.topologyTargets.isEmpty, !targets.isEmpty,
                Set(targets) != Set(transformSession.topologyTargets) {
                 self.transformSession = nil
@@ -2335,6 +2341,12 @@ private struct ProjectMainViewContent: View {
         }
         .onChange(of: snapshot.selection.wholeSceneNodeIDs, initial: true) { _, _ in
             refreshSelectionMass()
+        }
+        // Any other command starting ends the selection's default command.
+        .onChange(of: isAnotherCommandRunning) { _, running in
+            if running, faceEditSession?.followsSelection == true {
+                faceEditSession = nil
+            }
         }
         .onChange(of: snapshot.documentGeneration) { _, _ in
             refreshSelectionMass()
@@ -6211,6 +6223,14 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportPick(_ target: ViewportCanvasTarget) {
+        // The selection's default command takes plain clicks on bodies, as Plasticity's does (a
+        // face to push onto, an object to extend up to); a click adding to or taking from the
+        // selection, or one on nothing, changes the selection it follows.
+        if viewportPointerOwner.pickingCommand == .faceEdit, faceEditSession?.followsSelection == true,
+           target.selectionIntent == .toggle || target.hit == nil {
+            applyViewportSelection(hit: target.hit, intent: target.selectionIntent)
+            return
+        }
         if let command = viewportPointerOwner.pickingCommand {
             routeViewportPick(target, to: command)
             return
@@ -6449,6 +6469,7 @@ private struct ProjectMainViewContent: View {
             hasImprintableSelection: imprintSessionKind() != nil,
             isImprintSessionActive: imprintSession != nil,
             isFaceEditSessionActive: faceEditSession != nil,
+            isFaceEditFollowingSelection: faceEditSession?.followsSelection == true,
             isFilletDialogActive: modelingDraft?.kind == .fillet || modelingDraft?.kind == .chamfer,
             isLoftDialogActive: modelingDraft?.kind == .loft,
             isSideContinuityDialogActive: modelingDraft?.kind == .square || modelingDraft?.kind == .xnurbs,
@@ -7045,9 +7066,7 @@ private struct ProjectMainViewContent: View {
                 return true
             }
             if sheetEdges.isEmpty == false, sheetEdges.count + others.count == snapshot.selection.selectedTargets.count, others.count <= 1 {
-                faceEditSession = extendsPlanarSheet(sheetEdges)
-                    ? WorkspaceFaceEditSession(extendingPlanarSheetEdges: sheetEdges, limit: others.first)
-                    : WorkspaceFaceEditSession(kind: .extendSheet(edges: sheetEdges, limit: others.first))
+                faceEditSession = extendSheetSession(edges: sheetEdges, limit: others.first)
                 reportToolStatus("Extend Sheet: set the distance, Tab steps the shape; OK, Return or right-click extends the edges.")
                 return .handled
             }
@@ -9162,7 +9181,7 @@ private struct ProjectMainViewContent: View {
             guard !targets.isEmpty else {
                 clearSelection { published in
                     dimensionCommandState.deactivate()
-                    syncOffsetCommandAvailability(for: published.selection)
+                    selectionChangedInViewport(published.selection)
                 }
                 return
             }
@@ -9170,7 +9189,7 @@ private struct ProjectMainViewContent: View {
                 try selection.selectTargets(targets, in: document)
             } completion: { published in
                 dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability(for: published.selection)
+                selectionChangedInViewport(published.selection)
             }
         case .toggle:
             guard !targets.isEmpty else {
@@ -9188,7 +9207,7 @@ private struct ProjectMainViewContent: View {
                 try selection.selectTargets(nextTargets, in: document)
             } completion: { published in
                 dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability(for: published.selection)
+                selectionChangedInViewport(published.selection)
             }
         }
     }
@@ -9204,7 +9223,7 @@ private struct ProjectMainViewContent: View {
             guard !references.isEmpty else {
                 clearSelection { published in
                     dimensionCommandState.deactivate()
-                    syncOffsetCommandAvailability(for: published.selection)
+                    selectionChangedInViewport(published.selection)
                 }
                 return
             }
@@ -9212,7 +9231,7 @@ private struct ProjectMainViewContent: View {
                 try selection.selectReferences(references, in: document)
             } completion: { published in
                 dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability(for: published.selection)
+                selectionChangedInViewport(published.selection)
             }
         case .toggle:
             guard !references.isEmpty else {
@@ -9230,7 +9249,7 @@ private struct ProjectMainViewContent: View {
                 try selection.selectReferences(nextReferences, in: document)
             } completion: { published in
                 dimensionCommandState.deactivate()
-                syncOffsetCommandAvailability(for: published.selection)
+                selectionChangedInViewport(published.selection)
             }
         }
     }
@@ -9308,6 +9327,94 @@ private struct ProjectMainViewContent: View {
 
     private func syncOffsetCommandAvailability() {
         syncOffsetCommandAvailability(for: snapshot.selection)
+    }
+
+    /// A selection made in the viewport: the offset commands that no longer apply end, and the
+    /// selection's default command starts on it (`WorkspaceSelectionDefaultCommand`).
+    private func selectionChangedInViewport(_ selection: SelectionModel) {
+        syncOffsetCommandAvailability(for: selection)
+        startSelectionDefaultCommand(for: selection.selectedTargets)
+    }
+
+    /// Plasticity's default command for `selected`, while nothing else runs: Push Face on faces of
+    /// solids, Extend Sheet on open edges of sheets. A default command already running gives way
+    /// to the new selection's, or ends when it calls for none.
+    private func startSelectionDefaultCommand(for selected: [SelectionTarget]) {
+        guard selectedTool == .select, isAnotherCommandRunning == false,
+              faceEditSession.map(\.followsSelection) ?? true else { return }
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        func role(_ target: SelectionTarget) -> ObjectDescriptor.GeometryRole? {
+            guard let node = nodes[target.sceneNodeID], node.reference?.kind == .body else { return nil }
+            return node.object?.geometryRole
+        }
+        let solidFaces = Set(selected.filter { target in
+            guard case .face = target.component else { return false }
+            return role(target) == .solid
+        })
+        let command = WorkspaceSelectionDefaultCommand.resolve(
+            selected: selected, solidFaces: solidFaces, sheetOpenEdges: sheetOpenEdges(in: selected)
+        )
+        guard let command else {
+            if faceEditSession?.followsSelection == true { faceEditSession = nil }
+            return
+        }
+        if let faceEditSession, command.isRunning(in: faceEditSession) { return }
+        var dialog: WorkspaceFaceEditSession
+        switch command {
+        case let .pushFaces(faces):
+            dialog = WorkspaceFaceEditSession(kind: .push(faces: faces))
+            reportToolStatus("Push Face: drag the face's arrow or set the Distance, or click a face to push onto it; Tab steps Grow; OK, Return or right-click pushes.")
+        case let .extendSheet(edges):
+            dialog = extendSheetSession(edges: edges, limit: nil)
+            reportToolStatus("Extend Sheet: set the distance, or click an object to extend up to; Tab steps the shape; OK, Return or right-click extends the edges.")
+        }
+        dialog.followsSelection = true
+        faceEditSession = dialog
+    }
+
+    /// The selected edges that are open edges of sheets, read from Core's boundary edges of
+    /// their sheets; none unless every selected target is an edge of a sheet.
+    private func sheetOpenEdges(in selected: [SelectionTarget]) -> Set<SelectionTarget> {
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        let sheetEdges = selected.filter { target in
+            guard case .edge = target.component, let node = nodes[target.sceneNodeID] else { return false }
+            return node.reference?.kind == .body && node.object?.geometryRole == .surface
+        }
+        guard sheetEdges.isEmpty == false, sheetEdges.count == selected.count else { return [] }
+        var sheets: [SelectionTarget] = []
+        for edge in sheetEdges where sheets.contains(where: { $0.sceneNodeID == edge.sceneNodeID }) == false {
+            sheets.append(SelectionTarget(sceneNodeID: edge.sceneNodeID))
+        }
+        do {
+            let open = try BoundaryEdgeSelectionService().boundaryEdges(
+                of: sheets, in: snapshot.document.document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            return Set(sheetEdges).intersection(open)
+        } catch {
+            reportToolStatus("Extend Sheet: the sheet's open edges cannot be read: \(error.localizedDescription)", severity: .warning)
+            return []
+        }
+    }
+
+    /// Extend Sheet on `edges`: Linear first on a planar sheet, Natural on a curved one.
+    private func extendSheetSession(edges: [SelectionTarget], limit: SelectionTarget?) -> WorkspaceFaceEditSession {
+        extendsPlanarSheet(edges)
+            ? WorkspaceFaceEditSession(extendingPlanarSheetEdges: edges, limit: limit)
+            : WorkspaceFaceEditSession(kind: .extendSheet(edges: edges, limit: limit))
+    }
+
+    /// Whether a command, session or dialog other than a face dialog runs, or a tool other than
+    /// Select is active: the selection's default command neither starts nor stays then.
+    private var isAnotherCommandRunning: Bool {
+        selectedTool != .select || modelingDraft != nil || gearDraft != nil || meshDraft != nil
+            || placeSession != nil || transformSession != nil || mirrorSession != nil || sectionAnalysisSession != nil
+            || arraySession != nil || curvePickCommand != nil || cutCurveSession != nil || booleanSession != nil
+            || bodyCutSession != nil || rebuildSession != nil || deformSession != nil || imprintSession != nil
+            || projectSession != nil || bridgeEdgeSession != nil || filletSession != nil || pointPickRequest != nil
+            || viewAlignedConstructionPlaneRequest != nil || patternArrayCurvePathPickState.isActive
+            || regionOffsetCommandState.isActive || edgeOffsetCommandState.isActive || dimensionCommandState.isActive
+            || slideCommandState.isActive || slotProfileCommandState.isActive
     }
 
     private func syncOffsetCommandAvailability(for selection: SelectionModel) {

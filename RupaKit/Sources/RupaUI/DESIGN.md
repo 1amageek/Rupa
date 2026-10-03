@@ -941,7 +941,18 @@ open edges of a sheet open Extend Sheet's dialog (Distance, opening at 0; the Sh
 Linear, Reflective and Soft from Linear on a planar sheet, Natural too and from it on a curved
 one; Modify, not offered while Natural extends the surface itself; a face of another object clicked
 in the dialog makes that object the limit, Control-click dropping it); sketch
-curves alone each extend through Extend Curve's natural shape, together as one step. The palette's Align dispatches by
+curves alone each extend through Extend Curve's natural shape, together as one step.
+
+A selection made in the viewport while nothing else runs starts Plasticity's default command on it
+(`WorkspaceSelectionDefaultCommand`): faces of solids open Push Face, open edges of sheets (Core's
+`BoundaryEdgeSelectionService`) open Extend Sheet. Such a dialog `followsSelection`: plain clicks on
+bodies go to it as in the palette's dialog (a face to push onto, an object to extend up to), while
+a click adding to or taking from the selection, or one on nothing, changes the selection, which
+starts the command for the new selection or ends the dialog when it calls for none. A selection
+changed any other way, or any other command or tool starting (`isAnotherCommandRunning`), ends it,
+and keys of other commands reach the workspace as if it were idle (`isFaceEditFollowingSelection`).
+`WorkspaceSelectionDefaultCommandTests` own the resolution, and `WorkspaceKeyboardRouterTests` the
+idle keys. The palette's Align dispatches by
 selection too: an edge of a sheet and then a reference edge — or several such pairs, in selection
 order — open Align Surface's dialog (Continuity, which Tab steps for every pair, each pair's own
 continuity when there are several, Tension, Blend rows with their Influence, Partial Start and
