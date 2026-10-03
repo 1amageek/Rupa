@@ -400,6 +400,17 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     evaluatedDocument: evaluatedDocument
                 )
+            case .faceRebuild:
+                // A face of a solid given control points (Raise Degree) shows them like a B-spline
+                // source's; any other Rebuild Face has none to show.
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: nil,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .surfaceTrim(let surfaceTrim):
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
@@ -419,7 +430,7 @@ public struct ViewportSceneBuilder {
                  .linearPattern, .radialPattern, .gridPattern, .curveDrivenPattern,
                  .chamfer, .fillet, .g2Blend, .setbackCorner, .shell, .thicken,
                  .bridgeSurface, .surfaceOffset, .surfaceExtend, .surfaceMatch,
-                 .mirror, .joinBodies, .unjoinBody, .unjoinFaces, .reverseSheet, .isoparam, .imprintBody, .faceMatch, .removeFillets, .removeRedundantTopology, .sheetExtend, .surfaceAlign, .faceRebuild, .faceUnwrap, .imprintCurves, .untrimFace, .extract, .wrap:
+                 .mirror, .joinBodies, .unjoinBody, .unjoinFaces, .reverseSheet, .isoparam, .imprintBody, .faceMatch, .removeFillets, .removeRedundantTopology, .sheetExtend, .surfaceAlign, .faceUnwrap, .imprintCurves, .untrimFace, .extract, .wrap:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
                     sourceFeatureID: nil,

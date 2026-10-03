@@ -42,7 +42,7 @@ extension DesignDocument {
         var updatedCADDocument = cadDocument
         for featureID in order {
             guard var feature = cadDocument.designGraph.nodes[featureID],
-                  case .bSplineSurface(var surfaceFeature) = feature.operation else {
+                  var surfaceFeature = editableControlSurface(of: featureID) else {
                 throw EditorError(code: .referenceUnresolved, message: "\(owner) requires an existing direct B-spline surface source feature.")
             }
             let mirror = try options.mirrorAxis.map { try mirrorPlane(axis: $0, plane: options.mirrorPlane, for: featureID) }
@@ -57,7 +57,7 @@ extension DesignDocument {
                     surfaceFeature.surface.controlPoints[index.v][index.u] + displacement
             }
             try surfaceFeature.validate(tolerance: modelingSettings.tolerance)
-            feature.operation = .bSplineSurface(surfaceFeature)
+            feature = try withControlSurface(surfaceFeature, in: feature)
             try updatedCADDocument.replaceFeature(feature, tolerance: modelingSettings.tolerance)
         }
         let previousCADDocument = cadDocument

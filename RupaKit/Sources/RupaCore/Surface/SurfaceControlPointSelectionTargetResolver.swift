@@ -87,6 +87,12 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
                 message: "Surface control point editing requires a valid selection reference: \(error)."
             )
         }
+        if let given = Self.givenFace(reference.surface.subshape, in: document.cadDocument) {
+            try validateBSplineSurfaceControlPoint(reference, in: BSplineSurfaceFeature(surface: given.surface), owner: "Surface control point editing")
+            return .bSplineSurfaceControlPoint(BSplineSurfaceControlPointEditTarget(
+                featureID: given.featureID, uIndex: reference.uIndex, vIndex: reference.vIndex
+            ))
+        }
 
         let patchFace = try surfacePatchFace(from: reference.surface.subshape)
         guard let feature = document.cadDocument.designGraph.nodes[patchFace.featureID] else {
@@ -138,6 +144,10 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
                 code: .commandInvalid,
                 message: "Surface control point display requires a valid selection reference: \(error)."
             )
+        }
+        if let given = Self.givenFace(reference.surface.subshape, in: cadDocument) {
+            try validateBSplineSurfaceControlPoint(reference, in: BSplineSurfaceFeature(surface: given.surface), owner: "Surface control point display")
+            return
         }
         let patchFace = try surfacePatchFace(from: reference.surface.subshape)
         guard let feature = cadDocument.designGraph.nodes[patchFace.featureID] else {
@@ -319,6 +329,18 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             sceneNodeID: sceneNodeID,
             component: .vertex(.generatedTopology(subshapeID))
         )
+    }
+
+    /// The Rebuild Face giving a surface to the face `subshape` names, the latest when several do,
+    /// and that surface: a face of a solid whose control points Raise Degree made editable.
+    static func givenFace(_ subshape: StableSubshapeReference, in cadDocument: CADDocument) -> (featureID: FeatureID, surface: BSplineSurface3D)? {
+        for featureID in cadDocument.designGraph.order.reversed() {
+            guard case .faceRebuild(let rebuild)? = cadDocument.designGraph.nodes[featureID]?.operation,
+                  case let .given(surface) = rebuild.method, rebuild.faces.count == 1,
+                  rebuild.faces[0].subshapeID == subshape.subshapeID else { continue }
+            return (featureID, surface)
+        }
+        return nil
     }
 
     private func surfacePatchFace(from subshape: StableSubshapeReference) throws -> SurfacePatchFace {

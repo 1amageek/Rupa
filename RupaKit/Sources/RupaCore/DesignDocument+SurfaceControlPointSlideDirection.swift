@@ -23,7 +23,7 @@ extension DesignDocument {
                 for: target, in: try polySplineSource(target.featureID), direction: direction
             )
         case .bSplineSurfaceControlPoint(let target):
-            guard case let .bSplineSurface(feature) = cadDocument.designGraph.nodes[target.featureID]?.operation else {
+            guard let feature = editableControlSurface(of: target.featureID) else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Surface control point slide requires an existing direct B-spline surface source feature."

@@ -408,7 +408,7 @@ extension DesignDocument {
             )
         }
         guard var feature = cadDocument.designGraph.nodes[target.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+              let surfaceFeature = editableControlSurface(of: target.featureID) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "B-spline surface control point move requires an existing direct B-spline surface source feature."
@@ -416,12 +416,12 @@ extension DesignDocument {
         }
 
         let controlPointEditor = BSplineSurfaceControlPointEditingService(tolerance: modelingSettings.tolerance)
-        feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
+        feature = try withControlSurface(try controlPointEditor.updatedFeature(
             moving: target,
             by: delta,
             in: surfaceFeature,
             owner: "B-spline surface control point move"
-        ))
+        ), in: feature)
 
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
@@ -581,7 +581,7 @@ extension DesignDocument {
         objectRegistry: ObjectTypeRegistry
     ) throws {
         guard var feature = cadDocument.designGraph.nodes[controlPointTarget.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+              let surfaceFeature = editableControlSurface(of: controlPointTarget.featureID) else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "B-spline surface control point weight requires an existing direct B-spline surface source feature."
@@ -589,12 +589,12 @@ extension DesignDocument {
         }
 
         let controlPointEditor = BSplineSurfaceControlPointEditingService(tolerance: modelingSettings.tolerance)
-        feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
+        feature = try withControlSurface(try controlPointEditor.updatedFeature(
             settingWeight: resolvedWeight,
             for: controlPointTarget,
             in: surfaceFeature,
             owner: "B-spline surface control point weight"
-        ))
+        ), in: feature)
 
         var updatedCADDocument = cadDocument
         let previousCADDocument = cadDocument
@@ -1013,6 +1013,10 @@ extension DesignDocument {
     public func surfaceControlSourceFeatureID(for featureID: FeatureID) -> FeatureID? {
         switch cadDocument.designGraph.nodes[featureID]?.operation {
         case .bSplineSurface, .polySpline:
+            return featureID
+        case .faceRebuild(let rebuild):
+            // A face of a solid given control points keeps them on the Rebuild Face giving it.
+            guard case .given = rebuild.method, rebuild.faces.count == 1 else { return nil }
             return featureID
         case .surfaceTrim(let trim):
             guard case .bSplineSurface = cadDocument.designGraph.nodes[trim.target.featureID]?.operation else {
@@ -2871,7 +2875,7 @@ extension DesignDocument {
                 surfaceFeature = cachedSurfaceFeature
             } else {
                 guard let sourceFeature = cadDocument.designGraph.nodes[target.featureID],
-                      case let .bSplineSurface(sourceSurfaceFeature) = sourceFeature.operation else {
+                      let sourceSurfaceFeature = editableControlSurface(of: target.featureID) else {
                     throw EditorError(
                         code: .referenceUnresolved,
                         message: "B-spline surface control point slide requires an existing direct B-spline surface source feature."
@@ -2907,9 +2911,7 @@ extension DesignDocument {
                     message: "B-spline surface control point slide lost a resolved source update."
                 )
             }
-            var updatedFeature = feature
-            updatedFeature.operation = .bSplineSurface(surfaceFeature)
-            replacementFeatures.append(updatedFeature)
+            replacementFeatures.append(try withControlSurface(surfaceFeature, in: feature))
         }
 
         var updatedCADDocument = cadDocument

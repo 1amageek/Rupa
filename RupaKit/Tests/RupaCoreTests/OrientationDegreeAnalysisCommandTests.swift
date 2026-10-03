@@ -184,6 +184,43 @@ import Testing
         #expect(unchanged(drumSession, since: drumBefore))
     }
 
+    @Test(.timeLimit(.minutes(2)))
+    func aRaisedFaceOfASolidShowsAndMovesItsControlPoints() throws {
+        // Plasticity's video: the raised face's control points are listed and moved; the middle one
+        // pushed 5 mm out bulges the face, the box closed by its own edges: d · area / 9 more.
+        let (session, box) = try box()
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        let entry = try #require(try entries(.face, of: box, in: session).first)
+        let face = try #require(entry.selectionTarget())
+        let normal = try #require(entry.normal)
+        _ = try session.execute(.raiseSurfaceDegree(targets: [face]))
+        let feature = try #require(session.document.productMetadata.sceneNodes[box]?.reference?.featureID)
+        guard case .faceRebuild(let rebuild)? = session.document.cadDocument.designGraph.nodes[feature]?.operation else {
+            Issue.record("The box shows no Raise Degree.")
+            return
+        }
+        let summary = try SurfaceSourceSummaryService().summarize(document: session.document, displayUnit: .meter)
+        let source = try #require(summary.sources.first { $0.featureID == feature.description })
+        #expect(source.patches.first?.controlPoints.count == 9)
+        let middle = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+            surface: SurfaceReference(subshape: rebuild.faces[0]), uIndex: 1, vIndex: 1
+        )))
+        let d = 0.005
+        _ = try session.execute(.moveSurfaceControlPoint(
+            target: middle, deltaX: .length(normal.x * d, .meter), deltaY: .length(normal.y * d, .meter), deltaZ: .length(normal.z * d, .meter)
+        ))
+        #expect(session.evaluationStatus == .valid)
+        let moved = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(moved - (volume + d * 0.1 * 0.1 / 9)) < 1e-9, "\(moved) vs \(volume + d * 0.1 * 0.1 / 9)")
+        // A control point the face does not have is refused.
+        let missing = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+            surface: SurfaceReference(subshape: rebuild.faces[0]), uIndex: 3, vIndex: 0
+        )))
+        #expect(throws: EditorError.self) {
+            _ = try session.execute(.moveSurfaceControlPoint(target: missing, deltaX: .length(0.001, .meter), deltaY: .length(0, .meter), deltaZ: .length(0, .meter)))
+        }
+    }
+
     // MARK: Find Boundary Edges
 
     @Test(.timeLimit(.minutes(1)))

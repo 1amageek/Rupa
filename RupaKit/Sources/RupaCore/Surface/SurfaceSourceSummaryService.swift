@@ -86,6 +86,25 @@ public struct SurfaceSourceSummaryService: Sendable {
                 ) {
                     sources.append(surfaceSource)
                 }
+            case let .faceRebuild(rebuild):
+                // A face of a solid given control points (Raise Degree): its surface's control
+                // points, named on the face as the Rebuild Face took it, whose own edges bound it.
+                guard case let .given(surface) = rebuild.method, rebuild.faces.count == 1 else { continue }
+                if let surfaceSource = try BSplineSurfaceSourceSummaryBuilder().source(
+                    featureID: featureID,
+                    feature: feature,
+                    surfaceFeature: BSplineSurfaceFeature(surface: surface),
+                    authoredTrimLoops: [],
+                    authoredTrimTargetFace: rebuild.faces[0],
+                    authoredTrimFeatureID: nil,
+                    sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                    surfaceControlPointDisplays: surfaceControlPointDisplays,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName,
+                    tolerance: document.modelingSettings.tolerance
+                ) {
+                    sources.append(surfaceSource)
+                }
             default:
                 continue
             }

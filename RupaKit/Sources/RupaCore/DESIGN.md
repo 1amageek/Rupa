@@ -192,7 +192,17 @@ Degree on a box's face) is given its surface as an exact B-spline (Swift-CAD
 surface (`FaceRebuildMethod.given`, appended as "Raise Degree"); raising that face
 again raises the given surface in place. A whole solid is refused, one face at a
 time being raised (`FIXME(INCOMPLETE_IMPLEMENTATION)`), and so is an analytic face
-other than a plane (the converter's refusal). `BoundaryEdgeSelectionService` answers Find Boundary
+other than a plane (the converter's refusal). Such a face's control points are edited
+like a B-spline source's: `surfaceControlSourceFeatureID` answers the Rebuild Face,
+`SurfaceSourceSummaryService` lists the given surface's control points named on the
+face as the Rebuild Face took it (`rebuild.faces[0]`, stable while they move),
+`SurfaceControlPointSelectionTargetResolver.givenFace` resolves a reference on that
+face to the latest Rebuild Face giving it a surface, and moves, slides and weights
+read and write the given surface through `editableControlSurface(of:)` and
+`withControlSurface(_:in:)`; the kernel then keeps the face's edges when they still
+lie on it and otherwise re-solves them with the faces beside it.
+`OrientationDegreeAnalysisCommandTests` own a raised box face listing nine control
+points and its middle one moved 5 mm out bulging the box by d·area/9. `BoundaryEdgeSelectionService` answers Find Boundary
 Edges without changing the document: the open edges of the selected objects,
 every edge one face of the body uses (`OpenBoundaryLoopResolver.boundaryEdgeIDs`),
 as edge selections. Toggle Curvature (`toggleCurvatureMeasurement(targets:)`)
