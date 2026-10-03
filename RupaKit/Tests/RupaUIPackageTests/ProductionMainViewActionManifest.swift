@@ -154,6 +154,7 @@ enum ProductionMainViewActionManifest {
         "extendSheet",
         "alignSurface",
         "rebuildFaces",
+        "createPolySplineSurface",
         "unwrapFace",
         "extrudeFaces",
         "createPipes",
