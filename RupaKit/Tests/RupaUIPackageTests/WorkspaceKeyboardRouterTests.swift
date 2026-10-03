@@ -881,6 +881,14 @@ private func keyboardContext(
     var context = keyboardContext()
     context.isFaceEditSessionActive = true
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .focusFaceEditValue)
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "a"), context: context) == .focusFaceEditAngle)
+    // Only Push Face has an angle to type.
+    var push = WorkspaceFaceEditSession(kind: .push(faces: [SelectionTarget(sceneNodeID: SceneNodeID())]))
+    let pushTakesAngle = push.focusAngle()
+    #expect(pushTakesAngle && push.angleFocusRequests == 1)
+    var hollow = WorkspaceFaceEditSession(kind: .hollow(targets: [SelectionTarget(sceneNodeID: SceneNodeID())]))
+    let hollowTakesAngle = hollow.focusAngle()
+    #expect(hollowTakesAngle == false)
 }
 
 @Test func workspaceKeyboardRouterStartsSquareOnOptionShiftQ() {

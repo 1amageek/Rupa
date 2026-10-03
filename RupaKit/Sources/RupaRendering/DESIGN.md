@@ -956,9 +956,10 @@ as spheres elsewhere.
    generation and ruler for a document its current evaluation describes.
    A curvature measurement resolves to combs rather than anchor points; the
    viewport draws each comb's bent samples as white teeth and their envelope
-   (`curvatureMeshes`), each tooth `combScale` of its curve's size long at the
-   tightest bend and never past a centre of curvature, the rule sketch combs
-   follow.
+   (`curvatureMeshes`) standing outside the bend, every comb shown sharing one
+   length per unit curvature — `combScale` of the size of all combed curves
+   together at the tightest bend among them — so equal curvature on two curves
+   is drawn equally long and a G1 break between them can be read.
    The profile affordance actions `profileCornerMove`, `profileFaceMove`,
    and `profileEdgeChamfer` gain prepared records from the same producer
    pass that already registers `profileEdgeFillet`, and the affordance

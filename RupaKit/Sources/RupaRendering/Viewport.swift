@@ -2928,6 +2928,24 @@ public struct Viewport: View {
                 currentGeneration: sceneDocumentGeneration
             )
         }
+        // Every comb shares one length per unit curvature, read from all the combs shown together,
+        // so equal curvature on two curves is drawn equally long and a break in continuity between
+        // curves can be read (Plasticity's one Comb scale).
+        var lower: Point3D?
+        var upper: Point3D?
+        var maximum = 0.0
+        for resolution in resolutions {
+            guard let annotation = document.productMetadata.measurements[resolution.measurementID],
+                  isEffectivelyVisible(annotation.sceneNodeID, in: occurrences),
+                  case .combed(let combs) = resolution.outcome else { continue }
+            for sample in combs.flatMap(\.samples) where abs(sample.curvature) > 1.0e-12 {
+                maximum = max(maximum, abs(sample.curvature))
+                let point = sample.point
+                lower = lower.map { Point3D(x: min($0.x, point.x), y: min($0.y, point.y), z: min($0.z, point.z)) } ?? point
+                upper = upper.map { Point3D(x: max($0.x, point.x), y: max($0.y, point.y), z: max($0.z, point.z)) } ?? point
+            }
+        }
+        let sharedLength = (lower.flatMap { low in upper.map { ($0 - low).length } }).map { max($0, 1.0e-6) } ?? 0
         var result: [ViewportSpatialOverlaySemanticSnapshot.SavedMeasurement] = []
         for resolution in resolutions {
             guard let annotation = document.productMetadata.measurements[resolution.measurementID],
@@ -2936,7 +2954,8 @@ public struct Viewport: View {
             }
             if case .combed(let combs) = resolution.outcome {
                 let drawn = try combs.compactMap { comb in
-                    try savedCurvatureComb(comb, combScale: annotation.combScale ?? DesignDocument.defaultCurvatureCombScale)
+                    try savedCurvatureComb(comb, combScale: annotation.combScale ?? DesignDocument.defaultCurvatureCombScale,
+                                           sharedLength: sharedLength, sharedMaximum: maximum)
                 }
                 if drawn.isEmpty == false {
                     result.append(.init(points: [], label: annotation.name, curvatureCombs: drawn))
@@ -2955,23 +2974,16 @@ public struct Viewport: View {
         return result
     }
 
-    /// A curve's comb as drawn: its bent samples, with teeth `combScale` of the curve's size long
-    /// at its tightest bend, but never past a centre of curvature (the rule sketch combs follow,
-    /// `ViewportCurveCurvatureComb.displayScale`). A comb with fewer than two bent samples is not
-    /// drawn.
+    /// A curve's comb as drawn: its bent samples, its teeth standing outside the bend with one
+    /// length per unit curvature shared by every comb shown — `combScale` of the size of all the
+    /// combed curves together at the tightest bend among them (`sharedLength`, `sharedMaximum`).
+    /// A comb with fewer than two bent samples is not drawn.
     private func savedCurvatureComb(
-        _ comb: CurvatureComb, combScale: Double
+        _ comb: CurvatureComb, combScale: Double, sharedLength: Double, sharedMaximum: Double
     ) throws -> ViewportSpatialOverlaySemanticSnapshot.SavedCurvatureComb? {
         let bent = comb.samples.filter { abs($0.curvature) > 1.0e-12 }
-        guard bent.count >= 2, let maximum = bent.map({ abs($0.curvature) }).max() else { return nil }
-        var lower = bent[0].point
-        var upper = bent[0].point
-        for sample in comb.samples {
-            lower = Point3D(x: min(lower.x, sample.point.x), y: min(lower.y, sample.point.y), z: min(lower.z, sample.point.z))
-            upper = Point3D(x: max(upper.x, sample.point.x), y: max(upper.y, sample.point.y), z: max(upper.z, sample.point.z))
-        }
-        let diagonal = max((upper - lower).length, 1.0e-6)
-        let scale = min(diagonal * combScale / maximum, 1.0 / (maximum * maximum))
+        guard bent.count >= 2, sharedMaximum > 0 else { return nil }
+        let scale = sharedLength * combScale / sharedMaximum
         guard scale.isFinite, scale > 0 else {
             throw RealityViewportSpatialBatch.invalid("A curvature measurement's comb has no drawable length.")
         }

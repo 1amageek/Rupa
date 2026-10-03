@@ -7000,6 +7000,8 @@ private struct ProjectMainViewContent: View {
             guard faceEditSession != nil else { return .ignored }
             faceEditSession?.focusPrimaryValue()
             return .handled
+        case .focusFaceEditAngle:
+            return faceEditSession?.focusAngle() == true ? .handled : .ignored
         case .toggleThickenLock:
             guard case .thicken = faceEditSession?.kind else { return .ignored }
             faceEditSession?.locksThicknesses.toggle()

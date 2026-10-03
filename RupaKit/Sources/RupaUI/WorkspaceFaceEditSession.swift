@@ -122,8 +122,9 @@ struct WorkspaceFaceEditSession: Equatable {
     var extendV = 0.0
     var shrinks = false
 
-    /// Bumped by D: the dialog focuses the command's main value field.
+    /// Bumped by D: the dialog focuses the command's main value field; by A, Push Face's Angle.
     private(set) var primaryFocusRequests = 0
+    private(set) var angleFocusRequests = 0
 
     init(kind: Kind) {
         self.kind = kind
@@ -132,6 +133,13 @@ struct WorkspaceFaceEditSession: Equatable {
     /// D: focus the main value (Plasticity's D for distance, thickness or angle).
     mutating func focusPrimaryValue() {
         primaryFocusRequests += 1
+    }
+
+    /// A: Push Face's Angle Adjacent; false when the command has no angle.
+    mutating func focusAngle() -> Bool {
+        guard case .push(_, nil) = kind else { return false }
+        angleFocusRequests += 1
+        return true
     }
 
     var title: String {

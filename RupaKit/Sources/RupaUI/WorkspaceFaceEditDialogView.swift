@@ -14,10 +14,12 @@ struct WorkspaceFaceEditDialogView: View {
     var displayUnit: LengthDisplayUnit
     /// The command's main value (Distance, Degrees, Thickness, Front, Max Radius), which D focuses.
     @FocusState private var primaryFocused: Bool
+    @FocusState private var angleFocused: Bool
 
     var body: some View {
         fields
             .onChange(of: dialog.primaryFocusRequests) { primaryFocused = true }
+            .onChange(of: dialog.angleFocusRequests) { angleFocused = true }
     }
 
     @ViewBuilder private var fields: some View {
@@ -29,6 +31,7 @@ struct WorkspaceFaceEditDialogView: View {
                 pickedLabel("Onto face", picked: true, identifier: "WorkspaceFaceEdit.ontoPicked")
             }
             TextField("Angle Adjacent", value: $dialog.adjacentAngleDegrees, format: .number)
+                .focused($angleFocused)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.adjacentAngle")
         case let .draft(faces, neutral):

@@ -281,6 +281,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginPolySplines
     /// D while a face edit dialog runs: its main value takes the typing.
     case focusFaceEditValue
+    /// A while Push Face's dialog runs: its Angle Adjacent takes the typing.
+    case focusFaceEditAngle
     /// D, C or A in Fillet's dialog: the fillet distance, the chamfer distance or its angle.
     case focusEdgeTreatmentField(Character)
     /// Option-Shift-Q: the Surface Creation dialog on Square with the selection (palette too).
@@ -565,6 +567,7 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isTab { return .stepFaceEditGrow }
             if input.characters.lowercased() == "s" { return .toggleThickenLock }
             if input.characters.lowercased() == "d" { return .focusFaceEditValue }
+            if input.characters.lowercased() == "a" { return .focusFaceEditAngle }
         }
         if context.isProjectSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {
