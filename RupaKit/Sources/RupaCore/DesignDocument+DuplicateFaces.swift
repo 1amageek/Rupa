@@ -5,8 +5,9 @@ import RupaCoreTypes
 extension DesignDocument {
     /// Alternative Duplicate on faces: the chosen faces of each body are copied beside it as an
     /// object of its own, where the body is displayed, and the body stays as it is. Faces that
-    /// close (every face of each shell they lie on) are copied as a solid, others as a sheet,
-    /// through one Swift-CAD `extract` per body.
+    /// make a solid — they close, or they bound one with the faces around them (a pocket's plug,
+    /// answered by Swift-CAD's `ExtractFaceClosure`) — are copied as that solid, others as a
+    /// sheet, through one Swift-CAD `extract` per body.
     @discardableResult
     public mutating func duplicateBodyFaces(
         name: String = "Alternative Duplicate",
@@ -69,17 +70,17 @@ extension DesignDocument {
         }
         var copies: [FeatureID] = []
         for group in groups {
-            let closes = try ExtractFaceClosure().closes(faces: group.faces, source: group.featureID, in: evaluated)
+            let solid = try ExtractFaceClosure().makesSolid(faces: group.faces, source: group.featureID, in: evaluated)
             let featureID = FeatureID()
             try appendFeature(try FeatureNodeFactory.make(
                 operation: .extract(ExtractFeature(
                     target: PatternTargetReference(featureID: group.featureID),
-                    selection: closes ? .solidFaces(group.faces) : .faces(group.faces)
+                    selection: solid ? .solidFaces(group.faces) : .faces(group.faces)
                 )),
                 id: featureID, name: trimmedName, in: cadDocument, tolerance: modelingSettings.tolerance
             ))
             try insertBooleanResultNode(
-                name: trimmedName, featureID: featureID, geometryRole: closes ? .solid : .surface,
+                name: trimmedName, featureID: featureID, geometryRole: solid ? .solid : .surface,
                 besideTargetNode: group.sceneNodeID, hierarchy: try SceneNodeHierarchy(metadata: productMetadata),
                 objectRegistry: objectRegistry
             )

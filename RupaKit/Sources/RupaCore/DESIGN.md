@@ -141,11 +141,12 @@ cutting a box in two leaving two objects.
 
 Alternative Duplicate on faces (`duplicateBodyFaces(name:targets:)`) copies the
 chosen faces of each body beside it as an object of its own, placed like the body,
-through one Swift-CAD `extract` per body; the body stays. Faces that close (every
-face of each shell they lie on, answered by Swift-CAD's `ExtractFaceClosure` before
-the output is declared) are copied as a solid (`.solidFaces`), others as a sheet
+through one Swift-CAD `extract` per body; the body stays. Faces that make a solid
+(they close, or they bound one with the faces around them — a pocket's plug, a
+boss's block — answered by Swift-CAD's `ExtractFaceClosure.makesSolid` before the
+output is declared) are copied as that solid (`.solidFaces`), others as a sheet
 (`.faces`). Faces of an instance are refused (realize it first).
-`AlternativeDuplicateTests` own the solid, the sheet and the refusal.
+`AlternativeDuplicateTests` own the solid, the plug, the sheet and the refusal.
 
 Join on sheets (`joinSheets(name:targets:)`) sews the chosen sheet objects into one
 through Swift-CAD's `joinBodies`: each sheet joins where it is displayed, carrying
