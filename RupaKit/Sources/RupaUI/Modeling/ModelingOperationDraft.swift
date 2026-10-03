@@ -37,8 +37,11 @@ struct ModelingOperationDraft: Equatable {
         }
 
         /// The dialogs that preview as they are edited and that a right-click confirms, as
-        /// Plasticity's Square and Constrained Surface do.
-        var previewsLive: Bool { self == .square || self == .constrainedSurface }
+        /// Plasticity's surface and sweep dialogs do (Square, Constrained Surface, XNURBS, Bridge
+        /// Surface, Loft, Patch, Pipe, Sweep, Extrude and Revolve in its videos).
+        var previewsLive: Bool {
+            [.square, .constrainedSurface, .xnurbs, .bridgeSurface, .loft, .patch, .bridge, .pipe, .sweep, .extrude, .revolve].contains(self)
+        }
 
         static let surfaceCreationOperations: [Self] = [.surfacePatch, .constrainedSurface, .extrude, .revolve, .sweep, .loft, .patch, .bridge, .square, .xnurbs, .bridgeSurface]
 

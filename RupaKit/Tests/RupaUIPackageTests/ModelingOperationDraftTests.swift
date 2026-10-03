@@ -6,9 +6,11 @@ import SwiftCAD
 
 @Suite("Modeling operation drafts", .timeLimit(.minutes(1)))
 struct ModelingOperationDraftTests {
-    @Test func squareAndConstrainedSurfacePreviewLiveAndConfirmOnRightClick() {
-        // Plasticity's Square and Constrained Surface preview as they are edited.
-        #expect(ModelingOperationDraft.Kind.allCases.filter(\.previewsLive) == [.constrainedSurface, .square])
+    @Test func surfaceAndSweepDialogsPreviewLiveAndConfirmOnRightClick() {
+        // Plasticity's surface and sweep dialogs preview as they are edited; the primitives, the
+        // edge treatments and the sheet edits keep their Preview button.
+        #expect(Set(ModelingOperationDraft.Kind.allCases.filter(\.previewsLive))
+            == [.constrainedSurface, .square, .xnurbs, .bridgeSurface, .loft, .patch, .bridge, .pipe, .sweep, .extrude, .revolve])
     }
 
     @Test(arguments: [ModelingOperationDraft.Kind.extrude, .revolve, .loft])

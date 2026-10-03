@@ -373,7 +373,8 @@ unsupported paths and uncertifiable allowances remain visible Preview failures.
 - Editing a draft invalidates the parent's previous preview. Apply is enabled
   only for a completed matching preview and while no operation is running.
   Apply and Preview are disabled during work; Cancel remains available.
-- Square and Constrained Surface (`Kind.previewsLive`) preview a quarter second after each
+- Square, Constrained Surface, XNURBS, Bridge Surface, Loft, Patch, Boundary Bridge, Pipe, Sweep,
+  Extrude and Revolve (`Kind.previewsLive`) preview a quarter second after each
   edit that leaves the draft naming a command, and a right-click on the canvas confirms them:
   it applies a ready preview, or previews and applies once the preview is ready (a failed or
   superseded preview applies nothing).

@@ -6987,11 +6987,15 @@ private struct ProjectMainViewContent: View {
                 reportToolStatus("Extend Sheet: set the distance, Tab steps the shape; OK, Return or right-click extends the edges.")
                 return .handled
             }
-            if selectedSketchCurveTargets.count == 1, let curve = selectedSketchCurveTargets.first {
-                extendSelectedSketchCurve(curve, shape: .natural)
+            // Curves alone: Extend Curve on every one of them, as one step.
+            let curves = selectedSketchCurveTargets
+            if curves.isEmpty == false, curves.count == snapshot.selection.selectedTargets.count {
+                submitSource(curves.map { curve in
+                    .extendSketchCurve(target: curve, distance: .length(max(sketchExtendDistanceMeters, 1.0e-9), .meter), shape: .natural)
+                }, name: "Extend Curve")
                 return .handled
             }
-            reportToolStatus("Extend: select open edges of a sheet, or one sketch curve.", severity: .warning)
+            reportToolStatus("Extend: select open edges of a sheet, or sketch curves.", severity: .warning)
             return .handled
         case .beginAlign:
             let nodes = snapshot.document.document.productMetadata.sceneNodes
