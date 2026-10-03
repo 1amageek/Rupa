@@ -696,7 +696,8 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Imprint Body Body"),
                 WorkspaceInspectorTextRow(title: "Target", value: WorkspaceInspectorNumberText.shortID(imprint.target.featureID)),
-                WorkspaceInspectorTextRow(title: "Tool", value: WorkspaceInspectorNumberText.shortID(imprint.tool.featureID)),
+                WorkspaceInspectorTextRow(title: imprint.tools.count == 1 ? "Tool" : "Tools",
+                                          value: imprint.tools.map { WorkspaceInspectorNumberText.shortID($0.body.featureID) }.joined(separator: ", ")),
             ]
         case .imprintCurves(let imprint):
             return [

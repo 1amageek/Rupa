@@ -503,7 +503,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Imprint Curve Body: curves projected onto a target object.
     case imprintCurves(name: String, target: SceneNodeID, curves: [SelectionTarget], projection: ImprintProjection, completion: ImprintCompletion)
     /// Imprint Body Body: a tool object's crossing imprinted on a target object, and optionally the reverse.
-    case imprintBodies(name: String, target: SceneNodeID, tool: SceneNodeID, targetCompletion: ImprintCompletion, imprintsTool: Bool, toolCompletion: ImprintCompletion)
+    case imprintBodies(name: String, target: SceneNodeID, tools: [SceneNodeID], targetCompletion: ImprintCompletion, imprintsTool: Bool, toolCompletion: ImprintCompletion)
     /// Isoparam: a face's parameter lines imprinted on it.
     case isoparam(name: String, face: SelectionTarget, direction: SurfaceParameterDirection, fractions: [Double], subdividesControlNet: Bool)
     /// Untrim: a sheet of a face's untrimmed surface beside its object.

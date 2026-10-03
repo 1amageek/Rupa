@@ -20,7 +20,7 @@ struct WorkspaceImprintSession: Equatable {
         /// Imprint before its target and what it imprints are both known.
         case picking(target: SceneNodeID?, curves: [SelectionTarget])
         case curves(target: SceneNodeID, curves: [SelectionTarget])
-        case bodies(target: SceneNodeID, tool: SceneNodeID)
+        case bodies(target: SceneNodeID, tools: [SceneNodeID])
         case isoparam(face: SelectionTarget)
         case untrim(face: SelectionTarget)
     }
@@ -93,18 +93,19 @@ struct WorkspaceImprintSession: Equatable {
         }
     }
 
-    /// A clicked solid or sheet: the target while there is none, else the tool (a body imprinted
-    /// onto the target, in place of any curves).
+    /// A clicked solid or sheet: the target while there is none, else a tool going on or off (the
+    /// tools imprinted onto the target together, in place of any curves).
     mutating func pick(body: SceneNodeID) {
         switch kind {
         case let .picking(nil, curves):
             kind = curves.isEmpty ? .picking(target: body, curves: []) : .curves(target: body, curves: curves)
         case let .picking(target?, _) where target != body:
-            kind = .bodies(target: target, tool: body)
+            kind = .bodies(target: target, tools: [body])
         case let .curves(target, _) where target != body:
-            kind = .bodies(target: target, tool: body)
-        case let .bodies(target, _) where target != body:
-            kind = .bodies(target: target, tool: body)
+            kind = .bodies(target: target, tools: [body])
+        case let .bodies(target, tools) where target != body:
+            let next = tools.contains(body) ? tools.filter { $0 != body } : tools + [body]
+            kind = next.isEmpty ? .picking(target: target, curves: []) : .bodies(target: target, tools: next)
         case .picking, .curves, .bodies, .isoparam, .untrim:
             break
         }
@@ -152,9 +153,9 @@ struct WorkspaceImprintSession: Equatable {
                 ? .normal
                 : .vector(direction: Vector3D(x: vectorX, y: vectorY, z: vectorZ), bidirectional: isBidirectional, hidesOcclusion: hidesOcclusion)
             return .imprintCurves(name: "Imprint", target: target, curves: curves, projection: projection, completion: completion)
-        case let .bodies(target, tool):
+        case let .bodies(target, tools):
             return .imprintBodies(
-                name: "Imprint", target: target, tool: tool, targetCompletion: completion,
+                name: "Imprint", target: target, tools: tools, targetCompletion: completion,
                 imprintsTool: imprintsTool, toolCompletion: toolCompletion
             )
         case let .isoparam(face):

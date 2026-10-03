@@ -206,8 +206,11 @@ Offset Edge (`offsetEdges(name:targets:supportFace:distance:isSymmetric:gapFill:
 and Offset Face Loop (`offsetFaceLoops(name:targets:distance:isSymmetric:gapFill:isIndividual:)`)
 append Swift-CAD `edgeOffset` and `faceLoopOffset` features on one object's edges or
 faces, which offset over any face, planar or curved, of a solid or a sheet, and the
-object shows the result in its place, keeping its name. Every chosen edge must bound
-the support face, checked before anything changes. A face loop's negative distance
+object shows the result in its place, keeping its name. The edges run over the faces on
+the support face's side of their chain (`EdgeOffsetSideResolver`): the support face for the
+edges bounding it and, along the chain, each further edge's face on the same side, so a chain
+across a top and a slope offsets over both; a negative distance takes the faces across. An
+edge not chained to the support face is refused before anything changes. A face loop's negative distance
 offsets over the faces around it (the kernel takes the size and a
 `FaceLoopOffsetSide`), and symmetry offsets both ways. `offsetCurve` dispatches an
 edge or a face target to them; an edge's support face is the selected face or, when
@@ -220,7 +223,7 @@ appends a Swift-CAD `imprintCurves` feature: the selected sketch curves, or ever
 curve of a curve object, are carried into the target's frame by their relative
 placement (`ImprintCurveReference.placement`), and a Vector projection's world
 direction is turned into the target's frame, so each curve lands where it and the
-target are shown. Imprint Body Body (`imprintBodies(name:target:tool:targetCompletion:imprintsTool:toolCompletion:)`)
+target are shown. Imprint Body Body (`imprintBodies(name:target:tools:targetCompletion:imprintsTool:toolCompletion:)`, every tool in one imprint)
 appends `imprintBody` with the tool's relative placement and, when the tool is
 imprinted too, a second `imprintBody` on the tool whose tool is the imprinted
 target, placed the other way; the two are one step, undone together. Isoparam

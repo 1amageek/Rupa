@@ -37,7 +37,7 @@ import Testing
         let tool = try box(session, "Tool", size: 0.04)
         // The small box is shown standing through the target's top, away from its edges.
         _ = try session.execute(.setSceneNodeTransform(id: tool, localTransform: try Transform3D.translation(Vector3D(x: 0.02, y: 0.02, z: 0.08))))
-        _ = try session.execute(.imprintBodies(name: "Imprint", target: target, tool: tool, targetCompletion: .none, imprintsTool: true, toolCompletion: .none))
+        _ = try session.execute(.imprintBodies(name: "Imprint", target: target, tools: [tool], targetCompletion: .none, imprintsTool: true, toolCompletion: .none))
         #expect(try entries(.face, of: target, in: session).count == 7)
         // The tool's four sides are each cut where they pass through the target's top.
         #expect(try entries(.face, of: tool, in: session).count == 10)

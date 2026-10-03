@@ -841,7 +841,8 @@ scene go to the viewport) and takes no slide drag; releasing Control or ending S
 returns to the current project (`WorkspaceSlideComparisonTests`). Slide's dialogs, for
 curve and surface control points, take the step distance as a typed length
 (`WorkspaceCommandDistanceField.slideDistance`), the same value the keys and handles slide
-by. Deform in the palette,
+by; for surface control points it is signed, a negative one sliding the other way, and a
+handle's drag shows its signed amount there, as Plasticity's Distance does. Deform in the palette,
 with sketch curves or body objects selected (not both), starts Deform's dialog
 (`WorkspaceDeformSession`, Deform Curve or Deform Solid and Sheet by its subject): a
 click picks the reference face, the next the target face (a later click replaces the
@@ -893,19 +894,20 @@ Offset Edge over the selected face or the one cap the edges bound, its panel tak
 Distance, Plasticity's Gap fill row (Round | Linear | Natural, V stepping it) and the Lock toggle (S). Shift-I starts
 Imprint on what is selected (`WorkspaceImprintSession`): one solid or sheet object
 with sketch curves or curve objects imprints the curves (Method Normal or Vector
-with its direction, Bidirectional and Hide occlusion, and Completion); two objects
-imprint the second onto the first (Complete target, Imprint tool, Complete tool). With curves
+with its direction, Bidirectional and Hide occlusion, and Completion); two or more
+objects imprint the others onto the first, together (Complete target, Imprint tool, Complete tool). With curves
 alone, one object alone or nothing selected it starts picking (the `imprint` picking command,
 object hits): the first body clicked is the target, then clicked curves go on or off and a
-second body becomes the tool, as Plasticity's target and tool slots take them; OK reports what
+further body goes on or off the tools, as Plasticity's target and tool slots take them; OK reports what
 is still to pick.
 E starts Extrude on the selected faces, regions or curves (palette Extrude too), D typing its distance. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
 through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the
 hovered face does; and Option-T Untrim (Tab toggles Keep
-edges). `WorkspaceImprintDialogView` lays the options out in the context panel;
-Return, right-click or OK applies as one source command, a refused one leaving the dialog
+edges). `WorkspaceImprintDialogView` lays the options out in the context panel; while the
+dialog (and Deform's) names a command its result previews in place of the document, following
+every change (`previewDialog`); Return, right-click or OK applies as one source command, a refused one leaving the dialog
 open, and Escape ends it without a change. The palette lists them as Imprint
 (with the Plasticity names Imprint Curve Body and Imprint Body Body), Isoparam and
 Untrim.

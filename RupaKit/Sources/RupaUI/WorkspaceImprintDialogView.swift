@@ -81,7 +81,7 @@ struct WorkspaceImprintDialogView: View {
 #Preview("Imprint dialogs") {
     VStack(alignment: .leading) {
         WorkspaceImprintDialogView(dialog: .constant(WorkspaceImprintSession(kind: .curves(target: SceneNodeID(), curves: []))))
-        WorkspaceImprintDialogView(dialog: .constant(WorkspaceImprintSession(kind: .bodies(target: SceneNodeID(), tool: SceneNodeID()))))
+        WorkspaceImprintDialogView(dialog: .constant(WorkspaceImprintSession(kind: .bodies(target: SceneNodeID(), tools: [SceneNodeID()]))))
         WorkspaceImprintDialogView(dialog: .constant(WorkspaceImprintSession(kind: .isoparam(face: SelectionTarget(sceneNodeID: SceneNodeID())))))
         WorkspaceImprintDialogView(dialog: .constant(WorkspaceImprintSession(kind: .untrim(face: SelectionTarget(sceneNodeID: SceneNodeID())))))
     }

@@ -27,7 +27,13 @@ struct WorkspaceImprintSessionPickTests {
         session.pick(curve: curve)
         #expect(session.kind == .picking(target: body, curves: []))
         session.pick(body: other)
-        #expect(session.kind == .bodies(target: body, tool: other))
+        #expect(session.kind == .bodies(target: body, tools: [other]))
+        // A third body is another tool; clicked again a tool goes off.
+        let third = SceneNodeID()
+        session.pick(body: third)
+        #expect(session.kind == .bodies(target: body, tools: [other, third]))
+        session.pick(body: other)
+        #expect(session.kind == .bodies(target: body, tools: [third]))
     }
 
     @Test func startedOnCurvesTheBodyClickedIsTheTarget() {

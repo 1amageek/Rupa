@@ -3244,10 +3244,10 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case let .imprintBodies(name, target, tool, targetCompletion, imprintsTool, toolCompletion):
+        case let .imprintBodies(name, target, tools, targetCompletion, imprintsTool, toolCompletion):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.imprintBodies(
-                name: name, target: target, tool: tool, targetCompletion: targetCompletion, imprintsTool: imprintsTool,
+                name: name, target: target, tools: tools, targetCompletion: targetCompletion, imprintsTool: imprintsTool,
                 toolCompletion: toolCompletion, objectRegistry: objectRegistry
             ).first
             document = updatedDocument

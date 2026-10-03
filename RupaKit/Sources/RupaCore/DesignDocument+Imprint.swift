@@ -53,14 +53,15 @@ extension DesignDocument {
         )
     }
 
-    /// Imprint Body Body: the target's faces are split where the tool crosses them, each where it
-    /// is shown (Swift-CAD `imprintBody`), and with `imprintsTool` the tool's faces too, where the
+    /// Imprint Body Body: the target's faces are split where the tools cross them, each where it is
+    /// shown (Swift-CAD `imprintBody`, one imprint of every tool, so Complete Edge carries each
+    /// tool's lines across the others'), and with `imprintsTool` each tool's faces too, where the
     /// imprinted target crosses them. Each object shows its result in its place.
     @discardableResult
     public mutating func imprintBodies(
         name: String = "Imprint",
         target: SceneNodeID,
-        tool: SceneNodeID,
+        tools: [SceneNodeID],
         targetCompletion: ImprintCompletion,
         imprintsTool: Bool,
         toolCompletion: ImprintCompletion,
@@ -68,32 +69,38 @@ extension DesignDocument {
     ) throws -> [FeatureID] {
         let operationName = "Imprint"
         let trimmedName = try normalizedMetadataName(name, owner: operationName)
-        guard target != tool else {
-            throw EditorError(code: .commandInvalid, message: "\(operationName) needs a tool other than its target.")
+        guard tools.isEmpty == false, tools.contains(target) == false, Set(tools).count == tools.count else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) needs one or more tools other than its target.")
         }
         let targetFeatureID = try imprintedObject(target, operationName: operationName)
-        let toolFeatureID = try imprintedObject(tool, operationName: operationName)
+        let toolFeatureIDs = try tools.map { try imprintedObject($0, operationName: operationName) }
         let previous = self
         var didCommit = false
         defer { if !didCommit { self = previous } }
         let imprintedTarget = try appendFeatureShownByObject(
             .imprintBody(ImprintBodyFeature(
-                target: PatternTargetReference(featureID: targetFeatureID), tool: PatternTargetReference(featureID: toolFeatureID),
-                toolPlacement: try relativeRigidPlacement(of: tool, inFrameOf: target, owner: "The tool", relation: "the target"),
+                target: PatternTargetReference(featureID: targetFeatureID),
+                tools: try zip(tools, toolFeatureIDs).map { tool, featureID in
+                    ImprintBodyTool(body: PatternTargetReference(featureID: featureID),
+                                    placement: try relativeRigidPlacement(of: tool, inFrameOf: target, owner: "The tool", relation: "the target"))
+                },
                 completion: targetCompletion
             )),
             name: trimmedName, object: target, objectRegistry: objectRegistry
         )
         var result = [imprintedTarget]
         if imprintsTool {
-            result.append(try appendFeatureShownByObject(
-                .imprintBody(ImprintBodyFeature(
-                    target: PatternTargetReference(featureID: toolFeatureID), tool: PatternTargetReference(featureID: imprintedTarget),
-                    toolPlacement: try relativeRigidPlacement(of: target, inFrameOf: tool, owner: "The target", relation: "the tool"),
-                    completion: toolCompletion
-                )),
-                name: trimmedName, object: tool, objectRegistry: objectRegistry
-            ))
+            for (tool, featureID) in zip(tools, toolFeatureIDs) {
+                result.append(try appendFeatureShownByObject(
+                    .imprintBody(ImprintBodyFeature(
+                        target: PatternTargetReference(featureID: featureID),
+                        tools: [ImprintBodyTool(body: PatternTargetReference(featureID: imprintedTarget),
+                                                placement: try relativeRigidPlacement(of: target, inFrameOf: tool, owner: "The target", relation: "the tool"))],
+                        completion: toolCompletion
+                    )),
+                    name: trimmedName, object: tool, objectRegistry: objectRegistry
+                ))
+            }
         }
         didCommit = true
         return result

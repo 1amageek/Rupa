@@ -1848,6 +1848,8 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(sections.map(\.featureID) == boxes && sections.allSatisfy(\.section.isFace))
+        // Plasticity's face Loft opens on G1 at both ends: upright beside the boxes' walls.
+        #expect(sections.allSatisfy { $0.faceContinuity?.order == .tangent })
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))

@@ -218,6 +218,9 @@ private struct ProjectMainViewContent: View {
     @State private var showsOriginalOverPreview = false
     /// Whether the modeling preview shows the face edit's result, so a change to the edit drops it.
     @State private var previewsFaceEdit = false
+    /// Whether the modeling preview shows the running Imprint, Isoparam or Deform dialog's result,
+    /// which follows the dialog as it changes (Plasticity's live preview).
+    @State private var previewsDialog = false
     /// Align Surface's Analysis of the previewed alignment, measured once per preview.
     @State private var alignAnalysis: WorkspaceAlignAnalysis?
     /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
@@ -2537,6 +2540,12 @@ private struct ProjectMainViewContent: View {
         }
         .onChange(of: faceEditSession, initial: true) { _, new in
             updateRemovalPreview(new)
+        }
+        .onChange(of: imprintSession) { _, new in
+            previewDialog(new?.command(), name: new?.title ?? "Imprint")
+        }
+        .onChange(of: deformSession) { _, new in
+            previewDialog(new?.command, name: "Deform")
         }
         .onChange(of: faceEditSession) { old, new in
             // A face's arrow set Push Face's Distance: the dialog previews it at once.
@@ -8368,7 +8377,8 @@ private struct ProjectMainViewContent: View {
               slideCommandState.isSurfaceControlVerticesActive else {
             return
         }
-        polySplineSurfaceVertexSlideDistanceMeters = max(abs(target.distance), 1.0e-9)
+        // The Distance shows the drag's signed amount, as Plasticity's does.
+        polySplineSurfaceVertexSlideDistanceMeters = target.distance
         slideSelectedSurfaceControlPoints(
             target.targets,
             direction: target.direction,
@@ -10462,8 +10472,8 @@ private struct ProjectMainViewContent: View {
         if bodies.count == 1, let target = bodies.first, curves.isEmpty == false {
             return .curves(target: target, curves: curves)
         }
-        if bodies.count == 2, curves.isEmpty {
-            return .bodies(target: bodies[0], tool: bodies[1])
+        if bodies.count >= 2, curves.isEmpty {
+            return .bodies(target: bodies[0], tools: Array(bodies.dropFirst()))
         }
         if bodies.count == 1, let target = bodies.first {
             return .picking(target: target, curves: [])
@@ -10649,6 +10659,27 @@ private struct ProjectMainViewContent: View {
         edit.pick(face: face, toggles: target.modifierFlags.containsControl)
         faceEditSession = edit
         reportToolStatus(edit.missingInput ?? "\(edit.title): OK, Return or right-click applies.")
+    }
+
+    /// Previews a running dialog's command in place of the document, following the dialog as it
+    /// changes; nil (the dialog still picking, or ended) drops its preview.
+    private func previewDialog(_ command: EditorCommand?, name: String) {
+        guard let command else {
+            if previewsDialog {
+                previewsDialog = false
+                invalidateModelingPreview()
+            }
+            return
+        }
+        do {
+            let action = try DefaultProjectWorkspaceActionPlanner().source(name: name, commands: [command], from: snapshot)
+            startModelingPreview(.source(action))
+            previewsDialog = true
+        } catch {
+            previewsDialog = false
+            invalidateModelingPreview()
+            modelingPreview.errorMessage = recordFailure(error)
+        }
     }
 
     /// Previews the running face operation's result in place of the document until it changes.
@@ -13512,7 +13543,7 @@ private struct ProjectMainViewContent: View {
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double? = nil
     ) {
-        let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
+        let resolvedDistanceMeters = distanceMeters ?? max(abs(polySplineSurfaceVertexSlideDistanceMeters), 1.0e-9)
         submitSource(
             .slidePolySplineSurfaceVertices(
                 targets: targets,
@@ -13741,7 +13772,12 @@ private struct ProjectMainViewContent: View {
         direction: PolySplineSurfaceVertexSlideDirection,
         distanceMeters: Double? = nil
     ) {
-        let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
+        // Signed: a negative Distance slides the other way along the direction.
+        let resolvedDistanceMeters = distanceMeters ?? polySplineSurfaceVertexSlideDistanceMeters
+        guard abs(resolvedDistanceMeters) > 1.0e-9 else {
+            reportToolStatus("Slide: set a Distance other than zero.", severity: .warning)
+            return
+        }
         submitSource(
             .slideSurfaceControlPoints(
                 targets: targets,

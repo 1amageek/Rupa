@@ -1101,6 +1101,7 @@ struct ModelingOperationDraft: Equatable {
                 let choice = index == 0 ? loftStartContinuity : index == sectionTargets.count - 1 ? loftEndContinuity : .g0
                 let edgeTension = index == 0 ? startTension : endTension
                 var continuity: SurfaceEdgeContinuity?
+                var faceContinuity: LoftFaceContinuity?
                 switch target.component {
                 case .edge:
                     let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
@@ -1115,14 +1116,21 @@ struct ModelingOperationDraft: Equatable {
                                                         curvatureAllowance: try curvatureAllowance(for: order))
                     }
                 case .face:
-                    // A selected face of a body is a section of its own.
+                    // A selected face of a body is a section of its own; G1 or G2 there runs on as
+                    // the faces around it do (not toward a vertex, which takes no continuity).
                     reference = .face(try document.faceSectionReference(for: target, operationName: "Loft", currentEvaluation: nil))
+                    if let order = choice.order, vertices.isEmpty {
+                        faceContinuity = LoftFaceContinuity(order: order, tension: edgeTension,
+                                                            angularAllowance: try continuityAllowanceRadians(),
+                                                            curvatureAllowance: try curvatureAllowance(for: order))
+                    }
                 default:
                     reference = try sectionReference(for: target.sceneNodeID, in: document)
                 }
                 let controls = loftSectionControls[target.sceneNodeID] ?? LoftSectionDraft(section: LoftSectionReference(section: reference))
                 var section = try controls.applying(to: LoftSectionReference(section: reference))
                 section.continuity = continuity
+                section.faceContinuity = faceContinuity
                 return section
             }
             // Curves loft into a sheet; regions and faces into a solid unless Sheet output is on.
