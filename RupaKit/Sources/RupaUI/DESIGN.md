@@ -934,7 +934,7 @@ adding or taking off a face to match. OK reports what is still to pick or set. R
 leaving the dialog open, and Escape ends it without a change. The inspector's Face Edit steps
 push through the same `pushFaces`. A face's arrow sets the running dialog's value — Push Face's
 Distance (which opens at 0), Hollow's signed Thickness (into the body walls inward), Thicken's
-Front — opening Push Face on the selected faces when no such dialog runs, and previews it; a face clicked in Push
+Front, an Extrude dialog's Distance on one of its faces (not along a typed Vector) — opening Push Face on the selected faces when no such dialog runs, and previews it; a face clicked in Push
 Face's dialog is Plasticity's dependant offset, the faces put onto it (`matchFaces`). The palette's Remove Fillets From Shell
 opens the same dialog on one selected solid, with its Max Radius (a checkbox, off by default, enabling the value) and the Convexity Tab steps, the fillets those take tinted red while it runs (Core's `removableFilletTargets`, the viewport's `removalPreviewTargets`);
 Hollow on the selected faces or one solid, with its Thickness; and Thicken (alias Thicken Face)

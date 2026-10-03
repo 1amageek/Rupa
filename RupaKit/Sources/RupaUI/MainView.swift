@@ -8605,6 +8605,14 @@ private struct ProjectMainViewContent: View {
         }
         if faceEditSession?.setArrowDistance(target.distance) == true {
             // The running dialog took the arrow's distance.
+        } else if var draft = modelingDraft, draft.kind == .extrude, draft.extrusionDirection != .vector,
+                  draft.targets.contains(target.target) {
+            // Extrude's dot on the face's normal: the arrow's distance is the Distance, as
+            // Plasticity's yellow dot sets it.
+            let value = workspaceLengthFieldPresentation(fromMeters: target.distance, preferredUnit: draft.unit)
+            draft.distance = value.text + " " + value.unit.symbol
+            modelingDraft = draft
+            return
         } else {
             var faces = selectedBodyFaceTargets
             if faces.contains(target.target) == false { faces = [target.target] }
