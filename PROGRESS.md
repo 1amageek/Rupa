@@ -287,7 +287,7 @@
       - [ ] SO14.2.a Loft: face-section continuity, Trim profiles, continuous lofting from one edge, edge guides, open-curve Loop, two vertices bridging, L / palette / in-command keys (loft-4..14; loft-1,2,3,13 in Rupa cd2d110e). `depends:SO14.1` `parallel:none`
       - [ ] SO14.2.b Patch: crossing curves, hole patch Planar/G1/G2 per edge with guides, closing a body's holes into a solid, Insert Sheet trims, solid edge loops, Faces option, Tolerance, palette and labels (patch-1..11). `depends:SO14.1` `parallel:none`
       - [ ] SO14.2.c Fillet Shell and Fillet: Y-blend, partial concave rims with straight edges, Chordal tension, Conic/Chordal/G2 on tangent chains, Conic 0.5 default, Full over several faces, chains over B-spline rounds, negative drag to Chamfer, edge selection starts Fillet, keys, radius copy, two distances (fillet-shell-1..12, fillet-1). `depends:SO14.1` `parallel:none`
-      - [ ] SO14.2.d Remove Fillets from Shell: sheets, non-circular rounds, mixed-radius networks, red preview, Max radius toggle, scope (remove-fillets-from-shell-1..6). `depends:SO14.1` `parallel:none`
+      - [x] SO14.2.d Remove Fillets from Shell: sheets, B-spline rounds, mixed-radius networks, red preview, Max radius toggle (swift-CAD 43fa9fd, 8f489c3, 1dda8ea; Rupa 03a81157, f8719146, 1af629c0; one selected object as the video shows). `depends:SO14.1` `parallel:none`
       - [ ] SO14.2.e Hollow outward and Local, Delete Face on sheets, periodic faces merged after a full revolve, their keys and toolbar entries (hollow-1..4, delete-face-1..2, delete-redundant-topology-1..2). `depends:SO14.1` `parallel:none`
       - [ ] SO14.2.f Offset Edge side by drag, chains over several faces, sharp Linear corners, Lock distances, dialog; Offset Face Loop Linear/Natural corners (offset-edge-1..7, offset-face-loop-1..2). `depends:SO14.1` `parallel:none`
       - [ ] SO14.2.g Extend Sheet negative distance, one face under Modify, edge selection starts it, limit picked in-command, shapes per kind, D key, curved limits; Extend dispatch (extend-sheet-1..7, extend-1..2). `depends:SO14.1` `parallel:none`
@@ -567,3 +567,8 @@
   - [x] RV3 A hover delta's placement and section re-application are owed until a camera update completes them, and the mounted host runs that update on its next engine frame (07e9d48c). `depends:none` `parallel:none`
   - [x] RV4 Coverage of every native kind's suppression, the section containment, and the cache's unpublished-base and exhaustion paths (07e9d48c, ecf5f88c). `depends:RV3` `parallel:none`
   - [x] RV5 Integration: every RupaKit suite passes, app rebuilt and restarted, pushed. `depends:RV1,RV2,RV3,RV4` `parallel:none`
+
+- [x] OCCTG1 Fix the comparison contract: OCCT 8.0.1 open-source modules, current Swift-CAD source snapshot, responsibility boundaries, and evidence classifications; preserve all unrelated work. `depends:none` `parallel:none`
+- [x] OCCTG2 Trace public contracts and implementation limits for geometry, topology, modeling, querying, meshing, exchange and application services; attach source and official references to each gap. `depends:OCCTG1` `parallel:none`
+- [x] OCCTG3 Deliver a detailed gap inventory with current facts, proposed guarantees, failure contracts, ownership decisions and falsifiable completion evidence. `depends:OCCTG2` `parallel:none`
+- [x] OCCTGI Verify the complete comparison for unsupported absence claims, stale metadata, dependency order and unresolved conflicts; record runtime-verification limits. `depends:OCCTG1,OCCTG2,OCCTG3` `parallel:none`
