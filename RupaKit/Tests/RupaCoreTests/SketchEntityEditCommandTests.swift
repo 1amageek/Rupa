@@ -1404,7 +1404,7 @@ import Testing
     #expect(session.generation == (try beforeGeneration.advanced()))
     #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
     #expect(edgeOffset.edges == [try #require(edgeEntry.stableReference)])
-    #expect(edgeOffset.supportFace == (try #require(supportFaceEntry.stableReference)))
+    #expect(edgeOffset.supportFaces == [try #require(supportFaceEntry.stableReference)])
     #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(topology.counts.bodyCount == 1)

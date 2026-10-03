@@ -3,11 +3,12 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
-    /// Offset Edge on edges of one object: Swift-CAD `edgeOffset` offsets them over `supportFace`
-    /// by `distance`, and with symmetry over the face across each edge too, joining neighbouring
-    /// offsets as `gapFill` says. A negative distance offsets them by its size over the face across
-    /// the edges from `supportFace` instead (Plasticity's drag the other way). The object shows the
-    /// result in its place.
+    /// Offset Edge on edges of one object: Swift-CAD `edgeOffset` offsets them by `distance` over
+    /// the faces on `supportFace`'s side of the chain — `supportFace` for the edges bounding it and,
+    /// along the chain, the faces on the same side of the further edges — and with symmetry over
+    /// the faces across too, joining neighbouring offsets as `gapFill` says. A negative distance
+    /// offsets them by its size over the faces across instead (Plasticity's drag the other way).
+    /// The object shows the result in its place.
     @discardableResult
     public mutating func offsetEdges(
         name: String = "Offset Edge",
@@ -31,48 +32,43 @@ extension DesignDocument {
         )
         let object = try offsetObject(for: targets + [supportFace], operationName: operationName)
         let edges = try targets.map { try stableReference(of: $0, kind: .edge, in: topology, operationName: operationName) }
-        var face = try stableReference(of: supportFace, kind: .face, in: topology, operationName: operationName)
-        // Every edge is offset over the support face, so each must bound it.
+        let face = try stableReference(of: supportFace, kind: .face, in: topology, operationName: operationName)
         guard let evaluated = topology.evaluatedDocument,
-              case .face(let faceID) = evaluated.subshapes[face.subshapeID],
-              let supportFaceModel = evaluated.brep.faces[faceID] else {
+              case .face(let faceID) = evaluated.subshapes[face.subshapeID] else {
             throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not resolve the support face.")
         }
-        func edgeIDs(of model: Face) -> Set<EdgeID> {
-            Set(model.loops.flatMap { evaluated.brep.loops[$0]?.edges.map(\.edgeID) ?? [] })
-        }
-        let bounding = edgeIDs(of: supportFaceModel)
         var edgeModelIDs: [EdgeID] = []
         for edge in edges {
-            guard case .edge(let edgeID) = evaluated.subshapes[edge.subshapeID], bounding.contains(edgeID) else {
-                throw EditorError(code: .commandInvalid, message: "\(operationName) offsets edges over a support face they bound; an edge does not bound it.")
+            guard case .edge(let edgeID) = evaluated.subshapes[edge.subshapeID] else {
+                throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not resolve an edge.")
             }
             edgeModelIDs.append(edgeID)
         }
-        var size = distance
-        if meters < 0 {
-            // The other way: over the face across the edges, which they must all share.
-            let across = Set(evaluated.brep.faces.filter { id, model in
-                id != faceID && edgeModelIDs.allSatisfy { edgeIDs(of: model).contains($0) }
-            }.keys)
-            guard across.count == 1, let otherID = across.first,
-                  let other = topology.entries.first(where: { entry in
-                      guard entry.kind == .face, let reference = entry.stableReference else { return false }
-                      return evaluated.subshapes[reference.subshapeID] == .face(otherID)
-                  })?.stableReference else {
-                // FIXME(INCOMPLETE_IMPLEMENTATION): edges whose other side runs over several faces
-                // (Plasticity's chain across the top and a slope) would be offset over each edge's own
-                // face there, which is not built, so they are refused. Production path:
-                // DesignDocument.offsetEdges for a negative distance. Complete only when such a chain
-                // offsets over both faces, verified by a test of a chain across two faces.
-                throw EditorError(code: .commandInvalid, message: "\(operationName) the other way needs the edges to bound one face across them.")
+        // Each edge's side: the support face for the edges bounding it, carried along the chain to
+        // the faces on the same side of every further edge (Plasticity's chain across a top and a
+        // slope offsets over both). A negative distance takes the other side throughout.
+        let sides = try EdgeOffsetSideResolver(model: evaluated.brep).sides(of: edgeModelIDs, startingOn: faceID, operationName: operationName)
+        let supportIDs: [FaceID] = try sides.map { side in
+            guard meters < 0 else { return side.support }
+            guard let across = side.across else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) the other way needs a face across every edge.")
             }
-            face = other
-            size = .multiply(distance, .constant(.scalar(-1)))
+            return across
+        }
+        let size: CADExpression = meters < 0 ? .multiply(distance, .constant(.scalar(-1))) : distance
+        var supportFaces: [StableSubshapeReference] = []
+        for supportID in supportIDs {
+            guard let reference = topology.entries.first(where: { entry in
+                guard entry.kind == .face, let reference = entry.stableReference else { return false }
+                return evaluated.subshapes[reference.subshapeID] == .face(supportID)
+            })?.stableReference else {
+                throw EditorError(code: .referenceUnresolved, message: "\(operationName) could not name a face the edges are offset over.")
+            }
+            if supportFaces.contains(reference) == false { supportFaces.append(reference) }
         }
         return try appendFeatureShownByObject(
             .edgeOffset(EdgeOffsetFeature(
-                target: PatternTargetReference(featureID: object.featureID), edges: edges, supportFace: face,
+                target: PatternTargetReference(featureID: object.featureID), edges: edges, supportFaces: supportFaces,
                 distance: size, isSymmetric: isSymmetric, gapFill: gapFill.kernelGapFill
             )),
             name: trimmedName, object: object.nodeID, objectRegistry: objectRegistry

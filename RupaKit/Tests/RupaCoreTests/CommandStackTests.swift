@@ -674,7 +674,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFace.subshapeID == supportSubshapeID)
+    #expect(edgeOffset.supportFaces.map(\.subshapeID) == [supportSubshapeID])
     // The offset sews the body anew, so the old edge and face are no longer selectable.
     #expect(session.selection.selectedTargets.contains(edgeTarget) == false)
     #expect(session.evaluationStatus == .valid)
@@ -728,7 +728,7 @@ private func commandStackSelectionReference(role: String) -> SelectionReference 
     #expect(result.commandName == "offsetCurve")
     #expect(result.didMutate)
     #expect(edgeOffset.target == PatternTargetReference(featureID: bodyFeatureID))
-    #expect(edgeOffset.supportFace == expectedSupportFace)
+    #expect(edgeOffset.supportFaces == [expectedSupportFace])
     // The offset sews the body anew, so the old edge is no longer selectable.
     #expect(session.selection.selectedTargets.contains(edgeTarget) == false)
     #expect(session.evaluationStatus == .valid)
