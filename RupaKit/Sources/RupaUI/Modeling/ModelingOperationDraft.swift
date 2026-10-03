@@ -258,6 +258,11 @@ struct ModelingOperationDraft: Equatable {
         focusRequest = FocusRequest(field: key == "a" ? .angle : .distance, serial: (focusRequest?.serial ?? 0) + 1)
     }
 
+    /// Extrude's D: its distance takes the typing.
+    mutating func focusExtrudeDistance() {
+        focusRequest = FocusRequest(field: .distance, serial: (focusRequest?.serial ?? 0) + 1)
+    }
+
     /// Loft's D: the tension both ends take.
     mutating func focusLoftTension() {
         focusRequest = FocusRequest(field: .tension, serial: (focusRequest?.serial ?? 0) + 1)

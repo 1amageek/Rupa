@@ -269,6 +269,10 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case focusLoftTension
     /// Tab while Isoparam waits for a click: U and V switch.
     case toggleIsoparamPickDirection
+    /// E: Extrude on the selected faces, regions or curves (palette too).
+    case beginExtrude
+    /// D while Extrude's dialog runs: its distance.
+    case focusExtrudeDistance
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -429,6 +433,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isLoftDialogActive: Bool = false
     /// Whether Isoparam waits for a click on a face (Tab switches its direction).
     var isIsoparamPickActive: Bool = false
+    /// Whether Extrude's dialog runs (D types its distance).
+    var isExtrudeDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -551,6 +557,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {
             return .focusLoftTension
+        }
+        if context.isExtrudeDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {
+            return .focusExtrudeDistance
         }
         if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "t" {
@@ -1092,6 +1102,7 @@ struct WorkspaceKeyboardRouter: Sendable {
             if key == "d", !context.isSlotProfileCommandActive { return .focusBridgeTension }
         }
         switch key {
+        case "e": return .beginExtrude
         case "c": return context.hasBodyObjectSelection ? .beginBodyCut : .beginCutCurve
         case "q": return context.hasBodyObjectSelection ? .beginBoolean : nil
         case "f": return .openCommandPalette

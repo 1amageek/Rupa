@@ -894,7 +894,7 @@ Imprint on what is selected (`WorkspaceImprintSession`): one solid or sheet obje
 with sketch curves or curve objects imprints the curves (Method Normal or Vector
 with its direction, Bidirectional and Hide occlusion, and Completion); two objects
 imprint the second onto the first (Complete target, Imprint tool, Complete tool).
-Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
+E starts Extrude on the selected faces, regions or curves (palette Extrude too), D typing its distance. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
 through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the

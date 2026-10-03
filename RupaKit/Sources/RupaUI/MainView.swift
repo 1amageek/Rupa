@@ -6369,6 +6369,7 @@ private struct ProjectMainViewContent: View {
             isFilletDialogActive: modelingDraft?.kind == .fillet || modelingDraft?.kind == .chamfer,
             isLoftDialogActive: modelingDraft?.kind == .loft,
             isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
+            isExtrudeDialogActive: modelingDraft?.kind == .extrude,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6819,6 +6820,17 @@ private struct ProjectMainViewContent: View {
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
+            return .handled
+        case .beginExtrude:
+            guard snapshot.selection.selectedTargets.isEmpty == false else {
+                reportToolStatus("Extrude: select faces, regions or curves first.", severity: .warning)
+                return .handled
+            }
+            beginModelingOperation(.extrude)
+            reportToolStatus("Extrude: D types the distance; Preview then Apply.")
+            return .handled
+        case .focusExtrudeDistance:
+            modelingDraft?.focusExtrudeDistance()
             return .handled
         case .toggleIsoparamPickDirection:
             guard case .isoparam(let direction) = pointPickRequest else { return .ignored }

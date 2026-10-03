@@ -34,6 +34,7 @@ struct WorkspacePaletteCatalog: Equatable {
         Command(title: "Rectangular Array", invocation: .edit(.rectangularArray)),
         Command(title: "Radial Array", invocation: .edit(.radialArray)),
         Command(title: "Curve Array", invocation: .edit(.curveArray)),
+        Command(title: "Extrude", shortcut: "E", invocation: .keyboard(.beginExtrude)),
         Command(title: "Loft", shortcut: "L", invocation: .keyboard(.loftSelection)),
         Command(title: "Sweep", shortcut: "⇧P", invocation: .keyboard(.beginSweep)),
         Command(title: "Pipe", shortcut: "P", invocation: .keyboard(.beginPipe)),

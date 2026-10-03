@@ -269,6 +269,7 @@ struct ModelingOperationView: View {
                 lengthField("Start position", text: $draft.startDistance)
             }
             lengthField(draft.extrusionDirection == .symmetric ? "Total distance" : "End position", text: $draft.distance)
+                .focused($focusedField, equals: .distance)
             Picker("Direction", selection: $draft.extrusionDirection) {
                 ForEach(ModelingOperationDraft.ExtrusionDirectionChoice.allCases) { direction in
                     Text(direction.rawValue).tag(direction)

@@ -891,6 +891,14 @@ private func keyboardContext(
     #expect(hollowTakesAngle == false)
 }
 
+@Test func workspaceKeyboardRouterStartsExtrudeOnEAndTypesItsDistanceOnD() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "e"), context: context) == .beginExtrude)
+    context.isExtrudeDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .focusExtrudeDistance)
+}
+
 @Test func workspaceKeyboardRouterStartsSquareOnOptionShiftQ() {
     let router = WorkspaceKeyboardRouter()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "Œ", modifiers: [.option, .shift]), context: keyboardContext()) == .beginSquare)
