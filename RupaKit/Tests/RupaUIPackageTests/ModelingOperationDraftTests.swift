@@ -1877,8 +1877,13 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(targets == [top] && refit.order == nil && refit.options.uDegree == 5)
+        // Free follows the face's sides loosely, as the video's Refit Face dialog offers.
         draft.squareContinuity = .free
-        #expect(throws: (any Error).self) { try draft.command(in: document) }
+        guard case .rebuildFaces(_, .square(let free), _, _, _) = try draft.command(in: document) else {
+            Issue.record("Expected a Free Refit.")
+            return
+        }
+        #expect(free.isFree && free.order == nil)
         draft.squareContinuity = .g0
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))

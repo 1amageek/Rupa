@@ -1243,16 +1243,14 @@ struct ModelingOperationDraft: Equatable {
             do { try xnurbs.validate() } catch { throw invalid("The XNURBS is invalid: \(error).") }
             return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)
         case .square:
-            // Faces: Refit, each replaced by a Square sheet on its own edges at the Square's
-            // continuity (Free has no meaning there, the edges staying shared).
+            // Faces: Refit, each replaced by a Square sheet in exactly the dialog's net at the
+            // Square's continuity, or with its sides followed loosely when Free.
             if refitsFaces {
-                guard squareContinuity != .free else {
-                    throw invalid("Refit keeps a face's edges: choose G0, G1 or G2.")
-                }
-                let order = squareContinuity.order
+                let isFree = squareContinuity == .free
+                let order = isFree ? nil : squareContinuity.order
                 let refit = SquareRefit(options: try squareFitOptions(), order: order,
                                         angularAllowance: order == nil ? nil : try continuityAllowanceRadians(),
-                                        curvatureAllowance: try order.flatMap { try curvatureAllowance(for: $0) })
+                                        curvatureAllowance: try order.flatMap { try curvatureAllowance(for: $0) }, isFree: isFree)
                 do { try refit.validate() } catch { throw invalid("The Refit is invalid: \(error).") }
                 return .rebuildFaces(targets: targets, method: .square(refit))
             }
