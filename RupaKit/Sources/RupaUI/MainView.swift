@@ -582,7 +582,7 @@ private struct ProjectMainViewContent: View {
         liveModelingPreviewTask?.cancel()
         liveModelingPreviewTask = nil
         guard let draft, draft.kind.previewsLive,
-              case .success = Result(catching: { try draft.command(in: snapshot.document.document) }) else { return }
+              case .success = Result(catching: { try draft.commands(in: snapshot.document.document) }) else { return }
         liveModelingPreviewTask = Task { @MainActor in
             do {
                 try await Task.sleep(for: .milliseconds(250))
@@ -609,9 +609,9 @@ private struct ProjectMainViewContent: View {
 
     private func previewModelingOperation() {
         guard let draft = modelingDraft else { return }
-        let command: EditorCommand
+        let commands: [EditorCommand]
         do {
-            command = try draft.command(in: snapshot.document.document)
+            commands = try draft.commands(in: snapshot.document.document)
         } catch {
             // The panel disables Preview while the draft names no command, so
             // this is the document moving between the press and this call: a
@@ -623,7 +623,7 @@ private struct ProjectMainViewContent: View {
         }
         do {
             let action = try DefaultProjectWorkspaceActionPlanner().source(
-                name: draft.name, commands: [command], from: snapshot
+                name: draft.name, commands: commands, from: snapshot
             )
             startModelingPreview(.source(action))
         } catch {
@@ -6536,6 +6536,7 @@ private struct ProjectMainViewContent: View {
             isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
             isSolidDialogActive: modelingDraft?.takesSolidDialogKeys == true,
             isPatchDialogActive: modelingDraft?.kind == .patch,
+            isBridgeSurfaceDialogActive: modelingDraft?.kind == .bridgeSurface,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6998,6 +6999,10 @@ private struct ProjectMainViewContent: View {
         case .solidDialogKey(let key):
             guard let status = modelingDraft?.apply(key) else { return .ignored }
             reportToolStatus(status)
+            return .handled
+        case .addBridgeWallPair:
+            guard let added = modelingDraft?.addBridgeWallPair() else { return .ignored }
+            reportToolStatus(added.status, severity: added.added ? .info : .warning)
             return .handled
         case .cyclePatchContinuity:
             modelingDraft?.cyclePatchContinuity()

@@ -971,3 +971,12 @@ private func keyboardContext(
     let router = WorkspaceKeyboardRouter()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "p"), context: keyboardContext()) == .beginPipe)
 }
+
+@Test func workspaceKeyboardRouterSetsABridgeWallPairAsideOnA() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isBridgeSurfaceDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "a"), context: context) == .addBridgeWallPair)
+    context.isBridgeSurfaceDialogActive = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "a"), context: context) != .addBridgeWallPair)
+}

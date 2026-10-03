@@ -278,6 +278,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case solidDialogKey(ModelingOperationDraft.SolidDialogKey)
     /// Tab while Patch's dialog runs: its continuity steps.
     case cyclePatchContinuity
+    /// A while Bridge Surface's dialog runs: the picked wall pair is set aside for another.
+    case addBridgeWallPair
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -449,6 +451,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isSolidDialogActive: Bool = false
     /// Whether Patch's dialog runs (Tab steps its continuity).
     var isPatchDialogActive: Bool = false
+    /// Whether Bridge Surface's dialog runs (A sets the picked wall pair aside for another).
+    var isBridgeSurfaceDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -579,6 +583,10 @@ struct WorkspaceKeyboardRouter: Sendable {
         if context.isPatchDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.isTab {
             return .cyclePatchContinuity
+        }
+        if context.isBridgeSurfaceDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.characters.lowercased() == "a" {
+            return .addBridgeWallPair
         }
         if context.isSolidDialogActive, input.phases.contains(.down), !context.ownsTextEditingKeys {
             let key = input.characters.lowercased()

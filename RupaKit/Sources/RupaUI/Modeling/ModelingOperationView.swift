@@ -31,7 +31,7 @@ struct ModelingOperationView: View {
     /// read while the body is built, not an event, so it is displayed and not
     /// recorded. See `Modeling/DESIGN.md`.
     var planningRefusal: String? {
-        switch Result(catching: { try draft.command(in: document) }) {
+        switch Result(catching: { try draft.commands(in: document) }) {
         case .success: nil
         case .failure(let error): error.localizedDescription
         }
@@ -542,6 +542,10 @@ struct ModelingOperationView: View {
         case .bridge:
             EmptyView()
         case .bridgeSurface:
+            if draft.bridgeWallPairs.isEmpty == false {
+                Text("\(draft.bridgeWallPairs.count) wall pair\(draft.bridgeWallPairs.count == 1 ? "" : "s") set aside; A adds the picked pair")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             lengthField("Width", text: $draft.distance)
             Picker("Shape", selection: $draft.bridgeShape) {
                 ForEach(ModelingOperationDraft.BridgeShapeChoice.allCases) { Text($0.rawValue).tag($0) }

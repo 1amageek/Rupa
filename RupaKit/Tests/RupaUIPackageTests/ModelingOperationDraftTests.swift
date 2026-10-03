@@ -1460,6 +1460,45 @@ struct ModelingOperationDraftTests {
         #expect(abs(joined.totals.sheetAreaSquareMeters - (2 * 0.04 * 0.02 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
+    @Test func aSetAsideWallPairIsBridgedWithThePairPickedNext() throws {
+        var document = DesignDocument.empty()
+        func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {
+            let lines = try corners.indices.map { index in
+                let (start, end) = (corners[index], corners[(index + 1) % corners.count])
+                return try document.createLineSketch(name: "Edge", plane: plane,
+                    start: SketchPoint(x: .length(start.0, .meter), y: .length(start.1, .meter)),
+                    end: SketchPoint(x: .length(end.0, .meter), y: .length(end.1, .meter)))
+            }
+            return try document.createCurvePatch(name: "Sheet", curves: lines.map { CurveSectionReference(featureID: $0) })
+        }
+        // Two floor-and-wall corners side by side along x (the wall's sketch x is world z, its y world x).
+        let floors = try [0.0, 0.1].map { x in try sheet(on: .xy, [(x, 0.01), (x + 0.04, 0.01), (x + 0.04, 0.04), (x, 0.04)]) }
+        let walls = try [0.0, 0.1].map { x in try sheet(on: .zx, [(0.01, x), (0.01, x + 0.04), (0.04, x + 0.04), (0.04, x)]) }
+        func target(_ feature: FeatureID) throws -> SelectionTarget {
+            .init(sceneNodeID: try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(feature) }).id)
+        }
+        var draft = makeDraft(.bridgeSurface, targets: [try target(floors[0])])
+        draft.isSurfaceCreation = true
+        draft.distance = "20 mm"
+        // A with one sheet picked sets nothing aside.
+        #expect(draft.addBridgeWallPair().added == false)
+        draft.targets = [try target(floors[0]), try target(walls[0])]
+        #expect(draft.addBridgeWallPair().added)
+        #expect(draft.targets.isEmpty && draft.bridgeWallPairs.count == 1)
+        draft.targets = [try target(floors[1]), try target(walls[1])]
+        let commands = try draft.commands(in: document)
+        #expect(commands.count == 2)
+        let bridges = commands.compactMap { command -> SheetBridgeFeature? in
+            guard case .createBridgeSurface(_, let bridge, _) = command else { return nil }
+            return bridge
+        }
+        #expect(bridges.map(\.first) == floors && bridges.map(\.second) == walls)
+        // Both corners are bridged with the walls trimmed: each joins into one sheet.
+        let store = CADDocumentStore(document: document)
+        for command in commands { _ = try store.apply(command) }
+        #expect(try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter)).counts.sheets == 2)
+    }
+
     @Test func longAndShortSetHowFarTheBridgeRunsApartFromTrimmingTheWalls() throws {
         var document = DesignDocument.empty()
         func sheet(on plane: SketchPlane, _ corners: [(Double, Double)]) throws -> FeatureID {

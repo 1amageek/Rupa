@@ -395,6 +395,9 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var bridgeExtent = BridgeExtentChoice.both
+    /// Bridge Surface's wall pairs set aside with A (Plasticity's "Add left-right wall pair"), each
+    /// two sheets bridged with the same options as the pair still being picked.
+    var bridgeWallPairs: [[SelectionTarget]] = []
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -652,6 +655,33 @@ struct ModelingOperationDraft: Equatable {
         case .box, .cylinder, .sphere, .extrude, .revolve, .sweep, .pipe, .loft, .constrainedSurface, .surfacePatch, .patch, .bridge, .square, .xnurbs, .bridgeSurface, .surfaceExtend:
             WorkspaceScaleDefaults(ruler: ruler).placedSolidSideMeters
         }
+    }
+
+    /// The commands the dialog applies, as one step: Bridge Surface's set-aside wall pairs and the
+    /// pair being picked each bridged, any other dialog its one command.
+    func commands(in document: DesignDocument) throws -> [EditorCommand] {
+        guard kind == .bridgeSurface, bridgeWallPairs.isEmpty == false else { return [try command(in: document)] }
+        let pairs = bridgeWallPairs + (targets.isEmpty ? [] : [targets])
+        return try pairs.map { pair in
+            var single = self
+            single.bridgeWallPairs = []
+            single.targets = pair
+            single.operandSlotRoles = [:]
+            return try single.command(in: document)
+        }
+    }
+
+    /// A in Bridge Surface: the two sheets picked become a wall pair set aside, and the next two
+    /// are picked for another bridge. The status to show, and whether a pair was added.
+    mutating func addBridgeWallPair() -> (status: String, added: Bool) {
+        guard kind == .bridgeSurface else { return ("Add wall pair applies to Bridge Surface.", false) }
+        guard targets.count == 2 else {
+            return ("Bridge Surface: select two sheets before adding another wall pair.", false)
+        }
+        bridgeWallPairs.append(targets)
+        targets = []
+        operandSlotRoles = [:]
+        return ("Bridge Surface: \(bridgeWallPairs.count) wall pair\(bridgeWallPairs.count == 1 ? "" : "s") set aside; select the next two sheets.", true)
     }
 
     func command(in document: DesignDocument) throws -> EditorCommand {
