@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
@@ -33,16 +34,38 @@ struct WorkspaceFaceEditSessionAlignTests {
         session.boundaryFlow = .normal
         let commands = session.commands()
         #expect(commands.count == 2)
-        guard case let .alignSurface(first, firstContinuity, _, _, _, _, _, _, firstFlow) = commands[0],
-              case let .alignSurface(second, secondContinuity, _, _, _, _, _, _, _) = commands[1] else {
+        guard case let .alignSurface(first, firstContinuity, _, _, _, _, _, _, firstFlow, firstKeeps) = commands[0],
+              case let .alignSurface(second, secondContinuity, _, _, _, _, _, _, _, secondKeeps) = commands[1] else {
             Issue.record("Expected two alignments.")
             return
         }
         #expect(first == [targets[0], targets[1]] && second == [targets[2], targets[3]])
         #expect(firstContinuity == .tangentPlane && secondContinuity == .curvature && firstFlow == .normal)
+        // Edges of two sheets: neither keeps another's.
+        #expect(firstKeeps == false && secondKeeps == false)
         // Tab steps every pair's continuity together.
         session.stepGrow()
         #expect(session.pairContinuity.isEmpty && session.continuity == .curvature)
+    }
+
+    /// Two edges of one sheet in one dialog (Plasticity's align-3): the second keeps the first, and
+    /// takes no refit that would undo it.
+    @Test func aSheetsSecondEdgeKeepsItsFirst() {
+        let sheet = SceneNodeID()
+        let edges = (0..<2).map { _ in SelectionTarget(sceneNodeID: sheet, component: .edge(.init(rawValue: UUID().uuidString))) }
+        let references = (0..<2).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [
+            .init(edge: edges[0], reference: references[0]), .init(edge: edges[1], reference: references[1]),
+        ]))
+        session.refitsLayout = true
+        let commands = session.commands()
+        guard case let .alignSurface(_, _, _, _, _, _, _, firstLayout, _, firstKeeps) = commands[0],
+              case let .alignSurface(_, _, _, _, _, _, _, secondLayout, _, secondKeeps) = commands[1] else {
+            Issue.record("Expected two alignments.")
+            return
+        }
+        #expect(firstKeeps == false && secondKeeps)
+        #expect(firstLayout != nil && secondLayout == nil)
     }
 
     @Test func theDialogOpensOnPlasticitysDefaults() throws {
@@ -54,16 +77,16 @@ struct WorkspaceFaceEditSessionAlignTests {
         // Analysis opens on G0 with Scales 10, 10.0 and 0.1.
         #expect(session.analysisMeasure == .position)
         #expect(session.analysisScales == [.position: 10, .tangent: 10, .curvature: 0.1])
-        guard case let .alignSurface(_, _, neutral, _, _, _, _, _, _) = session.commands()[0] else {
+        guard case let .alignSurface(_, _, neutral, _, _, _, _, _, _, _) = session.commands()[0] else {
             Issue.record("Expected an alignment.")
             return
         }
         #expect(neutral == 1)
         // The shown tension is 4^(t − 0.5) on the kernel's scale: 0 halves it, 1 doubles it.
         session.tension = 0
-        guard case let .alignSurface(_, _, flat, _, _, _, _, _, _) = session.commands()[0] else { return }
+        guard case let .alignSurface(_, _, flat, _, _, _, _, _, _, _) = session.commands()[0] else { return }
         session.tension = 1
-        guard case let .alignSurface(_, _, full, _, _, _, _, _, _) = session.commands()[0] else { return }
+        guard case let .alignSurface(_, _, full, _, _, _, _, _, _, _) = session.commands()[0] else { return }
         #expect(flat == 0.5 && full == 2)
     }
 
@@ -75,8 +98,8 @@ struct WorkspaceFaceEditSessionAlignTests {
         session.continuity = .tangentPlane
         session.pairTension[1] = 1
         let commands = session.commands()
-        guard case let .alignSurface(_, _, first, _, _, _, _, _, _) = commands[0],
-              case let .alignSurface(_, _, second, _, _, _, _, _, _) = commands[1] else {
+        guard case let .alignSurface(_, _, first, _, _, _, _, _, _, _) = commands[0],
+              case let .alignSurface(_, _, second, _, _, _, _, _, _, _) = commands[1] else {
             Issue.record("Expected two alignments.")
             return
         }

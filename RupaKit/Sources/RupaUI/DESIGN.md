@@ -945,7 +945,8 @@ curves alone each extend through Extend Curve's natural shape, together as one s
 selection too: an edge of a sheet and then a reference edge — or several such pairs, in selection
 order — open Align Surface's dialog (Continuity, which Tab steps for every pair, each pair's own
 continuity when there are several, Tension, Blend rows with their Influence, Partial Start and
-End, Boundary flow, and Degree/Spans refitting the sheet first), applied as one alignment per pair;
+End, Boundary flow, and Degree/Spans refitting the sheet first), applied as one alignment per pair
+(a later edge of a sheet aligned before keeping that edge, `keepsOtherEdges`, and taking no refit);
 an aligned sheet's inspector shows its Analysis (G0 distance, G1 angle, G2 curvature difference),
 measured once per document generation; curve ends align through Align Vertex. Face-edit dialogs
 offer Preview: the edit's commands previewed through the modeling preview in place of the

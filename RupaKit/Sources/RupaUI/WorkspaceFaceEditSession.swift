@@ -308,7 +308,12 @@ struct WorkspaceFaceEditSession: Equatable {
     /// None while `missingInput` says something is still to pick or set.
     func commands() -> [EditorCommand] {
         if case let .alignSurface(pairs) = kind {
-            return pairs.indices.map { alignCommand(pairs[$0], index: $0) }
+            // A later edge of a sheet aligned before keeps that edge (Plasticity aligns them
+            // together), and takes no refit that would undo it.
+            return pairs.indices.map { index in
+                alignCommand(pairs[index], index: index,
+                             keepsOtherEdges: pairs[..<index].contains { $0.edge.sceneNodeID == pairs[index].edge.sceneNodeID })
+            }
         }
         if case let .polySplines(object, mesh) = kind {
             return [
@@ -322,11 +327,11 @@ struct WorkspaceFaceEditSession: Equatable {
         return [command]
     }
 
-    private func alignCommand(_ pair: AlignPair, index: Int) -> EditorCommand {
+    private func alignCommand(_ pair: AlignPair, index: Int, keepsOtherEdges: Bool) -> EditorCommand {
         .alignSurface(
             targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: DialogTensionScale.kernelScale(pairTension[index] ?? tension), blendRows: blendRows,
             inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
-            layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
+            layout: refitsLayout && keepsOtherEdges == false ? layout : nil, boundaryFlow: boundaryFlow, keepsOtherEdges: keepsOtherEdges
         )
     }
 
@@ -362,7 +367,7 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .alignSurface(pairs):
             // The first pair's; `commands()` gives every pair's.
-            return alignCommand(pairs[0], index: 0)
+            return alignCommand(pairs[0], index: 0, keepsOtherEdges: false)
         case .polySplines:
             // `commands()` gives the conversion and the mesh's removal together.
             return nil

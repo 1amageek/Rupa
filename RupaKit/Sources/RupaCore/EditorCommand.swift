@@ -280,7 +280,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case alignSurface(
         targets: [SelectionTarget], continuity: SurfaceContinuityLevel = .tangentPlane, tension: Double = 1, blendRows: Int = 0,
         inputShapeInfluence: Double = 1, partialStart: Double = 0, partialEnd: Double = 1, layout: SurfaceControlLayout? = nil,
-        boundaryFlow: SquareFitOptions.BoundaryFlow = .next
+        boundaryFlow: SquareFitOptions.BoundaryFlow = .next, keepsOtherEdges: Bool = false
     )
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)

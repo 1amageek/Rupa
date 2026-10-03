@@ -2122,11 +2122,11 @@ public final class CADDocumentStore {
                         target: target, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
                 case .alignSurface(let targets, let continuity, let tension, let blendRows, let influence, let partialStart, let partialEnd, let layout,
-                                   let boundaryFlow):
+                                   let boundaryFlow, let keepsOtherEdges):
                     try updatedDocument.alignSurface(
                         targets: targets, continuity: continuity, tension: tension, blendRows: blendRows,
                         inputShapeInfluence: influence, partialStart: partialStart, partialEnd: partialEnd, layout: layout,
-                        boundaryFlow: boundaryFlow,
+                        boundaryFlow: boundaryFlow, keepsOtherEdges: keepsOtherEdges,
                         objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation
                     )
