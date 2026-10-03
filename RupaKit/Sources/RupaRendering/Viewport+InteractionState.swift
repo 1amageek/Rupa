@@ -479,14 +479,18 @@ enum ViewportAffordanceAction: Equatable, Sendable {
         switch self {
         case .boundarySurface(let target): .boundarySurface(target)
         case .continuityBadge(let target): .continuityBadge(target)
+        case .profileEdgeFillet(let target, _), .profileEdgeChamfer(let target, _): .edgeMove(target)
         default: nil
         }
     }
 }
 
 /// A click on an affordance that a click completes: an open boundary edge's surface affordance
-/// starts a boundary surface on it; a continuity badge steps its edge's continuity.
+/// starts a boundary surface on it; a continuity badge steps its edge's continuity; a selected
+/// edge's handle, clicked rather than dragged (a drag rounds or chamfers it), moves the edge
+/// (Plasticity's Move planar edges: the edge's dot clicked brings up the Move gizmo).
 enum ViewportAffordanceClick: Equatable, Sendable {
     case boundarySurface(SelectionTarget)
     case continuityBadge(SelectionTarget)
+    case edgeMove(SelectionTarget)
 }

@@ -2474,6 +2474,7 @@ private struct ProjectMainViewContent: View {
             onEdgeChamferDrag: viewportEdgeChamferDragHandler,
             onEdgeFilletDrag: viewportEdgeFilletDragHandler,
             onBoundarySurface: viewportBoundarySurfaceHandler,
+            onEdgeHandleClick: viewportEdgeHandleClickHandler,
             onContinuityBadge: viewportContinuityBadgeHandler,
             onRegionOffsetDrag: viewportRegionOffsetDragHandler,
             onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
@@ -2768,6 +2769,25 @@ private struct ProjectMainViewContent: View {
             } else if var faceEdit = faceEditSession, faceEdit.stepContinuity(of: target) {
                 faceEditSession = faceEdit
             }
+        }
+    }
+
+    /// A selected edge's handle clicked rather than dragged (Plasticity's Move planar edges): the
+    /// selected edges move, through the Move session's gizmo at them, as G does.
+    private var viewportEdgeHandleClickHandler: ((SelectionTarget) -> Void)? {
+        guard viewportPointerOwner.allows(.edgeTreatment), selectedPresentationHasExactCADAffordanceContext else { return nil }
+        return { target in
+            guard viewportPointerOwner.allows(.edgeTreatment), transformSession == nil else { return }
+            let selected = snapshot.selection.selectedTargets
+            let edges = selected.contains(target) ? selected : [target]
+            guard edges.allSatisfy({ edge in
+                if case .edge(let id) = edge.component { return edge.sceneNodeID == target.sceneNodeID && id.generatedTopologySubshapeID != nil }
+                return false
+            }) else {
+                reportToolStatus("Move: the selected edges must be edges of one body.", severity: .warning)
+                return
+            }
+            beginTopologyMoveSession(.edges, targets: edges, mode: .move)
         }
     }
 

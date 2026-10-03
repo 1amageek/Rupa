@@ -85,6 +85,10 @@ import Testing
     #expect(ViewportAffordanceAction.boundarySurface(selectionTarget).directClick == .boundarySurface(selectionTarget))
     #expect(ViewportAffordanceAction.continuityBadge(selectionTarget).directClick == .continuityBadge(selectionTarget))
     #expect(ViewportAffordanceAction.translate(.x).directClick == nil)
+    // A selected edge's fillet or chamfer handle clicked, not dragged, moves the edge.
+    let frame = ViewportEdgeTreatmentDragFrame(anchor: .origin, direction: .unitX, modelTransform: .identity)
+    #expect(ViewportAffordanceAction.profileEdgeFillet(selectionTarget, frame).directClick == .edgeMove(selectionTarget))
+    #expect(ViewportAffordanceAction.profileEdgeChamfer(selectionTarget, frame).directClick == .edgeMove(selectionTarget))
 }
 
 @Test func viewportInteractionDragFinishResolverReturnsNoneWithoutPendingOrActiveDrag() {

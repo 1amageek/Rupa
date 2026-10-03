@@ -359,6 +359,9 @@ scene drawn, with a dot on the middle; the label carries a hit rectangle and the
 affordance whose action is `.continuityBadge(edge)`, whose click calls `onContinuityBadge` with the
 edge. A boundary the drawn scene lacks (a preview that rebuilt its body) draws no badge;
 `continuityBadgesLabelEachEdgeAtItsMiddleAndReportItOnClick` owns placement, handle and omission.
+A selected edge's fillet or chamfer handle clicked rather than dragged reports the edge through
+`onEdgeHandleClick` (`ViewportAffordanceAction.directClick` is `.edgeMove`), as the boundary
+surface's mark and the continuity badges report their clicks.
 Analysis labels (`ViewportAnalysisLabel`, carried by the analysis source) draw a dialog's values
 beside what they measure, green within, orange where nothing holds the value, red beyond.
 The original pure builder algorithms are shared with a nonescaping `rethrows`

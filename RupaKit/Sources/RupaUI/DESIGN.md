@@ -302,7 +302,7 @@ picks to the Boolean's list.
 | `objectPlacement` | Object; also under a picking command while a Move inside it runs | the selected bodies with an exact CAD context | move, rotate and scale gizmo; one placement command on release |
 | `objectHandles` | Object | the selected box body | resize handles (`WorkspaceBodyResizeCommandPlanner`) |
 | `faceOffset` | Face | a selected face | drag pushes the face (`pushFaces`) |
-| `edgeTreatment` | Edge, Object | a selected edge whose frame its two faces give | drag makes a fillet or chamfer (`createBodyEdgeTreatment`) |
+| `edgeTreatment` | Edge, Object | a selected edge whose frame its two faces give | drag makes a fillet or chamfer (`createBodyEdgeTreatment`); a click (no drag) on the handle moves the selected edges through the Move session's gizmo, as G does (Plasticity's Move planar edges) |
 | `boundarySurface` | Edge, Object | a selected open boundary edge | click starts a boundary surface draft on it |
 | `bodyVertexEditing` | Vertex | a selected body vertex, poly-spline vertex, surface control point, trim point or surface frame | drag moves it, or slides it while Slide runs |
 | `regionOffset` | Region | the selected regions while Offset Region runs | drag sets the distance and offsets |

@@ -239,6 +239,8 @@ public struct Viewport: View {
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
     private let onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)?
     private let onBoundarySurface: ((SelectionTarget) -> Void)?
+    /// A selected edge's handle clicked rather than dragged: move the edges.
+    private let onEdgeHandleClick: ((SelectionTarget) -> Void)?
     private let onContinuityBadge: ((SelectionTarget) -> Void)?
     private let onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)?
     private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
@@ -447,6 +449,7 @@ public struct Viewport: View {
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
         onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)? = nil,
         onBoundarySurface: ((SelectionTarget) -> Void)? = nil,
+        onEdgeHandleClick: ((SelectionTarget) -> Void)? = nil,
         onContinuityBadge: ((SelectionTarget) -> Void)? = nil,
         onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)? = nil,
         onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
@@ -595,6 +598,7 @@ public struct Viewport: View {
         self.onEdgeChamferDrag = onEdgeChamferDrag
         self.onEdgeFilletDrag = onEdgeFilletDrag
         self.onBoundarySurface = onBoundarySurface
+        self.onEdgeHandleClick = onEdgeHandleClick
         self.onContinuityBadge = onContinuityBadge
         self.onRegionOffsetDrag = onRegionOffsetDrag
         self.onEdgeOffsetDrag = onEdgeOffsetDrag
@@ -4968,6 +4972,7 @@ public struct Viewport: View {
             switch affordance.action.directClick {
             case .boundarySurface(let selectionTarget): onBoundarySurface?(selectionTarget)
             case .continuityBadge(let selectionTarget): onContinuityBadge?(selectionTarget)
+            case .edgeMove(let selectionTarget): onEdgeHandleClick?(selectionTarget)
             case nil: break
             }
         }
