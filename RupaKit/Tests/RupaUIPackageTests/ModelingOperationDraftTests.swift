@@ -1471,6 +1471,19 @@ struct ModelingOperationDraftTests {
         #expect(measurement.counts.sheets == 2)
         // Tangent to the flat plate, the fill is the flat square of the hole.
         #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.04 * 0.04) < 1e-8, "\(measurement.totals.sheetAreaSquareMeters)")
+
+        // A guide arc over the hole: G0 patching then passes through it, an XNURBS with the guide.
+        let arc = try document.createArcSketch(name: "Guide", plane: .zx, center: SketchPoint(x: .length(0.01, .meter), y: .length(0, .meter)),
+                                               radius: .length(0.005, .meter), startAngle: .angle(-90, .degree), endAngle: .angle(90, .degree))
+        let guideNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference?.featureID == arc })
+        var guided = makeDraft(.patch, targets: [try #require(hole.first), SelectionTarget(sceneNodeID: guideNode.id)])
+        guided.isSurfaceCreation = true
+        guided.patchContinuity = .g0
+        guard case .createXNurbs(_, let withGuide, _) = try guided.command(in: document) else {
+            Issue.record("A patch with a guide is an XNURBS through it.")
+            return
+        }
+        #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil })
     }
 
     @Test func aPatchOnASolidsEdgeLoopMakesASheetOfTheFacesItEncloses() throws {

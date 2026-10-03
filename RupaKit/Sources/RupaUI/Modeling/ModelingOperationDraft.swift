@@ -247,6 +247,14 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var patchContinuity = PatchContinuityChoice.g0
+    /// A hole patch's operands: the hole's edges, and whole curves after them as guides it passes
+    /// through (Plasticity's Select guides).
+    var patchHoleEdges: [SelectionTarget] {
+        targets.filter { if case .edge = $0.component { return true } else { return false } }
+    }
+    var patchGuideTargets: [SelectionTarget] {
+        targets.filter { $0.component == .object }
+    }
 
     /// Every side's continuity unless the side has its own in `squareSideContinuity`.
     var squareContinuity = SquareContinuityChoice.g0
@@ -1224,6 +1232,48 @@ struct ModelingOperationDraft: Equatable {
             && document.productMetadata.sceneNodes[targets[0].sceneNodeID]?.object?.geometryRole == .surface:
             // A sheet object: every hole filled and joined with it, a solid when they close.
             return .patchHoles(name: name, target: targets[0].sceneNodeID)
+        case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
+            && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
+            && patchHoleEdges.count + patchGuideTargets.count == targets.count:
+            // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,
+            // each continuous with the sheet beside it, passing through the guides.
+            let order = patchContinuity.order
+            let loop: [SelectionTarget]
+            do {
+                loop = patchHoleEdges.count > 1 ? patchHoleEdges : try OpenBoundaryLoopService().loop(through: patchHoleEdges[0], in: document)
+            } catch {
+                throw invalid("Patch: \(error.localizedDescription)")
+            }
+            let tension = DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
+            var edgeCurves: [EdgeCurveSource] = []
+            let boundaries = try loop.map { edge -> SquareSide in
+                let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
+                    for: edge, operationName: "Patch", currentEvaluation: nil
+                ))
+                edgeCurves.append(curve)
+                guard let order else { return SquareSide(curve: CurveSectionReference(featureID: curve.id)) }
+                guard let reference = curve.feature.edges.first else { throw invalid("A hole's edge has no curve.") }
+                let continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
+                                                       edge: reference, order: order, tension: tension,
+                                                       angularAllowance: try continuityAllowanceRadians(),
+                                                       curvatureAllowance: try curvatureAllowance(for: order))
+                return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
+            }
+            let guides = try patchGuideTargets.map { target -> CurveSectionReference in
+                guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
+                    throw invalid("A patch guide is a curve.")
+                }
+                return curve
+            }
+            let xnurbs = XNurbsFeature(
+                boundaries: boundaries, guides: guides, quadSided: false,
+                flatness: try number(xnurbsFlatness, label: "Flatness"), boundaryFlow: xnurbsBoundaryFlow, quality: xnurbsQuality,
+                satisfiesTolerances: xnurbsSatisfiesTolerances,
+                positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
+                angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180
+            )
+            do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
+            return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)
         case .patch where targets.contains(where: { $0.component == .object }):
             // Closed curves (the operands' kind, not their count, selects this): whole curve
             // sources, with any edges of bodies among them (their curves added with the patch),
@@ -1256,41 +1306,6 @@ struct ModelingOperationDraft: Equatable {
             }
             do { try CurvePatchFeature(curves: curves).validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createCurvePatch(name: name, curves: curves, edgeCurves: edgeCurves)
-        case .patch where patchContinuity.order != nil && targets.isEmpty == false
-            && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
-            && Set(targets.map(\.sceneNodeID)).count == 1:
-            // G1 or G2 on a hole: XNURBS over every edge of the hole's loop, each continuous with
-            // the sheet beside it.
-            guard let order = patchContinuity.order else { throw invalid("Patch's continuity is missing.") }
-            let loop: [SelectionTarget]
-            do {
-                loop = targets.count > 1 ? targets : try OpenBoundaryLoopService().loop(through: targets[0], in: document)
-            } catch {
-                throw invalid("Patch: \(error.localizedDescription)")
-            }
-            let tension = DialogTensionScale.kernelScale(try number(xnurbsTension, label: "Tension"))
-            var edgeCurves: [EdgeCurveSource] = []
-            let boundaries = try loop.map { edge -> SquareSide in
-                let curve = EdgeCurveSource(id: FeatureID(), feature: try document.edgeCurveFeature(
-                    for: edge, operationName: "Patch", currentEvaluation: nil
-                ))
-                edgeCurves.append(curve)
-                guard let reference = curve.feature.edges.first else { throw invalid("A hole's edge has no curve.") }
-                let continuity = SurfaceEdgeContinuity(source: curve.feature.source, bodyRole: curve.feature.bodyRole,
-                                                       edge: reference, order: order, tension: tension,
-                                                       angularAllowance: try continuityAllowanceRadians(),
-                                                       curvatureAllowance: try curvatureAllowance(for: order))
-                return SquareSide(curve: CurveSectionReference(featureID: curve.id), continuity: continuity)
-            }
-            let xnurbs = XNurbsFeature(
-                boundaries: boundaries, guides: [], quadSided: false,
-                flatness: try number(xnurbsFlatness, label: "Flatness"), boundaryFlow: xnurbsBoundaryFlow, quality: xnurbsQuality,
-                satisfiesTolerances: xnurbsSatisfiesTolerances,
-                positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
-                angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180
-            )
-            do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
-            return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)
         case .patch where targets.count > 1 && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
             && Set(targets.map(\.sceneNodeID)).count == 1
             && document.productMetadata.sceneNodes[targets[0].sceneNodeID]?.object?.geometryRole == .solid:
