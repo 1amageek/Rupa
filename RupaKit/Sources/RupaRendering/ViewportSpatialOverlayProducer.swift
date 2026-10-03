@@ -464,6 +464,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
     var continuityBadges: [ViewportContinuityBadge] = []
     /// The running dialog's value handles, drawn only while their drags are reported.
     var dialogValues: [ViewportSpatialOverlayProducer.DialogValueSource] = []
+    /// The running dialog's angle handles, drawn only while their drags are reported.
+    var dialogAngles: [ViewportSpatialOverlayProducer.DialogAngleSource] = []
     /// The scene the selection's identities belong to when it is not the scene drawn: a drag
     /// that previews an edit draws the preview, where the selected subshape may be gone.
     var selectionScene: ViewportScene?
@@ -702,6 +704,13 @@ enum ViewportSpatialOverlayProducer {
         )
         try appendDialogValues(
             snapshot.dialogValues,
+            meshes: &meshes,
+            markers: &markers,
+            interactionRecords: &interactionRecords,
+            activeFamilies: &activeFamilies
+        )
+        try appendDialogAngles(
+            snapshot.dialogAngles,
             meshes: &meshes,
             markers: &markers,
             interactionRecords: &interactionRecords,

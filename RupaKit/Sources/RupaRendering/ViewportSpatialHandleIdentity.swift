@@ -49,6 +49,8 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
     case sectionAnalysisDistance
     /// A running dialog's value handle, by the value's name.
     case dialogValue(String)
+    /// A running dialog's angle handle, by the angle's name.
+    case dialogAngle(String)
     case affordance(ViewportAffordanceTarget)
     case objectTransform(nodes: [SceneNodeID], action: ViewportAffordanceAction)
 
@@ -112,7 +114,7 @@ enum ViewportSpatialHandleIdentity: Equatable, Sendable {
                 try addresses(values)
                 try string(displayID.rawValue)
             case .regionOffset(let value): try string(value.componentID.rawValue)
-            case .dialogValue(let value): try string(value)
+            case .dialogValue(let value), .dialogAngle(let value): try string(value)
             case .objectTransform(let nodes, _):
                 guard nodes.count <= limits.maxPositionCount else { throw RealityViewportSpatialBatch.exhausted() }
                 try charge(nodes.capacity, stride: MemoryLayout<SceneNodeID>.stride)

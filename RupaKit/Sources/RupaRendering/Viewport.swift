@@ -195,6 +195,8 @@ public struct Viewport: View {
     private let sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle?
     /// The running dialog's values offered as handles, drawn only while `onDialogValueDrag` takes them.
     private let dialogValueHandles: [ViewportDialogValueHandle]
+    /// The running dialog's angles offered as handles, drawn only while `onDialogAngleDrag` takes them.
+    private let dialogAngleHandles: [ViewportDialogAngleHandle]
     private let snapResolutionOptions: SnapResolutionOptions?
     private let canvasDragPreviewKind: ViewportCanvasDragPreviewKind?
     private let canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind?
@@ -257,6 +259,7 @@ public struct Viewport: View {
     private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
     private let onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)?
     private let onDialogValueDrag: ((ViewportDialogValueDragTarget) -> Void)?
+    private let onDialogAngleDrag: ((ViewportDialogAngleDragTarget) -> Void)?
     private let onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)?
     private let onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)?
     private let onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)?
@@ -409,6 +412,7 @@ public struct Viewport: View {
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle? = nil,
         dialogValueHandles: [ViewportDialogValueHandle] = [],
+        dialogAngleHandles: [ViewportDialogAngleHandle] = [],
         snapResolutionOptions: SnapResolutionOptions? = nil,
         canvasDragPreviewKind: ViewportCanvasDragPreviewKind? = .rectangle(widthMeters: nil, heightMeters: nil),
         canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? = nil,
@@ -468,6 +472,7 @@ public struct Viewport: View {
         onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
         onSectionAnalysisDistanceDrag: ((ViewportSectionAnalysisDistanceDragTarget) -> Void)? = nil,
         onDialogValueDrag: ((ViewportDialogValueDragTarget) -> Void)? = nil,
+        onDialogAngleDrag: ((ViewportDialogAngleDragTarget) -> Void)? = nil,
         onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? = nil,
         onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? = nil,
         onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? = nil,
@@ -554,6 +559,7 @@ public struct Viewport: View {
         self.sectionClippingPlan = sectionClippingPlan
         self.sectionAnalysisHandle = sectionAnalysisHandle
         self.dialogValueHandles = dialogValueHandles
+        self.dialogAngleHandles = dialogAngleHandles
         self.snapResolutionOptions = snapResolutionOptions
         self.canvasDragPreviewKind = canvasDragPreviewKind
         self.canvasPlacementPreviewKind = canvasPlacementPreviewKind
@@ -619,6 +625,7 @@ public struct Viewport: View {
         self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
         self.onSectionAnalysisDistanceDrag = onSectionAnalysisDistanceDrag
         self.onDialogValueDrag = onDialogValueDrag
+        self.onDialogAngleDrag = onDialogAngleDrag
         self.onIndependentCopyExtrudeDistanceDrag = onIndependentCopyExtrudeDistanceDrag
         self.onIndependentCopyBodyDimensionDrag = onIndependentCopyBodyDimensionDrag
         self.onPatternArrayRadialAngleDrag = onPatternArrayRadialAngleDrag
@@ -1605,6 +1612,7 @@ public struct Viewport: View {
         key.sectionAnalysis = sectionAnalysis
         key.sectionAnalysisHandle = sectionAnalysisHandle
         key.dialogValueHandles = onDialogValueDrag != nil ? dialogValueHandles : []
+        key.dialogAngleHandles = onDialogAngleDrag != nil ? dialogAngleHandles : []
         key.snap = displayedSnapOverlayResult
         key.snapOptions = snapResolutionOptions
         key.placement = placementHighlightState
@@ -1640,6 +1648,7 @@ public struct Viewport: View {
         if onPatternArrayLinearAxisDrag != nil { key.availableRoutes |= 1 << 14 }
         if onSectionAnalysisDistanceDrag != nil { key.availableRoutes |= 1 << 22 }
         if onDialogValueDrag != nil { key.availableRoutes |= 1 << 32 }
+        if onDialogAngleDrag != nil { key.availableRoutes |= 1 << 33 }
         if onIndependentCopyExtrudeDistanceDrag != nil { key.availableRoutes |= 1 << 15 }
         if onIndependentCopyBodyDimensionDrag != nil { key.availableRoutes |= 1 << 16 }
         if onPatternArrayRadialAngleDrag != nil { key.availableRoutes |= 1 << 17 }
@@ -3787,6 +3796,7 @@ public struct Viewport: View {
         case .patternArrayCopyCount: onPatternArrayCopyCountDrag != nil
         case .patternArrayCurveExtent: onPatternArrayCurveExtentDrag != nil
         case .patternArrayOutputMode: onPatternArrayOutputModeChange != nil
+        case .dialogAngle: onDialogAngleDrag != nil
         default: false
         }
     }
@@ -4032,6 +4042,7 @@ public struct Viewport: View {
         case .patternArrayCopyCount(let target): onPatternArrayCopyCountDrag?(target)
         case .patternArrayCurveExtent(let target): onPatternArrayCurveExtentDrag?(target)
         case .patternArrayOutputMode(let target): onPatternArrayOutputModeChange?(target)
+        case .dialogAngle(let target): onDialogAngleDrag?(target)
         }
     }
 
@@ -6177,6 +6188,24 @@ extension Viewport {
                                      activeValueMeters: active?.id == handle.id ? active?.value : nil))
             }
             semantic.dialogValues = sources
+        }
+        if onDialogAngleDrag != nil {
+            // A turn in progress shows its handle at the angle it would set.
+            var turning: (id: String, angle: Double)?
+            if case .pattern(let press) = nativeInputGesture, case .dialogAngle(let id) = press.input.record.identity,
+               case .angleRadians(let angle)? = press.value {
+                turning = (id, angle)
+            }
+            var angles: [ViewportSpatialOverlayProducer.DialogAngleSource] = []
+            for handle in dialogAngleHandles {
+                // A handle whose curve the scene does not draw has nowhere to be; the dialog still
+                // shows its angle.
+                guard let source = try ViewportSpatialOverlayProducer.resolvedDialogAngle(
+                    handle, active: turning?.id == handle.id ? turning?.angle : nil, in: scene
+                ) else { continue }
+                angles.append(source)
+            }
+            semantic.dialogAngles = angles
         }
         // A curve or sketch whose node names a material draws in its color and opacity.
         for item in scene.items {

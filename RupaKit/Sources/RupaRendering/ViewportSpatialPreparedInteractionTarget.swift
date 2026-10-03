@@ -66,6 +66,8 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
     case sectionAnalysisDistance(axis: Axis)
     /// A running dialog's value moved along its handle's guide; the axis value is the value.
     case dialogValue(id: String, axis: Axis)
+    /// A running dialog's angle turned about its curve.
+    case dialogAngle(ViewportDialogAngleTarget)
     case affordance(target: ViewportAffordanceTarget, members: [AffordanceBodyMember],
                     groupEdit: ViewportObjectEditState?, placement: ViewportBodyPlacementBaseline?)
     case objectTransform(action: ViewportAffordanceAction, members: [ViewportObjectTransformMember], bounds: ViewportObjectEditState)
@@ -118,6 +120,7 @@ enum ViewportSpatialPreparedInteractionTarget: Sendable {
             case .constructionPlane(let identity, _, _, _, _): .constructionPlane(identity)
             case .sectionAnalysisDistance: .sectionAnalysisDistance
             case .dialogValue(let id, _): .dialogValue(id)
+            case .dialogAngle(let value): .dialogAngle(value.id)
             case .affordance(let target, _, _, _): .affordance(target)
             case .objectTransform(let action, let members, _):
                 .objectTransform(nodes: members.map(\.sceneNodeID), action: action)

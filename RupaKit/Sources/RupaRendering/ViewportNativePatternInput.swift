@@ -34,6 +34,7 @@ struct ViewportNativePatternInput: Sendable {
         case patternArrayCopyCount(ViewportPatternArrayCopyCountDragTarget)
         case patternArrayCurveExtent(ViewportPatternArrayCurveExtentDragTarget)
         case patternArrayOutputMode(ViewportPatternArrayOutputModeTarget)
+        case dialogAngle(ViewportDialogAngleDragTarget)
     }
 
     let record: ViewportSpatialInteractionRecord
@@ -47,7 +48,7 @@ struct ViewportNativePatternInput: Sendable {
     static func claims(_ target: ViewportSpatialPreparedInteractionTarget) -> Bool {
         switch target {
         case .patternArrayRadialAngle, .patternArrayCopyCount,
-             .patternArrayCurveExtent, .patternArrayOutputMode:
+             .patternArrayCurveExtent, .patternArrayOutputMode, .dialogAngle:
             true
         default:
             false
@@ -74,7 +75,7 @@ struct ViewportNativePatternInput: Sendable {
     /// retained rather than substituting one.
     func value(start: CGPoint, current: CGPoint) throws -> Value? {
         switch target {
-        case .patternArrayRadialAngle(_, let projection):
+        case .patternArrayRadialAngle(_, let projection), .dialogAngle(_, let projection):
             return try projection.angle(start: start, current: current).map { .angleRadians($0) }
 
         case .patternArrayCopyCountLinear(_, let projection):
@@ -121,6 +122,17 @@ struct ViewportNativePatternInput: Sendable {
             return .patternArrayRadialAngle(.init(
                 sourceID: source.sourceID, angleRadians: angleRadians
             ))
+
+        case .dialogAngle(let source, let projection):
+            guard let value else { return nil }
+            guard case .angleRadians(let angleRadians) = value else {
+                throw Self.mismatch("dialog-angle")
+            }
+            guard angleRadians.isFinite else {
+                throw RealityViewportSpatialBatch.invalid("The native dialog angle is not finite.")
+            }
+            guard abs(angleRadians - projection.baseAngleRadians) > 1.0e-12 else { return nil }
+            return .dialogAngle(.init(id: source.id, angleRadians: angleRadians))
 
         case .patternArrayCopyCountLinear(let source, let projection):
             return try Self.copyCountCommit(source: source, base: projection.baseCopyCount, value: value)

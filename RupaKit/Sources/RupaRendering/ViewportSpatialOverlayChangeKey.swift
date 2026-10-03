@@ -37,6 +37,7 @@ struct ViewportSpatialOverlayChangeKey: Equatable {
     var sectionAnalysis: SectionAnalysisResult?
     var sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle?
     var dialogValueHandles: [ViewportDialogValueHandle] = []
+    var dialogAngleHandles: [ViewportDialogAngleHandle] = []
     var snap: SnapResolutionResult?
     var snapOptions: SnapResolutionOptions?
     var placement: ViewportPlacementHighlight?

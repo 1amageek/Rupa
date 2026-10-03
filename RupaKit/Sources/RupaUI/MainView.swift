@@ -2433,6 +2433,7 @@ private struct ProjectMainViewContent: View {
                 }
             },
             dialogValueHandles: viewportDialogValueHandles,
+            dialogAngleHandles: viewportDialogAngleHandles,
             snapResolutionOptions: activeSnapResolutionOptions(),
             canvasDragPreviewKind: canvasDragPreviewKind,
             canvasPlacementPreviewKind: canvasPlacementPreviewKind,
@@ -2501,6 +2502,7 @@ private struct ProjectMainViewContent: View {
                 sectionAnalysisSession?.distanceMeters = target.distanceMeters
             },
             onDialogValueDrag: viewportDialogValueDragHandler,
+            onDialogAngleDrag: viewportDialogAngleDragHandler,
             onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
             onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
             onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
@@ -2828,6 +2830,60 @@ private struct ProjectMainViewContent: View {
             ))
         }
         return handles
+    }
+
+    /// The open dialog's angles offered as viewport handles: Pipe's Angle as the white circle about
+    /// the path's start on the section's rim (not for a custom profile), Sweep's Twist as a circle
+    /// about the path's end.
+    private var viewportDialogAngleHandles: [ViewportDialogAngleHandle] {
+        guard let draft = modelingDraft else { return [] }
+        let nodes = snapshot.document.document.productMetadata.sceneNodes
+        func isPath(_ target: SelectionTarget) -> Bool {
+            if case .edge = target.component { return true }
+            return target.component == .object && nodes[target.sceneNodeID]?.object?.geometryRole == .curve
+        }
+        func degrees(_ text: String) -> Double? {
+            Double(text.trimmingCharacters(in: .whitespaces)).flatMap { $0.isFinite ? $0 : nil }
+        }
+        switch draft.kind {
+        case .pipe:
+            guard draft.pipeCustomProfile == false, let path = draft.targets.first(where: isPath),
+                  let diameter = workspaceLengthMeters(fromFieldText: draft.pipeDiameter, defaultUnit: draft.unit),
+                  diameter.isFinite, diameter > 0, let angle = degrees(draft.pipeAngle) else { return [] }
+            return [ViewportDialogAngleHandle(id: Self.pipeAngleHandleID, anchor: .curveStart(path, offsetMeters: 0),
+                                              radiusMeters: diameter / 2, angleRadians: angle * .pi / 180)]
+        case .sweep:
+            // The path follows the section: an edge picked for it, or the curve after the section.
+            guard let path = draft.targets.last(where: { if case .edge = $0.component { return true }; return false })
+                    ?? draft.targets.dropFirst().first(where: isPath),
+                  let twist = degrees(draft.twistAngle) else { return [] }
+            return [ViewportDialogAngleHandle(id: Self.sweepTwistHandleID, anchor: .curveEnd(path, offsetMeters: 0),
+                                              radiusMeters: nil, angleRadians: twist * .pi / 180)]
+        default:
+            return []
+        }
+    }
+
+    static let pipeAngleHandleID = "pipe.angle"
+    static let sweepTwistHandleID = "sweep.twist"
+
+    private var viewportDialogAngleDragHandler: ((ViewportDialogAngleDragTarget) -> Void)? {
+        guard viewportDialogAngleHandles.isEmpty == false else { return nil }
+        return { target in
+            setDialogAngle(target)
+        }
+    }
+
+    /// A dialog angle its viewport handle was turned to, written into the dialog's field in degrees.
+    private func setDialogAngle(_ target: ViewportDialogAngleDragTarget) {
+        guard var draft = modelingDraft else { return }
+        let degrees = (target.angleRadians * 180 / .pi * 100).rounded() / 100
+        switch target.id {
+        case Self.pipeAngleHandleID: draft.pipeAngle = String(degrees)
+        case Self.sweepTwistHandleID: draft.twistAngle = String(degrees)
+        default: return
+        }
+        modelingDraft = draft
     }
 
     static let pipeDiameterHandleID = "pipe.diameter"

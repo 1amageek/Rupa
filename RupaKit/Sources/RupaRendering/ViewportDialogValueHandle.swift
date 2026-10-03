@@ -16,6 +16,8 @@ public struct ViewportDialogValueHandle: Equatable, Sendable {
         /// The start of a curve object or of a body's edge as the scene draws it, the guide square
         /// to the curve there, the origin `offsetMeters` out along the guide.
         case curveStart(SelectionTarget, offsetMeters: Double)
+        /// The end of such a curve, the guide square to it there.
+        case curveEnd(SelectionTarget, offsetMeters: Double)
     }
 
     /// The dialog's name for the value, which a drag reports back.

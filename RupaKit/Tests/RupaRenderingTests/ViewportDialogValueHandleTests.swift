@@ -1,3 +1,4 @@
+import CoreGraphics
 import RupaCore
 import RupaEvaluation
 import RupaKit
@@ -86,5 +87,46 @@ import Testing
         let missing = ViewportDialogValueHandle(id: "x", anchor: .curveStart(SelectionTarget(sceneNodeID: SceneNodeID()), offsetMeters: 0),
                                                 valueMeters: 0)
         #expect(try ViewportSpatialOverlayProducer.resolvedDialogValueAnchor(missing, in: scene) == nil)
+    }
+
+    @MainActor
+    @Test func anAngleHandleTurnsAboutItsAxisAndCommitsTheAngle() throws {
+        // A circle about z through the origin, measured from x, at 30°; the screen is the xy plane.
+        let target = ViewportDialogAngleTarget(id: "pipe.angle", center: .origin, axis: .unitZ,
+                                               referencePoint: Point3D(x: 0.01, y: 0, z: 0), angleRadians: .pi / 6)
+        let input = try #require(try ViewportNativePatternInput(record: .init(target: .dialogAngle(target))) { point in
+            CGPoint(x: point.x * 1000, y: point.y * 1000)
+        })
+        // From the handle at 30° to the pointer at 120°: a quarter turn on.
+        let start = CGPoint(x: 10 * cos(Double.pi / 6), y: 10 * sin(Double.pi / 6))
+        let current = CGPoint(x: 10 * cos(2 * Double.pi / 3), y: 10 * sin(2 * Double.pi / 3))
+        let value = try #require(try input.value(start: start, current: current))
+        guard case .angleRadians(let angle) = value else { Issue.record("Expected an angle."); return }
+        #expect(abs(abs(angle - Double.pi / 6) - Double.pi / 2) < 1e-9)
+        #expect(try input.commit(value: value) == .dialogAngle(.init(id: "pipe.angle", angleRadians: angle)))
+        // An angle may come back to zero.
+        let back = CGPoint(x: 10, y: 0)
+        guard case .angleRadians(let zero)? = try input.value(start: start, current: back) else { Issue.record("Expected an angle."); return }
+        #expect(abs(zero) < 1e-9)
+    }
+
+    @Test func theProducerDrawsAnAngleHandlesCircleAndDotAtTheAngleADragShows() throws {
+        let handle = ViewportDialogAngleHandle(id: "sweep.twist", anchor: .curveEnd(SelectionTarget(sceneNodeID: SceneNodeID()), offsetMeters: 0),
+                                               radiusMeters: 0.01, angleRadians: 0)
+        let source = ViewportSpatialOverlayProducer.DialogAngleSource(handle: handle, center: .origin, axis: .unitZ, reference: .unitX,
+                                                                      radius: 0.01, activeAngleRadians: Double.pi / 2)
+        var meshes: [ViewportSpatialOverlayInput.Mesh] = []
+        var markers: [ViewportSpatialOverlayInput.Marker] = []
+        var records: [ViewportSpatialInteractionRecord] = []
+        var families: Set<ViewportSpatialOverlayFamily> = []
+        try ViewportSpatialOverlayProducer.appendDialogAngles(
+            [source], meshes: &meshes, markers: &markers, interactionRecords: &records, activeFamilies: &families
+        )
+        #expect(records.map(\.identity) == [.dialogAngle("sweep.twist")])
+        let dot = try #require(markers.first { $0.value.handleIndex == 0 })
+        // A quarter turn about z from x: on y.
+        #expect(abs(dot.value.anchor.x) < 1e-12 && abs(dot.value.anchor.y - 0.01) < 1e-12)
+        let circle = try #require(meshes.first)
+        #expect(circle.value.positions.allSatisfy { abs(hypot($0.x, $0.y) - 0.01) < 1e-12 && abs($0.z) < 1e-12 })
     }
 }

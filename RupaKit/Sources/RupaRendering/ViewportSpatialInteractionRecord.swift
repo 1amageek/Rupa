@@ -142,6 +142,7 @@ struct ViewportSpatialInteractionRecord: Sendable {
             case .constructionPlane(_, _, _, _, let corners): try array(corners)
             case .sectionAnalysisDistance: break
             case .dialogValue(let id, _): try string(id)
+            case .dialogAngle(let value): try string(value.id)
             case .objectTransform(_, let members, _):
                 try array(members)
                 for member in members {

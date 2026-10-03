@@ -77,6 +77,7 @@ enum ViewportSpatialMaterializedInteractionTarget: Sendable {
         source: ViewportPatternAffordanceSource.RadialAngleHandle,
         projection: RadialProjection
     )
+    case dialogAngle(source: ViewportDialogAngleTarget, projection: RadialProjection)
     case patternArrayCopyCountLinear(
         source: ViewportPatternAffordanceSource.CopyCountHandle,
         projection: LinearCopyCountProjection
@@ -140,6 +141,20 @@ extension ViewportSpatialPreparedInteractionTarget {
              .bridgeCurveEndpoint, .constructionPlane, .patternArrayCurvePathPoint,
              .sectionAnalysisDistance, .dialogValue:
             return .projectionFree(self)
+
+        case .dialogAngle(let source):
+            // A dialog's angle may stand at zero, so it keeps no pattern's least angle.
+            return .dialogAngle(
+                source: source,
+                projection: try Self.radialProjection(
+                    center: source.center,
+                    axis: source.axis,
+                    referencePoint: source.referencePoint,
+                    angleRadians: source.angleRadians,
+                    minimumAngle: 1.0e-12,
+                    project: project
+                )
+            )
 
         case .patternArrayRadialAngle(let source):
             return .patternArrayRadialAngle(
@@ -332,10 +347,10 @@ private extension ViewportSpatialPreparedInteractionTarget {
         axis: Vector3D,
         referencePoint: Point3D,
         angleRadians: Double,
+        minimumAngle: Double = PatternArrayAnglePolicy.standard.minimumAngleRadians,
         project: (Point3D) throws -> CGPoint
     ) throws -> ViewportSpatialMaterializedInteractionTarget.RadialProjection {
         let frame = try radialFrame(center: center, axis: axis, referencePoint: referencePoint)
-        let minimumAngle = PatternArrayAnglePolicy.standard.minimumAngleRadians
         let baseAngle = try normalizedAngle(angleRadians, minimum: minimumAngle)
         let centerPoint = try finiteProjection(center, project: project)
         let radialPoint = try finiteProjection(add(center, frame.radial), project: project)

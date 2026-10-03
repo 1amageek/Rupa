@@ -404,8 +404,12 @@ the curve there, `resolvedDialogValueAnchor`; a handle whose anchor is not drawn
 is left out), and sits the value times `worldMetresPerValue` along the guide, a
 dot or a square for a second value. The axis value is the value itself, scaled
 by the handle's metres per value; a drag shows the handle at the value it would
-set and the release reports it. `ViewportDialogValueHandleTests` own the scaled
-drag, the registered handles and the curve-start anchor.
+set and the release reports it. A dialog's angle takes the `dialogAngle` route
+(`ViewportDialogAngleHandle`, `onDialogAngleDrag`): a circle about a curve's tangent at its start
+or end (radius given, or a tenth of the curve's drawn length) with a dot turned by the angle from
+the direction square to the curve, turned by the native pattern input's press-time radial
+projection without a pattern's least angle. `ViewportDialogValueHandleTests` own the scaled
+drag, the registered handles, the curve-start anchor and the angle's turn, registration and dot.
 
 While Section Analysis places its plane, the viewport offers the
 `sectionAnalysisDistance` native axis route: an arrow on the section plane along
