@@ -598,7 +598,7 @@ struct ModelingOperationView: View {
                 Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
             }
             .contentShape(Rectangle())
-            .disabled(draft.xnurbsQuadSided == false)
+            .help("The sheet's UV flow with Quad sided; without it the trimmed sheet's isocurves already run square to each other across the boundary's mean plane, as Normal asks, whichever is chosen.")
             Picker("Quality", selection: $draft.xnurbsQuality) {
                 Text("Auto").tag(XNurbsFeature.Quality.auto)
                 Text("High").tag(XNurbsFeature.Quality.high)
