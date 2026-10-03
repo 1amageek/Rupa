@@ -482,6 +482,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     /// Join on sheets: sewn along their exactly matching edges into one sheet, or a solid when
     /// they close.
     case joinSheets(name: String, targets: [SelectionTarget])
+    /// Patch on a sheet object: every hole filled and joined with it, a solid when they close.
+    case patchHoles(name: String, target: SceneNodeID)
     /// Unjoin on faces: each face leaves its body as a sheet of its own.
     case unjoinFaces(name: String, targets: [SelectionTarget])
     /// Unjoin on solids or sheets: every face becomes a sheet of its own.
@@ -1017,6 +1019,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "duplicateBodyFaces"
         case .joinSheets:
             "joinSheets"
+        case .patchHoles:
+            "patchHoles"
         case .unjoinFaces:
             "unjoinFaces"
         case .unjoinShells:
@@ -1286,6 +1290,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .cut,
              .duplicateBodyFaces,
              .joinSheets,
+             .patchHoles,
              .unjoinFaces,
              .unjoinShells,
              .reverseSheets,

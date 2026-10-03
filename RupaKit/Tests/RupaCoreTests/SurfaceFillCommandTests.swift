@@ -7,6 +7,33 @@ import SwiftCAD
 @Suite("Boundary surface commands", .timeLimit(.minutes(1)))
 struct SurfaceFillCommandTests {
     @Test
+    func patchFillsEveryHoleOfASheetAndMakesItSolid() throws {
+        // A box whose top and bottom were taken out: a tube sheet with two holes, which Patch
+        // fills and joins into the solid box again, shown by the sheet's object.
+        let session = EditorSession()
+        _ = try #require(session.createDefaultExtrudedRectangle())
+        let solidFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let solidSceneNodeID = try #require(sceneNodeID(for: solidFeatureID, in: session.document))
+        let volume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        let caps = try TopologySnapshotService().snapshot(document: session.document).entries.filter {
+            $0.kind == .face && $0.sceneNodeID == solidSceneNodeID.description
+                && ($0.generatedRole == "startFace" || $0.generatedRole == "endFace")
+        }.compactMap { $0.selectionTarget() }
+        #expect(caps.count == 2)
+        _ = try session.execute(.deleteBodyFaces(targets: caps))
+        let tubeFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+        let tube = try #require(sceneNodeID(for: tubeFeatureID, in: session.document))
+        #expect(session.document.productMetadata.sceneNodes[tube]?.object?.geometryRole == .surface)
+        _ = try session.execute(.patchHoles(name: "Patch", target: tube))
+        #expect(session.evaluationStatus == .valid)
+        #expect(session.document.productMetadata.sceneNodes[tube]?.object?.geometryRole == .solid)
+        let measured = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter))
+        #expect(measured.counts.solids == 1 && measured.counts.sheets == 0)
+        #expect(abs(measured.totals.solidVolumeCubicMeters - volume) < 1e-12)
+        #expect(throws: (any Error).self) { _ = try session.execute(.patchHoles(name: "Patch", target: tube)) }
+    }
+
+    @Test
     func deletedSolidFaceOpeningCreatesRetainedFillSheetAndSupportsUndoRedo() throws {
         let session = EditorSession()
         _ = try #require(session.createDefaultExtrudedRectangle())

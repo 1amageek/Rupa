@@ -1200,6 +1200,11 @@ struct ModelingOperationDraft: Equatable {
             }
             return .createBodyShell(name: name, target: targets[0],
                 thickness: try topologyLength(distance, label: "Wall thickness", in: document))
+        case .patch where targets.count == 1 && targets[0].component == .object
+            && document.productMetadata.sceneNodes[targets[0].sceneNodeID]?.reference?.kind == .body
+            && document.productMetadata.sceneNodes[targets[0].sceneNodeID]?.object?.geometryRole == .surface:
+            // A sheet object: every hole filled and joined with it, a solid when they close.
+            return .patchHoles(name: name, target: targets[0].sceneNodeID)
         case .patch where targets.contains(where: { $0.component == .object }):
             // Closed curves (the operands' kind, not their count, selects this): whole curve
             // sources, with any edges of bodies among them (their curves added with the patch),
@@ -1232,9 +1237,14 @@ struct ModelingOperationDraft: Equatable {
             }
             do { try CurvePatchFeature(curves: curves).validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createCurvePatch(name: name, curves: curves, edgeCurves: edgeCurves)
+        case .patch where targets.count > 1 && targets.allSatisfy({ if case .edge = $0.component { return true } else { return false } })
+            && Set(targets.map(\.sceneNodeID)).count == 1:
+            // The opening's edges selected together (Plasticity selects the whole loop): the loop
+            // is the one through the first.
+            return .createSurfaceFill(name: name, target: targets[0])
         case .patch, .bridge:
             guard kind != .patch || targets.count == 1 else {
-                throw invalid("Patch requires exactly one edge of the opening to fill.")
+                throw invalid("Patch fills a sheet's holes, one opening from its edges, or a closed loop of curves.")
             }
             guard kind != .bridge || targets.count == 2 else {
                 throw invalid("Boundary Bridge requires exactly two open edges, in boundary order.")

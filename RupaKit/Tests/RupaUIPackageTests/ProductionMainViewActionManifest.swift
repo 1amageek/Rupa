@@ -273,6 +273,7 @@ enum ProductionMainViewActionManifest {
         "projectCurvesAlongDirection",
         "duplicateBodyFaces",
         "joinSheets",
+        "patchHoles",
         "unjoinFaces",
         "unjoinShells",
         "reverseSheets",

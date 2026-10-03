@@ -155,7 +155,11 @@ close and `.sewnSheet` otherwise, so the output port is declared before evaluati
 Sheets that do not all meet along exactly matching edges, three faces on one edge,
 a solid among the targets and fewer than two sheets are refused as
 `commandInvalid` with nothing changed. The first sheet's object shows the result
-(solid or surface role) under its own name; the others are taken away.
+(solid or surface role) under its own name; the others are taken away. Patch on a sheet
+object (`patchHoles(name:target:)`) groups the sheet's open edges into loops by their shared ends,
+prepares one surface fill per loop on the sheet as it is, appends them, and joins the sheet with
+its fills, so a sheet whose every hole is filled becomes a solid in its object (Plasticity's "Holes
+are patched and made Solid"); a sheet with no hole is refused (`SurfaceFillCommandTests`).
 
 Unjoin on faces (`unjoinFaces(name:targets:)`) and on solids or sheets
 (`unjoinShells(name:targets:)`) append one Swift-CAD `unjoinFaces` feature per

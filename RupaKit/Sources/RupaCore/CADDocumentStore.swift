@@ -3159,6 +3159,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case let .patchHoles(name, target):
+            var updatedDocument = document
+            primaryFeatureID = try updatedDocument.patchHoles(
+                name: name, target: target, objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation, currentGeneration: generation
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case let .unjoinFaces(name, targets):
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.unjoinFaces(
