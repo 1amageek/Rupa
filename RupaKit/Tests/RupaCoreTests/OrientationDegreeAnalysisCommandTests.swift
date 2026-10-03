@@ -172,13 +172,23 @@ import Testing
         let raisedVolume = try MeasurementService().measure(document: session.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
         #expect(abs(raisedVolume - volume) < 1e-12)
         #expect(session.evaluationStatus == .valid)
-        // A cylinder's side is not given control points.
+        // A drum's side, closing round its seam, is given control points too; a ball's octant,
+        // reaching a pole, is refused.
         let (drumSession, drum) = try cylinder()
         let sides = try entries(.face, of: drum, in: drumSession).filter { $0.surfaceKind == "cylinder" }
         let side = try #require(sides.first?.selectionTarget())
-        let drumBefore = drumSession.document
-        #expect(throws: EditorError.self) { _ = try drumSession.execute(.raiseSurfaceDegree(targets: [side])) }
-        #expect(unchanged(drumSession, since: drumBefore))
+        let drumVolume = try MeasurementService().measure(document: drumSession.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        _ = try drumSession.execute(.raiseSurfaceDegree(targets: [side]))
+        #expect(drumSession.evaluationStatus == .valid)
+        let raisedDrum = try MeasurementService().measure(document: drumSession.document, ruler: .standard(for: .meter)).totals.solidVolumeCubicMeters
+        #expect(abs(raisedDrum - drumVolume) < drumVolume * 1e-6)
+        let ballSession = EditorSession()
+        _ = try ballSession.execute(.createAnalyticSphere(name: "Ball", center: .origin, radius: 0.01))
+        let ball = try #require(ballSession.document.productMetadata.sceneNodes.values.first { $0.reference?.kind == .body }).id
+        let octant = try #require(try entries(.face, of: ball, in: ballSession).first?.selectionTarget())
+        let ballBefore = ballSession.document
+        #expect(throws: EditorError.self) { _ = try ballSession.execute(.raiseSurfaceDegree(targets: [octant])) }
+        #expect(unchanged(ballSession, since: ballBefore))
     }
 
     @Test(.timeLimit(.minutes(2)))
