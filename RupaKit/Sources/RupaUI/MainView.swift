@@ -3479,7 +3479,8 @@ private struct ProjectMainViewContent: View {
     }
 
     private var viewportShiftScrollHandler: ((ViewportScrollDirection) -> Bool)? {
-        guard selectedTool == .polygon || arraySession != nil else {
+        let isoparamRuns = { if case .isoparam = imprintSession?.kind { return true } else { return false } }()
+        guard selectedTool == .polygon || arraySession != nil || isoparamRuns else {
             return nil
         }
         return { direction in
@@ -8132,6 +8133,12 @@ private struct ProjectMainViewContent: View {
     }
 
     private func handleViewportShiftScroll(_ direction: ViewportScrollDirection) -> Bool {
+        // Isoparam: Shift and the wheel add or take away lines, as Plasticity's Count does.
+        if case .isoparam = imprintSession?.kind {
+            imprintSession?.stepCount(by: direction == .up ? 1 : -1)
+            reportToolStatus("Isoparam: \(imprintSession?.count ?? 1) line(s).")
+            return true
+        }
         if arraySession != nil {
             let delta = direction == .up ? 1 : -1
             updateArrayInSession { shaping, source, _ in

@@ -891,6 +891,14 @@ private func keyboardContext(
     #expect(hollowTakesAngle == false)
 }
 
+@Test func isoparamsCountStepsWithinOneToSixtyFour() {
+    var session = WorkspaceImprintSession(kind: .isoparam(face: SelectionTarget(sceneNodeID: SceneNodeID())))
+    session.stepCount(by: -1)
+    #expect(session.count == 1)
+    session.stepCount(by: 2)
+    #expect(session.count == 3 && session.fractions.count == 3)
+}
+
 @Test func workspaceKeyboardRouterStepsPatchContinuityOnTab() {
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()

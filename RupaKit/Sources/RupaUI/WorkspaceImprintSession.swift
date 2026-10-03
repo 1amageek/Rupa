@@ -64,6 +64,11 @@ struct WorkspaceImprintSession: Equatable {
         count <= 1 ? [min(max(parameter, 0.001), 0.999)] : (1...count).map { Double($0) / Double(count + 1) }
     }
 
+    /// Shift-wheel: Isoparam's Count, from 1 to 64.
+    mutating func stepCount(by delta: Int) {
+        count = min(max(count + delta, 1), 64)
+    }
+
     /// Tab's toggle: Isoparam's direction, or Untrim's Keep edges.
     mutating func toggle() {
         switch kind {
