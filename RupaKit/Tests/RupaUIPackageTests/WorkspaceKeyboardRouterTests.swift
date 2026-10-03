@@ -793,7 +793,8 @@ private func keyboardContext(
     #expect(action("I", [.shift]) == nil)
     context.hasImprintableSelection = true
     #expect(action("I", [.shift]) == .beginImprint)
-    #expect(action("r", [.control]) == nil)
+    // Control-R with no face selected waits for a click on a face.
+    #expect(action("r", [.control]) == .beginIsoparam)
     #expect(action("t", [.option]) == nil)
     context.hasBodyFaceSelection = true
     #expect(action("r", [.control]) == .beginIsoparam)
@@ -802,6 +803,9 @@ private func keyboardContext(
     context.isImprintSessionActive = true
     #expect(action("\t", tab: true) == .toggleImprintOption)
     #expect(action("s") == .toggleIsoparamSubdivide)
+    context.isImprintSessionActive = false
+    context.isIsoparamPickActive = true
+    #expect(action("\t", tab: true) == .toggleIsoparamPickDirection)
 }
 
 @Test func workspaceKeyboardRouterDrivesTheFaceEditDialog() {

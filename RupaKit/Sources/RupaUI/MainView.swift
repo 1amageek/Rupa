@@ -7,6 +7,7 @@ import RupaGeometry
 import RupaProject
 import RupaRendering
 import SwiftUI
+import SwiftCAD
 
 func viewportDisplayModeTitle(_ mode: ViewportDisplayMode) -> String {
     switch mode {
@@ -6362,6 +6363,7 @@ private struct ProjectMainViewContent: View {
             isFaceEditSessionActive: faceEditSession != nil,
             isFilletDialogActive: modelingDraft?.kind == .fillet || modelingDraft?.kind == .chamfer,
             isLoftDialogActive: modelingDraft?.kind == .loft,
+            isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
             isCommandPaletteOpen: isCommandPaletteOpen,
@@ -6752,8 +6754,15 @@ private struct ProjectMainViewContent: View {
             reportToolStatus("Imprint: choose the options, then OK, Return or right-click.")
             return .handled
         case .beginIsoparam:
+            if selectedBodyFaceTargets.isEmpty, snapshot.selection.selectedTargets.isEmpty {
+                // Nothing selected: Plasticity's Isoparam places the line where the face is clicked.
+                let request = WorkspacePointPickRequest.isoparam(direction: .u)
+                pointPickRequest = request
+                reportToolStatus(request.prompt)
+                return .handled
+            }
             guard let face = selectedBodyFaceTargets.first, selectedBodyFaceTargets.count == 1 else {
-                reportToolStatus("Isoparam: select one face.", severity: .warning)
+                reportToolStatus("Isoparam: select one face, or nothing and click a face.", severity: .warning)
                 return .handled
             }
             imprintSession = WorkspaceImprintSession(kind: .isoparam(face: face))
@@ -6805,6 +6814,12 @@ private struct ProjectMainViewContent: View {
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
+            return .handled
+        case .toggleIsoparamPickDirection:
+            guard case .isoparam(let direction) = pointPickRequest else { return .ignored }
+            let request = WorkspacePointPickRequest.isoparam(direction: direction == .u ? .v : .u)
+            pointPickRequest = request
+            reportToolStatus(request.prompt)
             return .handled
         case .focusLoftTension:
             guard let draft = modelingDraft, draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 else {
@@ -11059,6 +11074,10 @@ private struct ProjectMainViewContent: View {
         case .refused(let message):
             reportToolStatus(message, severity: .warning)
         case .point(let picked):
+            if case .isoparam(let direction) = request {
+                placeIsoparam(at: picked, direction: direction)
+                return
+            }
             pointPickRequest = nil
             let exact: WorkspacePlaceSession.Reference
             do {
@@ -11081,6 +11100,9 @@ private struct ProjectMainViewContent: View {
                 } catch {
                     reportToolStatus(error.localizedDescription, severity: .warning)
                 }
+            case .isoparam:
+                // Placed before the generic point resolution above.
+                break
             case .radialArrayCenter(let ids):
                 do {
                     let axis: Vector3D
@@ -11097,6 +11119,31 @@ private struct ProjectMainViewContent: View {
                     reportToolStatus(error.localizedDescription, severity: .warning)
                 }
             }
+        }
+    }
+
+    /// Isoparam placed by a click: the line through the clicked point of the face, imprinted at
+    /// once as Plasticity's click on the hovered face does. A click off a face asks again.
+    private func placeIsoparam(at picked: ViewportPickedPoint, direction: SurfaceParameterDirection) {
+        guard let occurrenceID = picked.occurrenceID, let faceComponentID = picked.faceComponentID else {
+            reportToolStatus("Isoparam: click a face of a body.", severity: .warning)
+            return
+        }
+        do {
+            let document = snapshot.document.document
+            let topology = try TopologySnapshotService().snapshot(
+                document: document, objectRegistry: objectRegistry,
+                currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+            )
+            let placement = try IsoparamPlacementResolver().placement(
+                near: picked.point, onFace: faceComponentID, of: occurrenceID, direction: direction,
+                document: document, topology: topology
+            )
+            pointPickRequest = nil
+            submitSource(.isoparam(name: "Isoparam", face: placement.face, direction: direction,
+                                   fractions: [placement.fraction], subdividesControlNet: false))
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
         }
     }
 

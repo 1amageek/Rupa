@@ -267,6 +267,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case cycleLoftContinuity
     /// D while Loft's dialog runs: the tension both ends take.
     case focusLoftTension
+    /// Tab while Isoparam waits for a click: U and V switch.
+    case toggleIsoparamPickDirection
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -423,6 +425,8 @@ struct WorkspaceKeyboardContext: Sendable {
     var isFilletDialogActive: Bool = false
     /// Whether Loft's dialog runs.
     var isLoftDialogActive: Bool = false
+    /// Whether Isoparam waits for a click on a face (Tab switches its direction).
+    var isIsoparamPickActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
     var isProjectSessionActive: Bool = false
     /// Whether Bridge Edge's dialog runs.
@@ -534,6 +538,9 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isEscape { return .cancelImprint }
             if input.isTab { return .toggleImprintOption }
             if input.characters.lowercased() == "s" { return .toggleIsoparamSubdivide }
+        }
+        if context.isIsoparamPickActive, input.phases.contains(.down), input.modifiers.isEmpty, input.isTab {
+            return .toggleIsoparamPickDirection
         }
         if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.isTab {
@@ -1047,7 +1054,8 @@ struct WorkspaceKeyboardRouter: Sendable {
             return context.hasImprintableSelection ? .beginImprint : nil
         }
         if input.modifiers == [.control], key == "r" {
-            return context.hasBodyFaceSelection ? .beginIsoparam : nil
+            // A selected face opens the dialog; nothing selected, the next click on a face places the line.
+            return .beginIsoparam
         }
         if input.modifiers == [.option], key == "t" || key == "†" {
             return context.hasBodyFaceSelection ? .beginUntrim : nil

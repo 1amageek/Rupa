@@ -65,6 +65,31 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func aClickOnAShownFacePlacesTheIsoparamLineThroughIt() throws {
+        let session = EditorSession()
+        let target = try box(session, "Target")
+        _ = try session.execute(.setSceneNodeTransform(id: target, localTransform: try Transform3D.translation(Vector3D(x: 0.5, y: 0, z: 0))))
+        let document = session.document
+        let topology = try TopologySnapshotService().snapshot(document: document)
+        let occurrence = try #require(try SceneNodeHierarchy(metadata: document.productMetadata).resolvedOccurrences().first { $0.sourceSceneNodeID == target })
+        let topFace = try top(of: target, in: session)
+        let entry = try #require(topology.entries.first { $0.kind == .face && $0.selectionTarget() == topFace })
+        let center = try #require(entry.center)
+        // A quarter of the way across the top, shown 0.5 m along x.
+        let world = try occurrence.worldTransform.applied(to: Point3D(x: center.x - 0.025, y: center.y - 0.025, z: center.z))
+        let componentID = SelectionComponentID(rawValue: try #require(entry.selectionComponentID))
+        let placements = try [SurfaceParameterDirection.u, .v].map { direction in
+            try IsoparamPlacementResolver().placement(near: world, onFace: componentID, of: occurrence.id, direction: direction,
+                                                       document: document, topology: topology)
+        }
+        #expect(placements.allSatisfy { $0.face == topFace })
+        // Whichever way the top's parameters run, the point lies a quarter or three quarters across.
+        #expect(placements.allSatisfy { abs($0.fraction - 0.25) < 1e-9 || abs($0.fraction - 0.75) < 1e-9 })
+        _ = try session.execute(.isoparam(name: "Isoparam", face: topFace, direction: .u, fractions: [placements[0].fraction], subdividesControlNet: false))
+        #expect(try entries(.face, of: target, in: session).count == 7)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func isoparamAndOffsetsSplitFacesInPlace() throws {
         let session = EditorSession()
         let target = try box(session, "Target")

@@ -76,6 +76,33 @@ import Testing
         #expect(session.evaluationStatus == .valid)
     }
 
+    /// A difference cutting the box in two leaves two objects, one per solid, as Plasticity does.
+    @MainActor
+    @Test func aDifferenceThatCutsABodyInTwoLeavesTwoObjects() throws {
+        let (session, box, _) = try operands()
+        // A slab 10 mm thick across the cube's middle, from z = −100 to 200 mm.
+        _ = try session.execute(.createExtrudedRectangleFromCorners(
+            name: "Slab", plane: .xy,
+            firstCorner: SketchPoint(x: .length(-0.5, .meter), y: .length(-0.005, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.5, .meter), y: .length(0.005, .meter)),
+            depth: .length(0.3, .meter), direction: .symmetric
+        ))
+        let slab = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.name.hasPrefix("Slab") && $0.reference?.kind == .body
+        }?.reference?.featureID)
+        _ = try session.execute(.createBoolean(
+            name: "Split", targets: [BooleanTargetReference(featureID: box)],
+            tools: [BooleanToolReference(featureID: slab)], operation: .difference, keepTools: false
+        ))
+        #expect(abs(try volume(session.document) - 0.9 * cube) < 1e-9)
+        let solids = session.document.productMetadata.sceneNodes.values.filter {
+            $0.reference?.kind == .body && $0.object?.geometryRole == .solid
+        }
+        #expect(solids.count == 2)
+        #expect(session.evaluationStatus == .valid)
+        try expectEveryBodyObjectPresentsAnEvaluatedBody(session.document)
+    }
+
     /// A slice publishes each piece as its own object, through one extraction per piece.
     @MainActor
     @Test func aSliceShowsEachPieceAsItsOwnObject() throws {

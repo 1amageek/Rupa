@@ -1066,7 +1066,13 @@ extension DesignDocument {
         let hierarchy = try SceneNodeHierarchy(metadata: productMetadata)
         let geometryRole: ObjectDescriptor.GeometryRole = boolean.resultPort == .sheet ? .surface : .solid
         let targetNodeID = hierarchy.presentingSceneNodeID(for: target)
-        guard asPieces else {
+        // A result falling apart is one object per piece, as each Plasticity object is one
+        // connected solid or sheet (a difference cutting a body in two, Empty/Empty discs).
+        let pieceCount = try bodyComponentCount(
+            of: boolean.featureID, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, owner: name
+        )
+        guard asPieces || pieceCount > 1 else {
             if let targetNodeID, productMetadata.sceneNodes[targetNodeID]?.object != nil {
                 try retargetBodyNode(targetNodeID, to: boolean.featureID, name: name, geometryRole: geometryRole)
             } else {
@@ -1078,10 +1084,6 @@ extension DesignDocument {
             try removeSceneNodes(presenting: consumed)
             return
         }
-        let pieceCount = try bodyComponentCount(
-            of: boolean.featureID, objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, owner: name
-        )
         for index in 0..<pieceCount {
             let pieceID = FeatureID()
             let pieceName = "\(name) \(index + 1)"

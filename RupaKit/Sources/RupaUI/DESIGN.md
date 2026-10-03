@@ -895,7 +895,10 @@ with sketch curves or curve objects imprints the curves (Method Normal or Vector
 with its direction, Bidirectional and Hide occlusion, and Completion); two objects
 imprint the second onto the first (Complete target, Imprint tool, Complete tool).
 Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
-Subdivide, Count and Param in the dialog) and Option-T Untrim (Tab toggles Keep
+Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
+face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
+through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the
+hovered face does; and Option-T Untrim (Tab toggles Keep
 edges). `WorkspaceImprintDialogView` lays the options out in the context panel;
 Return, right-click or OK applies as one source command, a refused one leaving the dialog
 open, and Escape ends it without a change. The palette lists them as Imprint

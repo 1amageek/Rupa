@@ -126,16 +126,18 @@ edit retargets the object it edits, so it appears where the target was; the obje
 of every other consumed body (the other targets, and the tools unless kept) are
 removed, their children (a nested profile sketch) taking their place where they are
 displayed. The project evaluates every object, so an object whose body a later
-feature consumed would fail it (`BooleanProjectEvaluationTests`). A slice, and a region
-(every cell the targets and tools enclose, operands taking no material),
-publishes each piece as an object of its own: the Boolean's multi-component result has no
+feature consumed would fail it (`BooleanProjectEvaluationTests`). A slice, a region
+(every cell the targets and tools enclose, operands taking no material), and any result that
+falls apart (a difference cutting a body in two, Empty/Empty discs: each Plasticity object is
+one connected solid or sheet) publishes each piece as an object of its own: the Boolean's multi-component result has no
 object, and one Swift-CAD `extract` feature per component (`.component(index:
 count:)`, the count read from the evaluated result) carries each piece's object
 beside the target. Extraction copies, so a source is measured unless every one
 of its components is extracted, which only the document's extractions together
 tell (`MeasurementService`): then its pieces are measured instead; a single
 component or a face extraction leaves its source measured. `PlacedBooleanTests` own placement and
-`SheetBooleanCommandTests` sheet operands, materials, slice and region pieces.
+`SheetBooleanCommandTests` sheet operands, materials, slice and region pieces, and a difference
+cutting a box in two leaving two objects.
 
 Alternative Duplicate on faces (`duplicateBodyFaces(name:targets:)`) copies the
 chosen faces of each body beside it as an object of its own, placed like the body,
