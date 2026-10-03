@@ -278,7 +278,7 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
-    func aPartialAlignmentOnARefittedLayoutKeepsTheEdgesEnds() throws {
+    func aPartialAlignmentAttachesTheEdgeToAStretchOfTheReference() throws {
         let session = EditorSession()
         let row = { (y: Double) in [Point3D(x: 0, y: y, z: 0), Point3D(x: 0.05, y: y, z: 0.05), Point3D(x: 0.1, y: y, z: 0)] }
         _ = try session.execute(.createBSplineSurface(name: "Arch", surface: BSplineSurface3D(
@@ -299,14 +299,14 @@ import Testing
         let edge = try #require(try edges(atX: 0.12, of: flat).first?.selectionTarget())
         let reference = try #require(try edges(atX: 0.1, of: arch).first?.selectionTarget())
         _ = try session.execute(.alignSurface(
-            targets: [edge, reference], continuity: .curvature, partialStart: 0.3, partialEnd: 0.3,
+            targets: [edge, reference], continuity: .curvature, partialStart: 0.3, partialEnd: 0.7,
             layout: SurfaceControlLayout(uDegree: 3, vDegree: 3, uSpans: 4, vSpans: 8)
         ))
         #expect(session.evaluationStatus == .valid)
-        // Faded out at both ends, the edge still runs between its old corners.
-        #expect(try edges(atX: 0.12, of: flat).count == 1)
+        // The whole edge now runs along the middle of the arch's edge: none is left at x = 120 mm.
+        #expect(try edges(atX: 0.12, of: flat).isEmpty)
         #expect(throws: (any Error).self) {
-            _ = try session.execute(.alignSurface(targets: [edge, reference], partialStart: 0.6, partialEnd: 0.6))
+            _ = try session.execute(.alignSurface(targets: [edge, reference], partialStart: 0.6, partialEnd: 0.4))
         }
     }
 

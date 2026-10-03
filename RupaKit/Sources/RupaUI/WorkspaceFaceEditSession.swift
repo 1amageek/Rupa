@@ -89,7 +89,7 @@ struct WorkspaceFaceEditSession: Equatable {
     /// the edge, and, when `refitsLayout`, the degrees and spans the sheet is refitted to first.
     var inputShapeInfluence = 0.0
     var partialStart = 0.0
-    var partialEnd = 0.0
+    var partialEnd = 1.0
     /// Align Surface's Boundary: the cross-edge flow along a G1 or G2 edge.
     var boundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
     /// Each aligned pair's own continuity and tension, by its index, overriding `continuity` and

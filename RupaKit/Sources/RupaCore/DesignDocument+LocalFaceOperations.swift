@@ -308,8 +308,8 @@ extension DesignDocument {
     /// Align Surface: the first target, an edge of a sheet object, follows the second, an edge of
     /// another object where it is shown, with `continuity`, the speed across the edge scaled by
     /// `tension` and the change faded over `blendRows` further control rows keeping
-    /// `inputShapeInfluence` of their shape, faded in and out over `partialStart` and `partialEnd`
-    /// of the edge, the sheet refitted to `layout` first when given (Swift-CAD `surfaceAlign`). The
+    /// `inputShapeInfluence` of their shape, the whole edge attached to the stretch of the reference
+    /// edge from `partialStart` to `partialEnd`, the sheet refitted to `layout` first when given (Swift-CAD `surfaceAlign`). The
     /// sheet shows the result in its place.
     @discardableResult
     public mutating func alignSurface(
@@ -320,7 +320,7 @@ extension DesignDocument {
         blendRows: Int,
         inputShapeInfluence: Double = 1,
         partialStart: Double = 0,
-        partialEnd: Double = 0,
+        partialEnd: Double = 1,
         layout: SurfaceControlLayout? = nil,
         boundaryFlow: SquareFitOptions.BoundaryFlow = .next,
         objectRegistry: ObjectTypeRegistry = .builtIn,
@@ -341,8 +341,8 @@ extension DesignDocument {
         guard (0...1).contains(inputShapeInfluence) else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) input shape influence runs from 0 to 1.")
         }
-        guard (0...1).contains(partialStart), (0...1).contains(partialEnd), partialStart + partialEnd <= 1 else {
-            throw EditorError(code: .commandInvalid, message: "\(operationName) partial start and end are fractions of the edge that do not overlap.")
+        guard (0...1).contains(partialStart), (0...1).contains(partialEnd), partialEnd > partialStart else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) partial start and end are fractions of the reference edge, the start before the end.")
         }
         if let layout {
             do {

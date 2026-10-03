@@ -270,7 +270,8 @@ its place; otherwise the extensions are a new sheet object beside it, measured a
 Surface (`alignSurface(name:targets:continuity:tension:blendRows:inputShapeInfluence:partialStart:partialEnd:layout:)`)
 appends `surfaceAlign` with
 the first target, an edge of a sheet object, following the second, an edge of another object
-placed where it is shown; the sheet shows the result in its place, measured as a sheet. Rebuild
+placed where it is shown (the whole edge onto the reference edge's stretch from Partial start to
+Partial end, 0 and 1 by default); the sheet shows the result in its place, measured as a sheet. Rebuild
 Face (`rebuildFaces(name:targets:method:extendU:extendV:shrinks:)`) appends `faceRebuild` on
 faces of one object, which shows the result in its place, measured as the kind of body it is;
 Unwrap Face (`unwrapFace(name:target:)`) appends `faceUnwrap` and shows the flat sheet as a new
