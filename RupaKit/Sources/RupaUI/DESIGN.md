@@ -952,7 +952,13 @@ preview adds, and keeps them apart from the drawn `ViewportEdgeAlignmentAnalysis
 measure or its scale redraws without evaluating or dropping the preview; each edge is labelled
 with its worst gap (display unit), angle (deg) or curvature difference (m⁻¹), ✓ within the
 kernel's limits and ⚠ beyond. `WorkspaceAlignAnalysisTests` own a curvature alignment within every
-measure with matching combs and a positional one's 45° turn hairs. Rebuild
+measure with matching combs and a positional one's 45° turn hairs. Square's Analysis
+(`WorkspaceSquareAnalysis`) is measured the same way from the Squares a ready preview adds
+(`SquareSideAnalyzer`, each side with the order it holds) and drawn as `ViewportAnalysisLabel`s at
+each side's middle at the dialog's checked continuity (`squareAnalysisLevel`, G1 by default): ✓
+within the limit, ⊘ beyond it, ⚠ where the side holds less than the check; a side beside no face
+is checked at G0. Refit Face shows none (its sides are the face's own edges).
+`WorkspaceSquareAnalysisTests` own the verdicts and the G0 fallback. Rebuild
 dispatches selected faces of bodies to Rebuild Face's dialog (Method, which Tab steps between
 Degree/Spans and Tolerance, Extend U and V, Shrink) and splines to Rebuild Curve's; Unwrap lays
 the one selected face flat as a new sheet object.

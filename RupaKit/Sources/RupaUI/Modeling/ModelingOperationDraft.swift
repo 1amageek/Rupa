@@ -277,6 +277,8 @@ struct ModelingOperationDraft: Equatable {
     var squareFlatness = "1"
     var squareWeight = "1"
     var squareBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
+    /// The continuity Square's Analysis checks each side at (Plasticity's ANALYSIS → Continuity).
+    var squareAnalysisLevel = LoftContinuityChoice.g1
 
     /// A field a command key asks the form to type into; `serial` makes a repeated request a change.
     enum FocusField: Hashable { case distance, angle, tension }

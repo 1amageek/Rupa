@@ -359,6 +359,8 @@ scene drawn, with a dot on the middle; the label carries a hit rectangle and the
 affordance whose action is `.continuityBadge(edge)`, whose click calls `onContinuityBadge` with the
 edge. A boundary the drawn scene lacks (a preview that rebuilt its body) draws no badge;
 `continuityBadgesLabelEachEdgeAtItsMiddleAndReportItOnClick` owns placement, handle and omission.
+Analysis labels (`ViewportAnalysisLabel`, carried by the analysis source) draw a dialog's values
+beside what they measure, green within, orange where nothing holds the value, red beyond.
 The original pure builder algorithms are shared with a nonescaping `rethrows`
 checkpoint `(items, positions, visits)`. Legacy nonthrowing wrappers supply an
 explicit no-op checkpoint; the native worker supplies cooperative cancellation

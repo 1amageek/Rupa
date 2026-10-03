@@ -343,6 +343,8 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         let options: ViewportSurfaceAnalysisOptions
         /// Align Surface's Analysis along its aligned edges, drawn while its dialog is open.
         var edgeAlignment: ViewportEdgeAlignmentAnalysis? = nil
+        /// A dialog's Analysis values beside what they measure (Square's sides).
+        var labels: [ViewportAnalysisLabel] = []
     }
 
     /// Raw section inputs captured at the MainActor boundary.  Contour limits
@@ -398,6 +400,7 @@ struct ViewportSpatialOverlaySemanticSnapshot: Sendable {
         /// The curvature combs' length relative to their automatic one.
         var combScale: Double = 1
         var edgeAlignment: ViewportEdgeAlignmentAnalysis? = nil
+        var labels: [ViewportAnalysisLabel] = []
     }
 
     struct Section: Sendable {
@@ -1198,7 +1201,8 @@ enum ViewportSpatialOverlayProducer {
                 || !overlay.principalDirectionItems.isEmpty
                 || !overlay.boundaryItems.isEmpty
                 || !continuity.items.isEmpty
-                || source.edgeAlignment?.edges.isEmpty == false else {
+                || source.edgeAlignment?.edges.isEmpty == false
+                || !source.labels.isEmpty else {
             return nil
         }
         var items: [ViewportSpatialOverlaySemanticSnapshot.Analysis.Item] = []
@@ -1254,7 +1258,8 @@ enum ViewportSpatialOverlayProducer {
             boundaryItems: boundaryItems,
             continuityItems: continuityItems,
             combScale: source.options.combScale,
-            edgeAlignment: source.edgeAlignment
+            edgeAlignment: source.edgeAlignment,
+            labels: source.labels
         )
     }
 
@@ -1356,7 +1361,8 @@ enum ViewportSpatialOverlayProducer {
                 || !analysis.principalDirectionItems.isEmpty
                 || !analysis.boundaryItems.isEmpty
                 || !analysis.continuityItems.isEmpty
-                || analysis.edgeAlignment?.edges.isEmpty == false else {
+                || analysis.edgeAlignment?.edges.isEmpty == false
+                || !analysis.labels.isEmpty else {
             throw RealityViewportSpatialBatch.invalid(
                 "The active surface-analysis route has no native world descriptors."
             )
@@ -1475,6 +1481,23 @@ enum ViewportSpatialOverlayProducer {
         }
         if let alignment = analysis.edgeAlignment {
             try appendEdgeAlignment(alignment, unit: diagonal / 10, meshes: &meshes, labels: &labels)
+        }
+        for value in analysis.labels {
+            try Task.checkCancellation()
+            guard isFinitePoint(value.anchor) else {
+                throw RealityViewportSpatialBatch.invalid("An analysis label's place is not finite.")
+            }
+            let color: SIMD4<Float>
+            switch value.verdict {
+            case .within: color = SIMD4<Float>(0.55, 0.86, 0.33, 1)
+            case .unconstrained: color = SIMD4<Float>(0.97, 0.60, 0.16, 1)
+            case .beyond: color = SIMD4<Float>(0.95, 0.30, 0.27, 1)
+            }
+            labels.append(.init(
+                family: .analysis,
+                value: try label(value.text, anchor: value.anchor, offset: CGPoint(x: 0, y: 16), color: color,
+                                 alignment: .center, heightPoints: 10)
+            ))
         }
         activeFamilies.insert(.analysis)
     }

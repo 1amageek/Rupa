@@ -637,6 +637,12 @@ struct ModelingOperationView: View {
                 }
                 .contentShape(Rectangle())
                 .help("Natural: no flow. Normal: the cross flow perpendicular to each side. Next: perpendicular within the frame's mean plane. Adjacent: following the neighbouring sides.")
+                Picker("Analysis", selection: $draft.squareAnalysisLevel) {
+                    ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .contentShape(Rectangle())
+                .help("The continuity the preview checks beside each side: ✓ within, ⊘ beyond, ⚠ where the side asks for less.")
             }
             if draft.targets.contains(where: { draft.squareContinuity(of: $0).order != nil }) {
                 TextField("Tension", text: $draft.squareTension)
@@ -645,7 +651,7 @@ struct ModelingOperationView: View {
                     lengthField("Curvature allowance radius beside curved faces", text: $draft.curvatureAllowanceRadius)
                 }
             }
-            Text("Select faces to refit each as an untrimmed four-sided sheet on its own edges, at G0, G1 or G2 with its neighbours. Or select two to four sides: edges of bodies or curves. Four meeting end to end frame the sheet; three are closed by a straight side; two at a corner are completed by their copies; two apart are ruled between. Degree and Spans are the least the sheet takes; its other control points are as fair as Flatness asks, Free sides and the Boundary flow weighted by Weight. The sheet's Analysis is shown in its inspector.")
+            Text("Select faces to refit each as an untrimmed four-sided sheet on its own edges, at G0, G1 or G2 with its neighbours. Or select two to four sides: edges of bodies or curves. Four meeting end to end frame the sheet; three are closed by a straight side; two at a corner are completed by their copies; two apart are ruled between. Degree and Spans are the least the sheet takes; its other control points are as fair as Flatness asks, Free sides and the Boundary flow weighted by Weight. The preview shows each side's Analysis at the checked continuity, and the sheet's inspector lists it.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

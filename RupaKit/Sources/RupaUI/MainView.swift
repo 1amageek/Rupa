@@ -223,6 +223,8 @@ private struct ProjectMainViewContent: View {
     @State private var previewsDialog = false
     /// Align Surface's Analysis of the previewed alignment, measured once per preview.
     @State private var alignAnalysis: WorkspaceAlignAnalysis?
+    /// The previewed Square's sides measured for its Analysis.
+    @State private var squareAnalysis: WorkspaceSquareAnalysis?
     /// Offset Face Loop offsets each chosen face's own outline (I toggles it off, combining them).
     @State private var faceLoopOffsetIsIndividual = true
     @State private var projectSession: WorkspaceProjectSession?
@@ -2169,6 +2171,18 @@ private struct ProjectMainViewContent: View {
         }
     }
 
+    /// The previewed Square's Analysis as its dialog draws it: each side at the checked continuity.
+    private var previewedSquareAnalysisLabels: [ViewportAnalysisLabel] {
+        guard let squareAnalysis, let draft = modelingDraft, draft.kind == .square, draft.refitsFaces == false else { return [] }
+        let level: Int
+        switch draft.squareAnalysisLevel {
+        case .g0: level = 0
+        case .g1: level = 1
+        case .g2: level = 2
+        }
+        return squareAnalysis.drawn(level: level, displayUnit: snapshot.workspaceState.ruler.displayUnit)
+    }
+
     /// The previewed alignment's Analysis as Align's dialog draws it: its measure at its scale.
     private var previewedAlignAnalysis: ViewportEdgeAlignmentAnalysis? {
         guard let alignAnalysis, let edit = faceEditSession, case .alignSurface = edit.kind else { return nil }
@@ -2197,6 +2211,7 @@ private struct ProjectMainViewContent: View {
                         objectSelectionIndex: ViewportObjectSelectionIndex(document: payload.document, selection: .empty),
                         edgeAlignmentAnalysis: previewedAlignAnalysis,
                         continuityBadges: viewportContinuityBadges,
+                        analysisLabels: previewedSquareAnalysisLabels,
                         canvasDragPreviewKind: nil,
                         allowsObjectAffordances: false,
                         selectedPresentationHasExactCADContext: false,
@@ -2567,6 +2582,9 @@ private struct ProjectMainViewContent: View {
         }
         .task(id: previewsFaceEdit && modelingPreview.phase == .ready ? modelingPreview.token : nil) {
             await measureAlignAnalysis()
+        }
+        .task(id: modelingDraft?.kind == .square && modelingPreview.phase == .ready ? modelingPreview.token : nil) {
+            await measureSquareAnalysis()
         }
         .onModifierKeysChanged(mask: .control) { _, keys in
             // A previewed face edit shows the original while Control is held.
@@ -10724,6 +10742,35 @@ private struct ProjectMainViewContent: View {
         } catch {
             invalidateModelingPreview()
             modelingPreview.errorMessage = recordFailure(error)
+        }
+    }
+
+    /// Measures the previewed Square's sides for its Analysis off the main actor; cleared while
+    /// there is no ready Square preview.
+    private func measureSquareAnalysis() async {
+        guard let draft = modelingDraft, draft.kind == .square, draft.refitsFaces == false,
+              modelingPreview.phase == .ready, let payload = modelingPreview.payload else {
+            squareAnalysis = nil
+            return
+        }
+        let base = snapshot.document.document
+        let current = snapshot.cadInteraction
+        let preview = payload.document
+        let measuring = Task.detached(priority: .userInitiated) {
+            try WorkspaceSquareAnalysis.evaluate(preview: preview, base: base, current: current)
+        }
+        do {
+            let analysis = try await withTaskCancellationHandler {
+                try await measuring.value
+            } onCancel: {
+                measuring.cancel()
+            }
+            guard !Task.isCancelled else { return }
+            squareAnalysis = analysis
+        } catch {
+            guard !Task.isCancelled else { return }
+            squareAnalysis = nil
+            reportToolStatus("Square analysis: \(recordFailure(error))", severity: .warning, recordsFailure: false)
         }
     }
 

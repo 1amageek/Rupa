@@ -183,6 +183,7 @@ public struct Viewport: View {
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis?
     private let continuityBadges: [ViewportContinuityBadge]
+    private let analysisLabels: [ViewportAnalysisLabel]
     private let sectionAnalysis: SectionAnalysisResult?
     private let sectionClippingPlan: SectionAnalysisClippingPlan?
     /// The Section Analysis distance handle, while the section plane is being placed.
@@ -393,6 +394,7 @@ public struct Viewport: View {
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         edgeAlignmentAnalysis: ViewportEdgeAlignmentAnalysis? = nil,
         continuityBadges: [ViewportContinuityBadge] = [],
+        analysisLabels: [ViewportAnalysisLabel] = [],
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         sectionAnalysisHandle: ViewportSectionAnalysisDistanceHandle? = nil,
@@ -534,6 +536,7 @@ public struct Viewport: View {
         self.surfaceContinuity = surfaceContinuity
         self.edgeAlignmentAnalysis = edgeAlignmentAnalysis
         self.continuityBadges = continuityBadges
+        self.analysisLabels = analysisLabels
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
         self.sectionAnalysisHandle = sectionAnalysisHandle
@@ -1655,6 +1658,7 @@ public struct Viewport: View {
         key.surfaceContinuity = surfaceContinuity
         key.edgeAlignmentAnalysis = edgeAlignmentAnalysis
         key.continuityBadges = onContinuityBadge != nil ? continuityBadges : []
+        key.analysisLabels = analysisLabels
         key.sectionAnalysis = sectionAnalysis
         key.sectionAnalysisHandle = sectionAnalysisHandle
         key.snap = displayedSnapOverlayResult
@@ -5872,7 +5876,7 @@ extension Viewport {
                 )
                 : nil
         let analysisSource: ViewportSpatialOverlaySemanticSnapshot.AnalysisSource? =
-            surfaceAnalysis != nil || surfaceContinuity != nil || edgeAlignmentAnalysis != nil
+            surfaceAnalysis != nil || surfaceContinuity != nil || edgeAlignmentAnalysis != nil || !analysisLabels.isEmpty
                 ? .init(
                     result: surfaceAnalysis,
                     continuity: surfaceContinuity,
@@ -5880,7 +5884,8 @@ extension Viewport {
                     selection: selection,
                     document: document,
                     options: surfaceAnalysisOptions,
-                    edgeAlignment: edgeAlignmentAnalysis
+                    edgeAlignment: edgeAlignmentAnalysis,
+                    labels: analysisLabels
                 )
                 : nil
         // During a drag of the section handle the arrow previews the new distance; the section
