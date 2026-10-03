@@ -1642,7 +1642,20 @@ as spheres elsewhere.
    | surface knot, span, trim knot, trim span | vertex | `.annotation` | section alone |
 
    Admitted candidates are ordered by rank, then by projected distance to the
-   pointer, then by a stable emission order. `ViewportNativeHitCandidate` owns
+   pointer, then by a stable emission order. Coincident CAD vertices or edges of
+   different bodies — the edge two touching sheets share — tie
+   (`ViewportNativeHitCandidate.ties`, within `coincidentMetricTolerance`
+   points), and the pointer takes the one of the body the frame draws at the
+   pointer, as Plasticity picks the edge of the sheet hovered near it.
+   Control-Shift-click over such a tie lists the tied sub-shapes beside the click
+   (`ViewportCoincidentPickMenu`, the list's rectangle excluded from canvas
+   input): hovering an entry highlights its object, choosing one delivers the
+   click with it, and a click on the canvas closes the list. The wheel turned
+   while the primary button is held, undragged, at the press
+   (`ViewportInputSurface.onHeldScroll`) steps through the tie, highlighting the
+   chosen object, and the release picks it; elsewhere the wheel pans and zooms.
+   `ViewportCoincidentEdgePickTests` own the tie, the menu and, mounted on two
+   sheets sharing an edge, the hovered side, the menu click and the held wheel. `ViewportNativeHitCandidate` owns
    that vocabulary rather than either resolver, because both resolvers produce
    candidates that are compared against the other's, and the rank a family
    carries is a property of the family and not of the resolver that happened to

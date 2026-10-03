@@ -33,6 +33,9 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onModifierFlagsChange: (ViewportInputModifierFlags, CGSize) -> Void
     var onSecondaryClick: (CGPoint, CGSize) -> Void
     var onShiftScroll: (ViewportScrollDirection) -> Bool
+    /// The wheel turned while the primary button is held, not dragged, at the press point: true
+    /// when the canvas took it (Plasticity's cycling through coincident edges), false to pan or zoom.
+    var onHeldScroll: (CGPoint, CGSize, ViewportScrollDirection) -> Bool = { _, _, _ in false }
     var onShiftTap: (CGPoint, CGSize) -> Bool
     var onCancel: () -> Bool = { false }
     var onDelete: () -> Bool = { false }
@@ -59,6 +62,7 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onModifierFlagsChange = onModifierFlagsChange
         nsView.onSecondaryClick = onSecondaryClick
         nsView.onShiftScroll = onShiftScroll
+        nsView.onHeldScroll = onHeldScroll
         nsView.onShiftTap = onShiftTap
         nsView.onCancel = onCancel
         nsView.onDelete = onDelete
@@ -80,6 +84,7 @@ extension ViewportInputSurface {
         var onModifierFlagsChange: ((ViewportInputModifierFlags, CGSize) -> Void)?
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
+        var onHeldScroll: ((CGPoint, CGSize, ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
         var onDoubleClick: (() -> Void)?
         var onCancel: (() -> Bool)?
@@ -102,6 +107,7 @@ extension ViewportInputSurface {
         private var trackedPointerLocation: CGPoint?
         private var lastOrbitCentroid: CGPoint?
         private var shiftScrollAccumulator: CGFloat = 0.0
+        private var heldScrollAccumulator: CGFloat = 0.0
         private var isShiftPressed = false
 
         override var isFlipped: Bool {
@@ -375,10 +381,39 @@ extension ViewportInputSurface {
                 return
             }
             markCanvasInputActive()
+            if handleHeldScroll(event) {
+                return
+            }
             if handleShiftScroll(event) {
                 return
             }
             handlePanZoomScroll(event)
+        }
+
+        /// The wheel while the primary button is held at its press point: steps handed to
+        /// `onHeldScroll`, which takes them or leaves the wheel to pan and zoom.
+        private func handleHeldScroll(_ event: NSEvent) -> Bool {
+            guard let onHeldScroll, let dragStart, !primaryDragActivated, !primaryDragCancelled,
+                  NSEvent.pressedMouseButtons & 1 != 0 else {
+                heldScrollAccumulator = 0.0
+                return false
+            }
+            let vertical = event.scrollingDeltaY
+            let horizontal = event.scrollingDeltaX
+            let dominant = abs(vertical) >= abs(horizontal) ? vertical : horizontal
+            let threshold: CGFloat = event.hasPreciseScrollingDeltas ? 8.0 : 1.0
+            heldScrollAccumulator += dominant
+            var taken = true
+            while taken, heldScrollAccumulator >= threshold {
+                taken = onHeldScroll(dragStart, bounds.size, .up)
+                heldScrollAccumulator -= threshold
+            }
+            while taken, heldScrollAccumulator <= -threshold {
+                taken = onHeldScroll(dragStart, bounds.size, .down)
+                heldScrollAccumulator += threshold
+            }
+            if taken == false { heldScrollAccumulator = 0.0 }
+            return taken
         }
 
         private func handlePanZoomScroll(_ event: NSEvent) {

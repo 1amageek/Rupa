@@ -135,6 +135,11 @@ public struct Viewport: View {
     @State private var placementHighlightFailureDescription: String?
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var hoveredCanvasHit: ViewportHit?
+    /// Control-Shift-click's list of coincident sub-shapes, open until one is chosen or the canvas
+    /// is clicked again.
+    @State private var coincidentPickMenu: ViewportCoincidentPickMenu?
+    /// The coincident sub-shape the wheel chose while the button is held, which the release picks.
+    @State private var heldCoincidentChoice: (hits: [ViewportHit], index: Int)?
     @State private var edgeTreatmentHoverTarget: SelectionTarget?
     @State private var hoveredModelPoint: Point2D?
     @State private var measurementSession = ViewportMeasurementSession()
@@ -819,80 +824,7 @@ public struct Viewport: View {
                     if let gridReadout { gridAccessibilityMarkers(readout: gridReadout) }
                 }
                 .overlay {
-                    ViewportInputSurface(
-                        onPress: { point, size, _ in
-                            beginViewportPress(at: point)
-                        },
-                        onPick: { point, size, intent in
-                            pick(at: point, size: size, selectionIntent: intent)
-                        },
-                        onCanvasDrag: { start, end, size, intent in
-                            handleCanvasDrag(
-                                from: start,
-                                to: end,
-                                size: size,
-                                selectionIntent: intent
-                            )
-                        },
-                        onDragPreview: { start, current, size in
-                            updateCanvasDragPlaceholder(
-                                from: start,
-                                to: current,
-                                size: size
-                            )
-                        },
-                        onHover: { point, size in
-                            if let point {
-                                hover(at: point, size: size)
-                            } else {
-                                clearCanvasHover()
-                            }
-                        },
-                        onPan: { delta, size in
-                            panCanvas(by: delta, size: size)
-                        },
-                        onZoom: { factor, anchor, size in
-                            zoomCanvas(by: factor, anchor: anchor, size: size)
-                        },
-                        onOrbit: { delta, size in
-                            orbitViewport(by: delta, size: size)
-                        },
-                        onModifierFlagsChange: { flags, _ in
-                            modifierFlags = flags
-                            refreshSnapOverlayResolution()
-                            refreshPlacementHighlight()
-                        },
-                        onSecondaryClick: { _, _ in
-                            // Right-click while placing a dimension measures the straight distance.
-                            if measurementToolActive, measurementSession.state.phase == .placing {
-                                measurementSession.confirmStraight()
-                                publishMeasurementState()
-                                return
-                            }
-                            onCommandConfirm?()
-                        },
-                        onShiftScroll: { direction in
-                            onShiftScroll?(direction) ?? false
-                        },
-                        onShiftTap: { point, _ in
-                            captureReferenceLineAnchor(at: point)
-                        },
-                        onCancel: {
-                            if nativeInputGesture != nil || pendingInteractionTarget != nil
-                                || activeInteractionDrags.hasActiveDrag || activeCanvasDrag != nil {
-                                clearPendingCanvasInteractionTargets()
-                                activeCanvasDrag = nil
-                                return true
-                            }
-                            guard measurementToolActive else { return false }
-                            resetMeasurement()
-                            return true
-                        },
-                        onDelete: { onDeleteSelection?() ?? false },
-                        onDoubleClick: { onDoubleClick?() },
-                        inputExclusionRects: chromeLayout.inputExclusionRects
-                    )
-                    .accessibilityHidden(true)
+                    canvasInputSurface(chromeLayout: chromeLayout)
                 }
                 .overlay {
                     faceAccessibilityMarkers(size: proxy.size, basis: basis)
@@ -2026,8 +1958,18 @@ public struct Viewport: View {
             ) else {
                 continue
             }
-            if let best, resolved.candidate.precedes(best.candidate) == false {
-                continue
+            if let best {
+                if resolved.candidate.ties(with: best.candidate) {
+                    // Coincident sub-shapes of different bodies, as the edge two touching sheets
+                    // share: the one of the body drawn at the pointer, as Plasticity picks the
+                    // edge of the sheet hovered near it.
+                    guard best.hit.kind == .body, best.hit.selectionComponent != nil,
+                          sceneNodeID == visibleSceneNodeID, best.hit.sceneNodeID != visibleSceneNodeID else {
+                        continue
+                    }
+                } else if resolved.candidate.precedes(best.candidate) == false {
+                    continue
+                }
             }
             best = (
                 ViewportHit(
@@ -2040,6 +1982,56 @@ public struct Viewport: View {
             )
         }
         return best?.hit
+    }
+
+    /// The CAD vertices or edges of different bodies lying as near the pointer as the nearest one
+    /// (`ViewportNativeHitCandidate.ties`), the body drawn at the pointer first: coincident
+    /// sub-shapes the pointer cannot tell apart, which Control-Shift-click lists to choose from.
+    /// Empty unless the nearest sub-shape is a vertex or an edge.
+    private func coincidentCADSubshapeHits(
+        at point: CGPoint,
+        visibleSurface: (triangle: MeshSourcePresentationTriangle, point: Point3D)?,
+        in scene: ViewportScene,
+        includesSelectedObjectEdges: Bool
+    ) throws -> [ViewportHit] {
+        let probe = try ViewportNativePresentationFrameProbe(
+            planCache: presentationPlanCache,
+            identity: presentationQueryIdentity(),
+            revision: activeControlSession.revision
+        )
+        let visibleSceneNodeID = visibleSurface.flatMap { surface -> SceneNodeID? in
+            guard case .cad = surface.triangle.sourceReference else { return nil }
+            return presentationSceneNodeIDByOccurrenceID[surface.triangle.occurrenceID]
+        }
+        var resolved: [(hit: ViewportHit, candidate: ViewportNativeHitCandidate)] = []
+        for item in scene.items {
+            guard let sceneNodeID = item.sceneNodeID, case .body(let component) = item.kind,
+                  presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+                  let topology = component.topology,
+                  let found = try ViewportNativeCADTopologyResolver.resolve(
+                      at: point,
+                      topology: topology,
+                      modelTransform: item.modelTransform,
+                      selectionHitPolicy: includesSelectedObjectEdges
+                          && selectionHitPolicy == .object
+                          && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID })
+                          && document.productMetadata.sceneNodes[sceneNodeID]?.isLocked == false
+                          ? .edge : selectionHitPolicy,
+                      // Faces are not listed, so no drawn surface is asked about.
+                      visibleSurface: nil,
+                      probe: probe
+                  ) else { continue }
+            resolved.append((
+                ViewportHit(featureID: item.featureID, sceneNodeID: sceneNodeID, kind: .body, selectionComponent: found.component),
+                found.candidate
+            ))
+        }
+        guard let nearest = resolved.min(by: { $0.candidate.precedes($1.candidate) }),
+              nearest.candidate.rank == .vertex || nearest.candidate.rank == .edge else { return [] }
+        let ties = resolved.filter { $0.candidate.ties(with: nearest.candidate) }
+        guard Set(ties.compactMap(\.hit.sceneNodeID)).count > 1 else { return [] }
+        return ties.filter { $0.hit.sceneNodeID == visibleSceneNodeID }.map(\.hit)
+            + ties.filter { $0.hit.sceneNodeID != visibleSceneNodeID }.map(\.hit)
     }
 
     /// Every family the rectangle admits, answered by the mounted native frame
@@ -4497,6 +4489,7 @@ public struct Viewport: View {
     }
 
     private func beginViewportPress(at point: CGPoint) {
+        heldCoincidentChoice = nil
         guard !bodyCommitHandoff.isPending else {
             nativeInputGesture = .cancelled
             return
@@ -4804,6 +4797,12 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
+        // A click on the canvas closes the coincident list without choosing.
+        if coincidentPickMenu != nil {
+            coincidentPickMenu = nil
+            onHover?(nil)
+            return
+        }
         if nativeInputGesture != nil {
             // Output mode owns no drag state, so its release resolves here.
             if case .pattern(let press) = nativeInputGesture {
@@ -4948,18 +4947,216 @@ public struct Viewport: View {
             // An unavailable frame cannot authorize selection or an edit.
             return
         }
-        onPick(
-            ViewportCanvasTarget(
-                hit: hit,
-                modelPoint: input.point,
-                modelWorldPoint: exactWorldPoint,
-                viewRayAnchorWorldPoint: viewRayAnchorWorldPoint,
-                pickRay: pickRay,
-                sketchPlane: sketchPlane,
-                selectionIntent: selectionIntent,
-                modifierFlags: modifierFlags
-            )
+        let target = ViewportCanvasTarget(
+            hit: hit,
+            modelPoint: input.point,
+            modelWorldPoint: exactWorldPoint,
+            viewRayAnchorWorldPoint: viewRayAnchorWorldPoint,
+            pickRay: pickRay,
+            sketchPlane: sketchPlane,
+            selectionIntent: selectionIntent,
+            modifierFlags: modifierFlags
         )
+        // The wheel turned while the button was held chose among coincident sub-shapes: the release
+        // picks that one.
+        if let choice = heldCoincidentChoice {
+            heldCoincidentChoice = nil
+            onHover?(nil)
+            var chosen = target
+            chosen.hit = choice.hits[choice.index]
+            onPick(chosen)
+            return
+        }
+        // Control-Shift-click on coincident vertices or edges of different bodies lists them to
+        // choose from (Plasticity's pop-up) instead of picking the one the pointer favours.
+        if modifierFlags.containsControl, modifierFlags.containsShift, presentationScene != nil {
+            let coincident: [ViewportHit]
+            do {
+                coincident = try coincidentCADSubshapeHits(
+                    at: point,
+                    visibleSurface: presentationSurface,
+                    in: scene,
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil
+                        || onEdgeChamferDrag != nil || onBoundarySurface != nil
+                )
+            } catch {
+                // An unavailable frame cannot authorize selection or an edit.
+                return
+            }
+            if coincident.count > 1 {
+                let nodes = document.productMetadata.sceneNodes
+                coincidentPickMenu = ViewportCoincidentPickMenu(
+                    point: point, target: target, hits: coincident, name: { nodes[$0]?.name }
+                )
+                return
+            }
+        }
+        onPick(target)
+    }
+
+    /// The wheel turned with the button held at `point`: over coincident vertices or edges of
+    /// different bodies it steps through them (Plasticity's scroll method), highlighting the object
+    /// of the one the release will pick; anywhere else it is left to pan and zoom.
+    private func cycleHeldCoincidentChoice(at point: CGPoint, size: CGSize, direction: ViewportScrollDirection) -> Bool {
+        guard presentationScene != nil, nativeInputGesture == nil, pendingInteractionTarget == nil,
+              measurementToolActive == false, pointPickActive == false else { return false }
+        if heldCoincidentChoice == nil {
+            let scene = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).scene
+            let hits: [ViewportHit]
+            do {
+                hits = try coincidentCADSubshapeHits(
+                    at: point,
+                    visibleSurface: try presentationSurfaceHit(at: point),
+                    in: scene,
+                    includesSelectedObjectEdges: onEdgeFilletDrag != nil
+                        || onEdgeChamferDrag != nil || onBoundarySurface != nil
+                )
+            } catch {
+                // An unavailable frame cannot choose among sub-shapes; the wheel stays the camera's.
+                return false
+            }
+            guard hits.count > 1 else { return false }
+            // The pointer's own pick is the first; the first step moves off it.
+            heldCoincidentChoice = (hits, 0)
+        }
+        guard var choice = heldCoincidentChoice else { return false }
+        let step = direction == .up ? 1 : choice.hits.count - 1
+        choice.index = (choice.index + step) % choice.hits.count
+        heldCoincidentChoice = choice
+        let hit = choice.hits[choice.index]
+        onHover?(ViewportHit(featureID: hit.featureID, sceneNodeID: hit.sceneNodeID, kind: hit.kind))
+        return true
+    }
+
+    /// The canvas's pointer, wheel and key input, with the chrome's rectangles left to the
+    /// controls drawn over it, and Control-Shift-click's list over it.
+    private func canvasInputSurface(chromeLayout: ViewportCanvasChromeLayout) -> some View {
+        ZStack {
+            canvasInputView(chromeLayout: chromeLayout)
+                .accessibilityHidden(true)
+            // Control-Shift-click's list lies over the input it is excluded from.
+            coincidentPickMenuOverlay
+        }
+    }
+
+    private func canvasInputView(chromeLayout: ViewportCanvasChromeLayout) -> ViewportInputSurface {
+        ViewportInputSurface(
+            onPress: { point, size, _ in
+                beginViewportPress(at: point)
+            },
+            onPick: { point, size, intent in
+                pick(at: point, size: size, selectionIntent: intent)
+            },
+            onCanvasDrag: { start, end, size, intent in
+                handleCanvasDrag(
+                    from: start,
+                    to: end,
+                    size: size,
+                    selectionIntent: intent
+                )
+            },
+            onDragPreview: { start, current, size in
+                updateCanvasDragPlaceholder(
+                    from: start,
+                    to: current,
+                    size: size
+                )
+            },
+            onHover: { point, size in
+                if let point {
+                    hover(at: point, size: size)
+                } else {
+                    clearCanvasHover()
+                }
+            },
+            onPan: { delta, size in
+                panCanvas(by: delta, size: size)
+            },
+            onZoom: { factor, anchor, size in
+                zoomCanvas(by: factor, anchor: anchor, size: size)
+            },
+            onOrbit: { delta, size in
+                orbitViewport(by: delta, size: size)
+            },
+            onModifierFlagsChange: { flags, _ in
+                modifierFlags = flags
+                refreshSnapOverlayResolution()
+                refreshPlacementHighlight()
+            },
+            onSecondaryClick: { _, _ in
+                // Right-click while placing a dimension measures the straight distance.
+                if measurementToolActive, measurementSession.state.phase == .placing {
+                    measurementSession.confirmStraight()
+                    publishMeasurementState()
+                    return
+                }
+                onCommandConfirm?()
+            },
+            onShiftScroll: { direction in
+                onShiftScroll?(direction) ?? false
+            },
+            onHeldScroll: { point, size, direction in
+                cycleHeldCoincidentChoice(at: point, size: size, direction: direction)
+            },
+            onShiftTap: { point, _ in
+                captureReferenceLineAnchor(at: point)
+            },
+            onCancel: {
+                if nativeInputGesture != nil || pendingInteractionTarget != nil
+                    || activeInteractionDrags.hasActiveDrag || activeCanvasDrag != nil {
+                    clearPendingCanvasInteractionTargets()
+                    activeCanvasDrag = nil
+                    return true
+                }
+                guard measurementToolActive else { return false }
+                resetMeasurement()
+                return true
+            },
+            onDelete: { onDeleteSelection?() ?? false },
+            onDoubleClick: { onDoubleClick?() },
+            inputExclusionRects: canvasInputExclusionRects(chromeLayout)
+        )
+    }
+
+    /// The canvas chrome's rectangles, and the coincident list's while it is open: the points the
+    /// input surface leaves to the controls drawn over it.
+    private func canvasInputExclusionRects(_ chromeLayout: ViewportCanvasChromeLayout) -> [CGRect] {
+        guard let menu = coincidentPickMenu else { return chromeLayout.inputExclusionRects }
+        return chromeLayout.inputExclusionRects + [menu.inputExclusionRect]
+    }
+
+    /// Control-Shift-click's list: an entry per coincident sub-shape, hovering one highlighting its
+    /// object, clicking one picking it.
+    @ViewBuilder
+    private var coincidentPickMenuOverlay: some View {
+        if let menu = coincidentPickMenu {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(menu.entries) { entry in
+                    Button {
+                        coincidentPickMenu = nil
+                        onHover?(nil)
+                        onPick?(menu.target(choosing: entry))
+                    } label: {
+                        Text(entry.title)
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { inside in
+                        onHover?(inside ? menu.objectHit(of: entry) : nil)
+                    }
+                    .accessibilityIdentifier("viewport.coincidentPick.\(entry.id)")
+                }
+            }
+            .padding(4)
+            .fixedSize()
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .offset(x: menu.point.x + 8, y: menu.point.y + 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 
     private func finishPendingInteractionClick(_ target: ViewportInteractionTarget) {

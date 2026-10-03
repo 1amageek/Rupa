@@ -49,4 +49,16 @@ struct ViewportNativeHitCandidate {
     func precedes(_ other: ViewportNativeHitCandidate) -> Bool {
         rank == other.rank ? metric < other.metric : rank.rawValue < other.rank.rawValue
     }
+
+    /// Projected distances, in points, within which two vertices or two edges lie as near the
+    /// pointer as each other: coincident sub-shapes of different bodies, such as the edge two
+    /// touching sheets share, whose tessellations differ by less than this.
+    static let coincidentMetricTolerance = 1.0
+
+    /// Whether this candidate and `other` are a vertex or an edge each, as near the pointer as
+    /// each other, so that neither precedes the other for the pointer to choose between them.
+    func ties(with other: ViewportNativeHitCandidate) -> Bool {
+        rank == other.rank && (rank == .vertex || rank == .edge)
+            && abs(metric - other.metric) <= Self.coincidentMetricTolerance
+    }
 }
