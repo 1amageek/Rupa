@@ -27,7 +27,7 @@ import SwiftCAD
     #expect(source.meshCounts.vertexCount == 6)
     #expect(source.meshCounts.triangleCount == 4)
     #expect(source.options.mergePatches == false)
-    #expect(source.options.interpolateBoundaryExactly)
+    #expect(source.options.interpolateBoundaryExactly == false)
     #expect(source.support.isSupported)
     #expect(source.support.candidateKind == "quadPatchGraph")
     #expect(source.support.supportedPatchCount == 2)

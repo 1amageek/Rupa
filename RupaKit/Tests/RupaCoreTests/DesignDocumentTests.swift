@@ -350,7 +350,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     #expect(node.object?.properties["control.point.u"] == .integer(4))
     #expect(node.object?.properties["control.point.v"] == .integer(4))
     #expect(node.object?.properties["merge.patches"] == .boolean(true))
-    #expect(node.object?.properties["interpolate.boundary"] == .boolean(true))
+    #expect(node.object?.properties["interpolate.boundary"] == .boolean(false))
 }
 
 @Test func polySplineSurfaceVertexMoveMutatesSourceBoundaryVertex() async throws {
@@ -1997,7 +1997,7 @@ func objectTypeRegistryReusesPreorderedDefinitionStorage() {
     #expect(node.object?.properties["control.point.u"] == .integer(4))
     #expect(node.object?.properties["control.point.v"] == .integer(4))
     #expect(node.object?.properties["merge.patches"] == .boolean(false))
-    #expect(node.object?.properties["interpolate.boundary"] == .boolean(true))
+    #expect(node.object?.properties["interpolate.boundary"] == .boolean(false))
 }
 
 @Test func polySplineMeshAnalysisServiceReportsRoundedCornerSupport() async throws {

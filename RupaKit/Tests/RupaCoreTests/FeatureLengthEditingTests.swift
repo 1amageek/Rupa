@@ -62,15 +62,16 @@ struct FeatureLengthEditingTests {
     @Test func shellRebindsParametersAndRefusesInvalidReplacement() throws {
         let session = try fixture(kind: 4)
         let id = try #require(session.document.cadDocument.designGraph.order.last)
-        _ = try session.execute(.upsertParameter(name: "wall", expression: .length(0.003, .meter), kind: .length))
+        // A negative wall hollows inward (positive grows the walls outward).
+        _ = try session.execute(.upsertParameter(name: "wall", expression: .length(-0.003, .meter), kind: .length))
         let expression = try ParameterExpressionParser().parse("wall", parameters: session.document.cadDocument.parameters, targetKind: .length)
         _ = try session.execute(.setFeatureLength(featureID: id, expression: expression))
-        _ = try session.execute(.upsertParameter(name: "wall", expression: .length(0.005, .meter), kind: .length))
+        _ = try session.execute(.upsertParameter(name: "wall", expression: .length(-0.005, .meter), kind: .length))
         let original = session.document
         let result = try DocumentEvaluator.modelingDefault(for: original).evaluateExact(original.cadDocument)
         #expect(abs(try result.brep.volume(tolerance: original.modelingSettings.tolerance)
             - (0.001 - 0.09 * 0.09 * 0.095)) < 1e-12)
-        for invalid in [CADExpression.length(0, .meter), .length(0.2, .meter), .angle(2, .degree)] {
+        for invalid in [CADExpression.length(0, .meter), .length(-0.2, .meter), .angle(2, .degree)] {
             #expect(throws: (any Error).self) { try session.execute(.setFeatureLength(featureID: id, expression: invalid)) }
             #expect(session.document.cadDocument.designGraph == original.cadDocument.designGraph)
             #expect(session.document.productMetadata == original.productMetadata)
@@ -106,7 +107,7 @@ struct FeatureLengthEditingTests {
         let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
         let target = try #require(topology.entries.first { $0.kind == (kind >= 4 ? .face : .edge) }?.selectionTarget())
         switch kind {
-        case 4: _ = try session.execute(.createBodyShell(name: "Shell", target: target, thickness: .length(0.002, .meter)))
+        case 4: _ = try session.execute(.createBodyShell(name: "Shell", target: target, thickness: .length(-0.002, .meter)))
         case 5: _ = try session.execute(.createSheetSurfaceEdit(name: "Offset", target: target, edit: .offset(distance: .length(0.002, .meter))))
         default:
             let treatment: BodyEdgeTreatment = kind == 1 ? .fillet(radius: .length(0.002, .meter))

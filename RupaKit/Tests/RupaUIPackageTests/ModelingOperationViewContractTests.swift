@@ -10,7 +10,7 @@ struct ModelingOperationViewContractTests {
         var calls = 0
         let document = DesignDocument.empty()
         let cases: [(ModelingOperationDraft.Kind, String?)] = [
-            (ModelingOperationDraft.Kind.loft, "Select at least two ordered sections, separate from guides."),
+            (ModelingOperationDraft.Kind.loft, "Select at least two ordered sections, separate from guides, or one section with a guide leaving each end."),
             (.box, nil),
         ]
         for (kind, expected) in cases {
