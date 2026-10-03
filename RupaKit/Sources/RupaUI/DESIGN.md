@@ -894,7 +894,11 @@ Distance, Plasticity's Gap fill row (Round | Linear | Natural, V stepping it) an
 Imprint on what is selected (`WorkspaceImprintSession`): one solid or sheet object
 with sketch curves or curve objects imprints the curves (Method Normal or Vector
 with its direction, Bidirectional and Hide occlusion, and Completion); two objects
-imprint the second onto the first (Complete target, Imprint tool, Complete tool).
+imprint the second onto the first (Complete target, Imprint tool, Complete tool). With curves
+alone, one object alone or nothing selected it starts picking (the `imprint` picking command,
+object hits): the first body clicked is the target, then clicked curves go on or off and a
+second body becomes the tool, as Plasticity's target and tool slots take them; OK reports what
+is still to pick.
 E starts Extrude on the selected faces, regions or curves (palette Extrude too), D typing its distance. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line

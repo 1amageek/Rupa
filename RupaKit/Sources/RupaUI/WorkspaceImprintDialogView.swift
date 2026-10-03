@@ -11,6 +11,10 @@ struct WorkspaceImprintDialogView: View {
 
     var body: some View {
         switch dialog.kind {
+        case .picking:
+            Text(dialog.missingInput ?? "")
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("WorkspaceImprint.prompt")
         case .curves:
             Picker("Method", selection: $dialog.method) {
                 ForEach(WorkspaceImprintSession.Method.allCases, id: \.self) { Text($0.title).tag($0) }

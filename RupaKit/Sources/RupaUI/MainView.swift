@@ -6072,6 +6072,9 @@ private struct ProjectMainViewContent: View {
             if let deformSession {
                 return .pickingCommand(.deform, hitPolicy: deformSession.viewportHitPolicy, scope: selectionScope, transforming: transforming)
             }
+            if imprintSession?.takesPicks == true {
+                return .pickingCommand(.imprint, hitPolicy: .object, scope: selectionScope, transforming: transforming)
+            }
             if faceEditSession?.takesFacePicks == true {
                 return .pickingCommand(.faceEdit, hitPolicy: .face, scope: selectionScope, transforming: transforming)
             }
@@ -6111,6 +6114,8 @@ private struct ProjectMainViewContent: View {
             pickBodyCutOperand(at: target)
         case .deform:
             pickDeformFace(at: target)
+        case .imprint:
+            pickImprintOperand(at: target)
         case .faceEdit:
             pickFaceEditFace(at: target)
         case .filletEdit:
@@ -6765,7 +6770,7 @@ private struct ProjectMainViewContent: View {
         case .beginImprint:
             guard let kind = imprintSessionKind() else { return .ignored }
             imprintSession = WorkspaceImprintSession(kind: kind)
-            reportToolStatus("Imprint: choose the options, then OK, Return or right-click.")
+            reportToolStatus(imprintSession?.missingInput ?? "Imprint: choose the options, then OK, Return or right-click.")
             return .handled
         case .beginIsoparam:
             if selectedBodyFaceTargets.isEmpty, snapshot.selection.selectedTargets.isEmpty {
@@ -10444,7 +10449,8 @@ private struct ProjectMainViewContent: View {
     }
 
     /// What Shift-I imprints from the selection: curves (sketch curves, or curve objects) onto
-    /// the one solid or sheet object selected, or the second object selected onto the first.
+    /// the one solid or sheet object selected, or the second object selected onto the first. With
+    /// curves alone, one object alone or nothing, Imprint starts picking what is missing.
     private func imprintSessionKind() -> WorkspaceImprintSession.Kind? {
         let bodies = selectedBodyObjectIDs
         let nodes = snapshot.document.document.productMetadata.sceneNodes
@@ -10459,13 +10465,45 @@ private struct ProjectMainViewContent: View {
         if bodies.count == 2, curves.isEmpty {
             return .bodies(target: bodies[0], tool: bodies[1])
         }
+        if bodies.count == 1, let target = bodies.first {
+            return .picking(target: target, curves: [])
+        }
+        if bodies.isEmpty {
+            return .picking(target: nil, curves: curves)
+        }
         return nil
+    }
+
+    /// A click while Imprint picks: a solid or sheet is its target, then its tool; a sketch or
+    /// curve object goes on or off its curves.
+    private func pickImprintOperand(at target: ViewportCanvasTarget) {
+        var resolver = selectionTargetResolver
+        resolver.selectionScope = .object
+        guard var imprint = imprintSession, let hit = target.hit, let picked = resolver.selectionTarget(for: hit),
+              let reference = snapshot.document.document.productMetadata.sceneNodes[picked.sceneNodeID]?.reference else {
+            reportToolStatus(imprintSession?.missingInput ?? "Imprint: click a body or a curve.", severity: .warning)
+            return
+        }
+        if reference.kind == .body {
+            imprint.pick(body: picked.sceneNodeID)
+        } else if reference.featureID != nil {
+            imprint.pick(curve: SelectionTarget(sceneNodeID: picked.sceneNodeID))
+        } else {
+            reportToolStatus("Imprint: click a body or a curve.", severity: .warning)
+            return
+        }
+        imprintSession = imprint
+        reportToolStatus(imprint.missingInput ?? "Imprint: choose the options, then OK, Return or right-click.")
     }
 
     /// Applies the running imprinting dialog as one step; it stays for another try when Core refuses.
     private func confirmImprint() {
         guard let imprint = imprintSession else { return }
-        submitDialogCommand([imprint.command()], name: imprint.title, instance: imprint.instance,
+        guard let command = imprint.command() else {
+            reportToolStatus(imprint.missingInput ?? "Imprint: pick what to imprint.", severity: .warning)
+            return
+        }
+        submitDialogCommand([command], name: imprint.title, instance: imprint.instance,
                             running: { imprintSession?.instance }, end: { imprintSession = nil },
                             done: { reportToolStatus("\(imprint.title) applied.") })
     }

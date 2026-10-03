@@ -11,6 +11,8 @@ enum WorkspaceViewportPickingCommand: Equatable, Sendable {
     case boolean
     case bodyCut
     case deform
+    /// Imprint's target, curves and tool body, clicked while its dialog runs.
+    case imprint
     /// Draft Face's and Match Face's reference and faces, clicked while their dialog runs.
     case faceEdit
     /// Fillet's edges toggled, and a round's radius copied, by clicks while its dialog runs.
