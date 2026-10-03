@@ -240,7 +240,7 @@ Selected-edge Fillet, Chamfer and G2 Blend use the
 [Core topology editing](../../RupaCore/TopologyEditing/DESIGN.md) contract,
 not extrusion-profile corner rewriting. They require one generated CAD edge
 and an amount above modeling tolerance, except Fillet's Full shape, which takes
-the two edges on either side of a face and no amount (`fullFillet(across:)`).
+edges two by two, each pair on either side of a face, and no amount (`fullFillet(across:pairs:)`; Full is offered only for such edges).
 Several distinct edges of one body take the same treatment in turn
 (`several(_:more:)`); edges that meet join at the kernel's mitres, and three
 square edges rounded at a corner close on its rolling ball; chamfers that meet

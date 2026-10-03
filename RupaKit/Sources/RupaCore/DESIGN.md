@@ -583,7 +583,7 @@ continuity names the edge's body as an input, which must likewise be shown where
 Edge treatments (Fillet of any shape, Chamfer, G2 Blend, Setback Corner) rebuild their body in
 place and are measured as the body they evaluate to, the treated source being superseded; a
 sheet's fillet, chamfer or G2 blend is measured as the sheet it evaluates to. A Full
-fillet (`BodyEdgeTreatment.fullFillet(across:)`) resolves both edges and states the round's radius,
+fillet (`BodyEdgeTreatment.fullFillet(across:pairs:)`, further pairs rounding their own faces with it) resolves its edges and states the first pair's radius,
 which the kernel's `FullFilletRadius` reads from the faces (and the evaluator checks).
 
 `createApexLoft` adds a Loft from one section to a vertex of a body (`loftApex(for:)` reads the

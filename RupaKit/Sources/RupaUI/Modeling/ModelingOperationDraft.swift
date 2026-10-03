@@ -402,11 +402,11 @@ struct ModelingOperationDraft: Equatable {
 
     /// Plasticity's default: Conic at tension 0.5, which is the round of the distance's radius.
     var filletShape = FilletShapeChoice.conic
-    /// The shapes the dialog offers for its edges: Full only once two edges, the pair on either
-    /// side of a face, are its targets, as Plasticity's Shape row shows it.
+    /// The shapes the dialog offers for its edges: Full only once its targets are edges two by
+    /// two, each pair on either side of a face, as Plasticity's Shape row shows it.
     var offeredFilletShapes: [FilletShapeChoice] {
         let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
-        let pairs = edges.count == 2 && targets.count == 2
+        let pairs = edges.count >= 2 && edges.count % 2 == 0 && targets.count == edges.count
         return FilletShapeChoice.offered.filter { $0 != .full || pairs || filletShape == .full }
     }
     var filletTension = "0.5"
@@ -1237,10 +1237,11 @@ struct ModelingOperationDraft: Equatable {
             return .createSheetSurfaceEdit(name: name, target: targets[0], edit: edit)
         case .fillet where filletShape == .full:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
-            guard edges.count == 2, targets.count == 2 else {
-                throw invalid("Full rounds across the face between two edges; select both.")
+            guard edges.count >= 2, edges.count % 2 == 0, targets.count == edges.count else {
+                throw invalid("Full rounds across a face between each pair of edges; select them two by two.")
             }
-            return .createBodyEdgeTreatment(name: name, target: edges[0], treatment: .fullFillet(across: edges[1]))
+            return .createBodyEdgeTreatment(name: name, target: edges[0],
+                                            treatment: .fullFillet(across: edges[1], pairs: Array(edges.dropFirst(2))))
         case .fillet, .chamfer, .g2Blend:
             let edges = WorkspaceSelectionTargetClassification(targets: targets).edgeTargets
             guard edges.isEmpty == false, edges.count == targets.count, Set(edges).count == edges.count,

@@ -27,13 +27,19 @@ extension DesignDocument {
                 operation: SeveralEdgeTreatment(base: base, more: others.map(\.reference)),
                 objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
         }
-        if case .fullFillet(let across) = treatment {
+        if case .fullFillet(let across, let pairs) = treatment {
             let first = try topologyEditSelection(target, kind: .edge, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
             let second = try topologyEditSelection(across, kind: .edge, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
-            guard first.sourceID == second.sourceID, first.reference != second.reference else {
-                throw EditorError(code: .commandInvalid, message: "A full fillet takes two edges of one body.")
+            let further = try pairs.map { edge in
+                try topologyEditSelection(edge, kind: .edge, objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            }
+            let all = [first, second] + further
+            guard pairs.count % 2 == 0, all.allSatisfy({ $0.sourceID == first.sourceID }),
+                  Set(all.map(\.reference)).count == all.count else {
+                throw EditorError(code: .commandInvalid, message: "A full fillet takes distinct edges of one body, two by two.")
             }
             // The round's radius, which its faces fix.
             let evaluated = try DocumentEvaluationContextResolver().exactEvaluatedDocument(
@@ -47,7 +53,7 @@ extension DesignDocument {
                 throw EditorError(code: .commandInvalid, message: "Full fillet: \(error.message)")
             }
             return try prepareTopologyEdit(name: name, target: target,
-                operation: FullFilletEdges(across: second.reference, radius: radius),
+                operation: FullFilletEdges(across: second.reference, pairs: further.map(\.reference), radius: radius),
                 objectRegistry: objectRegistry, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
         }
         return try prepareTopologyEdit(name: name, target: target, operation: treatment, objectRegistry: objectRegistry,
