@@ -64,8 +64,9 @@ extension DesignDocument {
             }
         }
         let object = try offsetObject(for: [SelectionTarget(sceneNodeID: target)], operationName: operationName)
-        guard productMetadata.sceneNodes[target]?.object?.geometryRole == .solid else {
-            throw EditorError(code: .commandInvalid, message: "\(operationName) works on solid objects.")
+        // A solid heals closed over its rounds; a sheet heals open.
+        guard [.solid, .surface].contains(productMetadata.sceneNodes[target]?.object?.geometryRole) else {
+            throw EditorError(code: .commandInvalid, message: "\(operationName) works on solids and sheets.")
         }
         return try appendFeatureShownByObject(
             .removeFillets(RemoveFilletsFeature(

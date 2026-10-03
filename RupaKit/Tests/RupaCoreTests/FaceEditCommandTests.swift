@@ -127,6 +127,26 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func removeFilletsSharpensASheet() throws {
+        // The rounded box opened top and bottom is a sheet; its four rounds go and its walls meet.
+        let session = EditorSession()
+        let target = try box(session, "Box")
+        let sketch = try #require(session.document.productMetadata.sceneNodes[target]?.childIDs.first)
+        _ = try session.execute(.setSceneNodeObjectProperty(id: sketch, propertyID: PropertyID(rawValue: "corner.radius"), value: .length(0.01)))
+        let caps = try [Vector3D(x: 0, y: 0, z: 1), Vector3D(x: 0, y: 0, z: -1)].map { normal in
+            try face(of: target, in: session, normal: normal) { $0.z * normal.z }
+        }
+        _ = try session.execute(.deleteBodyFaces(targets: caps))
+        let sheet = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body && $0.object?.geometryRole == .surface
+        }).id
+        _ = try session.execute(.removeFillets(target: sheet, maximumRadius: .length(0.02, .meter), convexity: .convex))
+        #expect(session.evaluationStatus == .valid)
+        #expect(try faces(of: sheet, in: session).count == 4)
+        #expect(session.document.productMetadata.sceneNodes[sheet]?.object?.geometryRole == .surface)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func deleteRedundantTopologyMakesASplitTopWholeAgain() throws {
         let session = EditorSession()
         let target = try box(session, "Box")

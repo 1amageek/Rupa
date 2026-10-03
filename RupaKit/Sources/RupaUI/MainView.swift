@@ -6912,7 +6912,7 @@ private struct ProjectMainViewContent: View {
             return .handled
         case .beginRemoveFillets:
             guard selectedBodyObjectIDs.count == 1, let object = selectedBodyObjectIDs.first else {
-                reportToolStatus("Remove Fillets: select one solid.", severity: .warning)
+                reportToolStatus("Remove Fillets: select one solid or sheet.", severity: .warning)
                 return .handled
             }
             faceEditSession = WorkspaceFaceEditSession(kind: .removeFillets(object: object))
