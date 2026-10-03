@@ -1704,6 +1704,34 @@ struct ModelingOperationDraftTests {
         #expect(none == nil)
     }
 
+    @Test func solidDialogKeysSetTheBooleanKeepToolsAndTheFieldTyped() {
+        var revolve = makeDraft(.revolve, targets: [])
+        let slice = revolve.apply(.boolean(.slice))
+        let keep = revolve.apply(.keepTools)
+        #expect(slice != nil && keep != nil && revolve.solidBoolean == .slice && revolve.keepsTools)
+        let angle = revolve.apply(.angle)
+        #expect(angle != nil && revolve.focusRequest?.field == .angle)
+        let thickness = revolve.apply(.thickness)
+        #expect(thickness != nil && revolve.focusRequest?.field == .thickness)
+        let noDistance = revolve.apply(.distance)
+        #expect(noDistance == nil)
+        var sweep = makeDraft(.sweep, targets: [])
+        let twist = sweep.apply(.distance)
+        #expect(twist != nil && sweep.focusRequest?.field == .twist)
+        let sweepAngle = sweep.apply(.angle)
+        let sweepThickness = sweep.apply(.thickness)
+        #expect(sweepAngle == nil && sweepThickness == nil)
+        var pipe = makeDraft(.pipe, targets: [])
+        let size = pipe.apply(.distance)
+        #expect(size != nil && pipe.focusRequest?.field == .distance)
+        pipe.pipeCustomProfile = true
+        let customSize = pipe.apply(.distance)
+        #expect(customSize == nil)
+        var loft = makeDraft(.loft, targets: [])
+        let loftUnion = loft.apply(.boolean(.union))
+        #expect(loftUnion == nil && loft.solidBoolean == .automatic)
+    }
+
     @Test func aBadgeClickStepsItsOwnBoundary() {
         // Plasticity's round badges: one per boundary edge, a click stepping that edge alone
         // (Square G0, G1, G2, Free; XNURBS G0, G1, G2); a curve side and a guide carry none; Patch's

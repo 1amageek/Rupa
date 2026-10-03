@@ -6433,7 +6433,7 @@ private struct ProjectMainViewContent: View {
             isLoftDialogActive: modelingDraft?.kind == .loft,
             isSideContinuityDialogActive: modelingDraft?.kind == .square || modelingDraft?.kind == .xnurbs,
             isIsoparamPickActive: { if case .isoparam = pointPickRequest { return true } else { return false } }(),
-            isExtrudeDialogActive: modelingDraft?.kind == .extrude,
+            isSolidDialogActive: modelingDraft?.takesSolidDialogKeys == true,
             isPatchDialogActive: modelingDraft?.kind == .patch,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
@@ -6894,8 +6894,9 @@ private struct ProjectMainViewContent: View {
             beginModelingOperation(.extrude)
             reportToolStatus("Extrude: D types the distance; Preview then Apply.")
             return .handled
-        case .focusExtrudeDistance:
-            modelingDraft?.focusExtrudeDistance()
+        case .solidDialogKey(let key):
+            guard let status = modelingDraft?.apply(key) else { return .ignored }
+            reportToolStatus(status)
             return .handled
         case .cyclePatchContinuity:
             modelingDraft?.cyclePatchContinuity()

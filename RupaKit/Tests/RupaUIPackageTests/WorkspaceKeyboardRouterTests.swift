@@ -920,8 +920,26 @@ private func keyboardContext(
     let router = WorkspaceKeyboardRouter()
     var context = keyboardContext()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "e"), context: context) == .beginExtrude)
-    context.isExtrudeDialogActive = true
-    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .focusExtrudeDistance)
+    context.isSolidDialogActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .solidDialogKey(.distance))
+}
+
+/// Plasticity's keys inside Extrude, Revolve, Sweep and Pipe: Shift+Q Slice, Q Union, W Difference,
+/// Shift+E Intersect, B New body, T Keep tools, A angle, Shift+T thickness.
+@Test func workspaceKeyboardRouterGivesSolidDialogsTheirBooleanAndFieldKeys() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isSolidDialogActive = true
+    let plain: [(String, ModelingOperationDraft.SolidDialogKey)] = [
+        ("q", .boolean(.union)), ("w", .boolean(.difference)), ("b", .boolean(.newBody)), ("t", .keepTools), ("a", .angle),
+    ]
+    for (key, expected) in plain {
+        #expect(router.action(for: WorkspaceKeyboardInput(characters: key), context: context) == .solidDialogKey(expected))
+    }
+    let shifted: [(String, ModelingOperationDraft.SolidDialogKey)] = [("Q", .boolean(.slice)), ("E", .boolean(.intersect)), ("T", .thickness)]
+    for (key, expected) in shifted {
+        #expect(router.action(for: WorkspaceKeyboardInput(characters: key, modifiers: [.shift]), context: context) == .solidDialogKey(expected))
+    }
 }
 
 @Test func workspaceKeyboardRouterStartsSquareOnOptionShiftQ() {

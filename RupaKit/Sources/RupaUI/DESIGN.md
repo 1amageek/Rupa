@@ -902,7 +902,12 @@ alone, one object alone or nothing selected it starts picking (the `imprint` pic
 object hits): the first body clicked is the target, then clicked curves go on or off and a
 further body goes on or off the tools, as Plasticity's target and tool slots take them; OK reports what
 is still to pick.
-E starts Extrude on the selected faces, regions or curves (palette Extrude too), D typing its distance. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
+E starts Extrude on the selected faces, regions or curves (palette Extrude too). Inside a solid
+Extrude, Revolve, Sweep or Pipe dialog (`ModelingOperationDraft.SolidDialogKey`) Shift+Q, Q, W and
+Shift+E choose Slice, Union, Difference and Intersect, B New body, T turns Keep tools, A types the
+angle (Extrude's Degrees, Revolve's and Pipe's Angle), Shift+T the thickness (not a sheet's, not
+Sweep's) and D Extrude's distance, Pipe's size or Sweep's twist; a key the dialog has no option for
+is ignored. Control-R starts Isoparam on a selected face (Tab switches U and V, S toggles
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
 through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the

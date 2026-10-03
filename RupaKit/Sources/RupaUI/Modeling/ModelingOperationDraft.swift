@@ -281,7 +281,7 @@ struct ModelingOperationDraft: Equatable {
     var squareAnalysisLevel = LoftContinuityChoice.g1
 
     /// A field a command key asks the form to type into; `serial` makes a repeated request a change.
-    enum FocusField: Hashable { case distance, angle, tension }
+    enum FocusField: Hashable { case distance, angle, tension, thickness, twist }
     struct FocusRequest: Equatable { var field: FocusField; var serial: Int }
     var focusRequest: FocusRequest?
 
@@ -294,11 +294,6 @@ struct ModelingOperationDraft: Equatable {
         default: return
         }
         focusRequest = FocusRequest(field: key == "a" ? .angle : .distance, serial: (focusRequest?.serial ?? 0) + 1)
-    }
-
-    /// Extrude's D: its distance takes the typing.
-    mutating func focusExtrudeDistance() {
-        focusRequest = FocusRequest(field: .distance, serial: (focusRequest?.serial ?? 0) + 1)
     }
 
     /// Loft's D: the tension both ends take.

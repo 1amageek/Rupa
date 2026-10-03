@@ -273,8 +273,9 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleIsoparamPickDirection
     /// E: Extrude on the selected faces, regions or curves (palette too).
     case beginExtrude
-    /// D while Extrude's dialog runs: its distance.
-    case focusExtrudeDistance
+    /// A key of Extrude's, Revolve's, Sweep's or Pipe's dialog: its Boolean, Keep tools, or the
+    /// field that takes the typing.
+    case solidDialogKey(ModelingOperationDraft.SolidDialogKey)
     /// Tab while Patch's dialog runs: its continuity steps.
     case cyclePatchContinuity
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
@@ -439,8 +440,10 @@ struct WorkspaceKeyboardContext: Sendable {
     var isSideContinuityDialogActive: Bool = false
     /// Whether Isoparam waits for a click on a face (Tab switches its direction).
     var isIsoparamPickActive: Bool = false
-    /// Whether Extrude's dialog runs (D types its distance).
-    var isExtrudeDialogActive: Bool = false
+    /// Whether Extrude's, Revolve's, Sweep's or Pipe's solid dialog runs, taking Plasticity's keys:
+    /// Shift+Q Slice, Q Union, W Difference, Shift+E Intersect, B New body, T Keep tools, A angle,
+    /// Shift+T thickness, D distance.
+    var isSolidDialogActive: Bool = false
     /// Whether Patch's dialog runs (Tab steps its continuity).
     var isPatchDialogActive: Bool = false
     /// Whether Project Curve Body's dialog runs.
@@ -574,9 +577,26 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.ownsTextEditingKeys, input.isTab {
             return .cyclePatchContinuity
         }
-        if context.isExtrudeDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
-           !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {
-            return .focusExtrudeDistance
+        if context.isSolidDialogActive, input.phases.contains(.down), !context.ownsTextEditingKeys {
+            let key = input.characters.lowercased()
+            if input.modifiers.isEmpty {
+                switch key {
+                case "q": return .solidDialogKey(.boolean(.union))
+                case "w": return .solidDialogKey(.boolean(.difference))
+                case "b": return .solidDialogKey(.boolean(.newBody))
+                case "t": return .solidDialogKey(.keepTools)
+                case "a": return .solidDialogKey(.angle)
+                case "d": return .solidDialogKey(.distance)
+                default: break
+                }
+            } else if input.modifiers == [.shift] {
+                switch key {
+                case "q": return .solidDialogKey(.boolean(.slice))
+                case "e": return .solidDialogKey(.boolean(.intersect))
+                case "t": return .solidDialogKey(.thickness)
+                default: break
+                }
+            }
         }
         if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "t" {

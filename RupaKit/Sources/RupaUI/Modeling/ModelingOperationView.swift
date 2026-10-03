@@ -294,9 +294,11 @@ struct ModelingOperationView: View {
                 vectorFields("Direction", values: $draft.axis, unit: "")
             }
             TextField("Degrees", text: $draft.draftDegrees)
+                .focused($focusedField, equals: .angle)
                 .accessibilityIdentifier("Modeling.extrusionDraftDegrees")
             if !draft.createsSheet {
                 lengthField("Thickness", text: $draft.wallThickness)
+                    .focused($focusedField, equals: .thickness)
             }
             if !draft.isSurfaceCreation {
                 Toggle("Sheet output", isOn: $draft.sheet)
@@ -343,8 +345,10 @@ struct ModelingOperationView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             TextField("Angle (degrees)", text: $draft.angle)
+                .focused($focusedField, equals: .angle)
             if !draft.createsSheet {
                 lengthField("Thickness", text: $draft.wallThickness)
+                    .focused($focusedField, equals: .thickness)
             }
             if !draft.isSurfaceCreation {
                 Toggle("Sheet output", isOn: $draft.sheet)
@@ -364,12 +368,15 @@ struct ModelingOperationView: View {
             Toggle("Custom profile", isOn: $draft.pipeCustomProfile)
             if !draft.pipeCustomProfile {
                 lengthField("Diameter", text: $draft.pipeDiameter)
+                    .focused($focusedField, equals: .distance)
             }
             lengthField("Thickness (+ outward, − inward)", text: $draft.wallThickness)
+                .focused($focusedField, equals: .thickness)
             if !draft.pipeCustomProfile {
                 TextField("Vertices (0 for a circle)", text: $draft.pipeVertices)
             }
             TextField("Angle (degrees)", text: $draft.pipeAngle)
+                .focused($focusedField, equals: .angle)
             TextField("Twist (degrees)", text: $draft.pipeTwist)
             TextField("Scale at the end", text: $draft.pipeEndScale)
             TextField("Distance 1 (below 0 runs on past the start)", text: $draft.pipeStart)
@@ -425,6 +432,7 @@ struct ModelingOperationView: View {
                 }
             }
             TextField("Twist angle (degrees)", text: $draft.twistAngle)
+                .focused($focusedField, equals: .twist)
             Toggle("Reverse twist at midpoint (double helix)", isOn: $draft.doubleHelical)
             TextField("Scale", text: $draft.sweepEndScale)
             TextField("Distance (0–1)", text: $draft.sweepDistance)
