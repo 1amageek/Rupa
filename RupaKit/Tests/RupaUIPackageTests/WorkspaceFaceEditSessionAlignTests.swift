@@ -46,4 +46,20 @@ struct WorkspaceFaceEditSessionAlignTests {
         guard case let .alignSurface(_, _, full, _, _, _, _, _, _) = session.commands()[0] else { return }
         #expect(flat == 0.5 && full == 2)
     }
+
+    @Test func everyPairTakesItsOwnTension() throws {
+        let targets = (0..<4).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [
+            .init(edge: targets[0], reference: targets[1]), .init(edge: targets[2], reference: targets[3]),
+        ]))
+        session.continuity = .tangentPlane
+        session.pairTension[1] = 1
+        let commands = session.commands()
+        guard case let .alignSurface(_, _, first, _, _, _, _, _, _) = commands[0],
+              case let .alignSurface(_, _, second, _, _, _, _, _, _) = commands[1] else {
+            Issue.record("Expected two alignments.")
+            return
+        }
+        #expect(first == 1 && second == 2)
+    }
 }

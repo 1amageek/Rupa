@@ -92,8 +92,10 @@ struct WorkspaceFaceEditSession: Equatable {
     var partialEnd = 0.0
     /// Align Surface's Boundary: the cross-edge flow along a G1 or G2 edge.
     var boundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
-    /// Each aligned pair's own continuity, by its index, overriding `continuity`.
+    /// Each aligned pair's own continuity and tension, by its index, overriding `continuity` and
+    /// `tension` (Plasticity shows one Tension per G1 or G2 edge).
     var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
+    var pairTension: [Int: Double] = [:]
     /// Align Surface's Analysis while the dialog is open: the continuity checked along the aligned
     /// edges and each one's scale (Plasticity's G0, G1 and G2 Scale, 10 each). They change what is
     /// drawn, never the commands.
@@ -120,8 +122,16 @@ struct WorkspaceFaceEditSession: Equatable {
     var extendV = 0.0
     var shrinks = false
 
+    /// Bumped by D: the dialog focuses the command's main value field.
+    private(set) var primaryFocusRequests = 0
+
     init(kind: Kind) {
         self.kind = kind
+    }
+
+    /// D: focus the main value (Plasticity's D for distance, thickness or angle).
+    mutating func focusPrimaryValue() {
+        primaryFocusRequests += 1
     }
 
     var title: String {
@@ -288,7 +298,7 @@ struct WorkspaceFaceEditSession: Equatable {
 
     private func alignCommand(_ pair: AlignPair, index: Int) -> EditorCommand {
         .alignSurface(
-            targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: DialogTensionScale.kernelScale(tension), blendRows: blendRows,
+            targets: [pair.edge, pair.reference], continuity: pairContinuity[index] ?? continuity, tension: DialogTensionScale.kernelScale(pairTension[index] ?? tension), blendRows: blendRows,
             inputShapeInfluence: inputShapeInfluence, partialStart: partialStart, partialEnd: partialEnd,
             layout: refitsLayout ? layout : nil, boundaryFlow: boundaryFlow
         )

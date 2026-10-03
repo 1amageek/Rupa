@@ -265,6 +265,8 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case toggleFilletTangentEdges
     /// Tab while Loft's dialog runs: both ends' continuity steps.
     case cycleLoftContinuity
+    /// D while Loft's dialog runs: the tension both ends take.
+    case focusLoftTension
     /// Push Face, Draft Face or Match Face on the selected faces (palette).
     case beginPushFace
     case beginDraftFace
@@ -275,6 +277,12 @@ enum WorkspaceKeyboardAction: Equatable, Sendable {
     case beginPatch
     /// PolySplines on the selected mesh object (palette).
     case beginPolySplines
+    /// D while a face edit dialog runs: its main value takes the typing.
+    case focusFaceEditValue
+    /// D, C or A in Fillet's dialog: the fillet distance, the chamfer distance or its angle.
+    case focusEdgeTreatmentField(Character)
+    /// Option-Shift-Q: the Surface Creation dialog on Square with the selection (palette too).
+    case beginSquare
     /// Shift-P: Sweep on the selection, its section, guides and path in order (palette too).
     case beginSweep
     /// P: Pipe along the selected curves (palette too).
@@ -453,6 +461,16 @@ struct WorkspaceKeyboardContext: Sendable {
             || isSurfaceControlVertexSlideActive
     }
 
+    /// Whether no command, session or dialog that takes keys or picks is running.
+    var isIdle: Bool {
+        !(isDimensionCommandActive || isWorkspaceCommandActive || isPlaceSessionActive || isTransformSessionActive
+            || isMirrorSessionActive || isArrayCreationSessionActive || isSectionAnalysisSessionActive
+            || isCurvePickCommandActive || isCutCurveSessionActive || isBooleanSessionActive || isBodyCutSessionActive
+            || isFilletSessionActive || isRebuildSessionActive || isDeformSessionActive || isImprintSessionActive
+            || isFaceEditSessionActive || isFilletDialogActive || isLoftDialogActive || isProjectSessionActive
+            || isBridgeEdgeSessionActive || isCommandPaletteOpen || isCurveOffsetCommandActive)
+    }
+
     var ownsTextEditingKeys: Bool {
         isDimensionCommandActive
             || isSlotProfileCommandActive
@@ -521,9 +539,17 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.ownsTextEditingKeys, input.isTab {
             return .cycleLoftContinuity
         }
+        if context.isLoftDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
+           !context.ownsTextEditingKeys, input.characters.lowercased() == "d" {
+            return .focusLoftTension
+        }
         if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys, input.characters.lowercased() == "t" {
             return .toggleFilletTangentEdges
+        }
+        if context.isFilletDialogActive, input.phases.contains(.down), input.modifiers.isEmpty, !context.ownsTextEditingKeys,
+           let key = input.characters.lowercased().first, input.characters.count == 1, "dca".contains(key) {
+            return .focusEdgeTreatmentField(key)
         }
         if context.isFaceEditSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {
@@ -531,6 +557,7 @@ struct WorkspaceKeyboardRouter: Sendable {
             if input.isEscape { return .cancelFaceEdit }
             if input.isTab { return .stepFaceEditGrow }
             if input.characters.lowercased() == "s" { return .toggleThickenLock }
+            if input.characters.lowercased() == "d" { return .focusFaceEditValue }
         }
         if context.isProjectSessionActive, input.phases.contains(.down), input.modifiers.isEmpty,
            !context.ownsTextEditingKeys {
@@ -569,6 +596,11 @@ struct WorkspaceKeyboardRouter: Sendable {
            !context.isPlaceSessionActive,
            !context.ownsTextEditingKeys {
             return .beginMirror
+        }
+        if input.phases.contains(.down), input.modifiers == [.shift], input.characters.lowercased() == "x",
+           context.isSelectToolActive, context.hasBodyFaceSelection, context.isIdle {
+            // Shift-X deletes the selected faces while nothing runs; during a pick it bypasses snapping.
+            return .deleteSelection
         }
         if let snapOverrideAction = snapOverrideAction(for: input) {
             return snapOverrideAction
@@ -1025,6 +1057,9 @@ struct WorkspaceKeyboardRouter: Sendable {
         }
         if input.modifiers == [.shift], key == "p" {
             return .beginSweep
+        }
+        if input.modifiers == [.option, .shift], key == "q" || key == "œ" {
+            return .beginSquare
         }
         if input.modifiers == [.shift], key == "s" {
             let raises = context.selectedSketchTargetCount > 0

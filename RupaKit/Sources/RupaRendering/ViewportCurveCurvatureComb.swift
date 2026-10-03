@@ -65,18 +65,16 @@ public struct ViewportCurveCurvatureComb: Equatable {
         self.modelBounds = Self.bounds(for: drawableSamples)
     }
 
-    /// The tooth length per unit curvature. The longest tooth is `scaleFactor` of the curve's
-    /// bounding diagonal, unless that would carry it past its own center of curvature: teeth
-    /// point toward that center, and one longer than the local radius crosses its neighbours.
-    /// So the scale is at most 1 / κ²max, which keeps every tooth (κ·scale ≤ κ / κ²max ≤ 1 / κ)
-    /// within its radius. Either way the teeth stay proportional to the curvature.
+    /// The tooth length per unit curvature: the longest tooth is `scaleFactor` of the curve's
+    /// bounding diagonal. Teeth stand outside the bend, fanning away from the centre of
+    /// curvature, so a long tooth never crosses its neighbours and the teeth stay proportional to
+    /// the curvature.
     public func displayScale(scaleFactor: Double = CurveCurvatureDisplay.defaultCombScale) -> Double {
         guard maxAbsCurvature > 1.0e-12 else {
             return 0.0
         }
         let diagonal = max(Double(hypot(modelBounds.width, modelBounds.height)), 1.0e-6)
-        let sizeScale = diagonal * scaleFactor / maxAbsCurvature
-        return min(sizeScale, 1.0 / (maxAbsCurvature * maxAbsCurvature))
+        return diagonal * scaleFactor / maxAbsCurvature
     }
 
     private static func bounds(for samples: [CurveEvaluationSample]) -> CGRect {

@@ -143,23 +143,49 @@ extension DesignDocument {
             )
             let destination: SceneFragmentInserter.Attachment
             let parentWorld: Transform3D
-            if let parentID = hierarchy.parentID(of: id), let parent = updated.productMetadata.sceneNodes[parentID] {
-                destination = .child(of: parentID, at: (parent.childIDs.firstIndex(of: id) ?? parent.childIDs.count - 1) + 1)
+            // An instance filed in the Instances category is realized beside the category, at the
+            // document root, as Plasticity leaves realized objects among the plain objects.
+            var category: SceneNodeID?
+            var anchor = id
+            if let parentID = hierarchy.parentID(of: id), updated.isInstancesCategory(parentID, hierarchy: hierarchy) {
+                category = parentID
+                anchor = parentID
+            }
+            if let parentID = hierarchy.parentID(of: anchor), let parent = updated.productMetadata.sceneNodes[parentID] {
+                destination = .child(of: parentID, at: (parent.childIDs.firstIndex(of: anchor) ?? parent.childIDs.count - 1) + 1)
                 parentWorld = try hierarchy.worldTransform(of: parentID)
             } else {
                 destination = .documentRoot
                 parentWorld = .identity
             }
-            realized += try updated.insertCopies(
+            let copies = try updated.insertCopies(
                 of: fragment, placements: [placement], destination: destination,
                 parentWorld: parentWorld, boolean: nil, objectRegistry: objectRegistry,
                 currentEvaluation: currentEvaluation,
                 currentGeneration: currentGeneration
             )
             try updated.deleteSceneNodes(ids: [id], objectRegistry: objectRegistry)
+            // A realized group leaves its members as plain objects; no copy of the group is kept.
+            for copy in copies {
+                if updated.productMetadata.sceneNodes[copy]?.isGroupingNode == true {
+                    realized += try updated.ungroupSceneNode(id: copy, objectRegistry: objectRegistry)
+                } else {
+                    realized.append(copy)
+                }
+            }
+            if let category, updated.productMetadata.sceneNodes[category]?.childIDs.isEmpty == true {
+                try updated.productMetadata.removeSceneNode(category)
+            }
         }
         self = updated
         return realized
+    }
+
+    /// Whether `id` is the document root's Instances category.
+    private func isInstancesCategory(_ id: SceneNodeID, hierarchy: SceneNodeHierarchy) -> Bool {
+        guard let node = productMetadata.sceneNodes[id], node.isGroupingNode, node.name == Self.instancesCategoryName,
+              node.localTransform == .identity, let parentID = hierarchy.parentID(of: id) else { return false }
+        return hierarchy.parentID(of: parentID) == nil
     }
 
     private mutating func placeInstances(
@@ -221,17 +247,19 @@ extension DesignDocument {
                 name: name, rootSceneNodeIDs: roots, objectRegistry: objectRegistry
             )
         }
-        let definitionName = updated.productMetadata.componentDefinitions[definitionID]?.name ?? "Instance"
+        // Each instance is named after the object it copies with the next free three-digit
+        // suffix, as Plasticity names a copy ("Main Object Group.001").
+        let instanceBase = productMetadata.sceneNodes[roots[0]]?.name ?? "Object"
         var instanceNodeIDs: [SceneNodeID] = []
         for placement in placements {
             try placement.validateAffinePlacement()
             let taken = Set(updated.productMetadata.componentInstances.values.map(\.name))
             var ordinal = 1
-            while taken.contains("\(definitionName) \(ordinal)") {
+            while taken.contains(Self.instanceName(instanceBase, ordinal)) {
                 ordinal += 1
             }
             let instanceID = try updated.createComponentInstance(
-                name: "\(definitionName) \(ordinal)",
+                name: Self.instanceName(instanceBase, ordinal),
                 definitionID: definitionID,
                 localTransform: try inverseInstanceParent.composed(with: try placement.composed(with: definitionFrame)),
                 objectRegistry: objectRegistry
@@ -384,5 +412,11 @@ extension DesignDocument {
         for rootID in rootIDs {
             productMetadata.sceneNodes[rootID]?.isVisible = false
         }
+    }
+
+    /// `base` with a three-digit ordinal suffix: "Box.001".
+    static func instanceName(_ base: String, _ ordinal: Int) -> String {
+        let digits = String(ordinal)
+        return "\(base).\(String(repeating: "0", count: max(0, 3 - digits.count)))\(digits)"
     }
 }

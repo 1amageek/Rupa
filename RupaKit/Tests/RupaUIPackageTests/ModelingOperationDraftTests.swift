@@ -1329,6 +1329,7 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.bridgeSurface, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.isSurfaceCreation = true
         draft.distance = "10 mm"
+        draft.bridgeTrim = .none
         guard case .createBridgeSurface(_, let bridge, _) = try draft.command(in: document) else {
             Issue.record("Expected a Bridge Surface.")
             return
@@ -1338,6 +1339,11 @@ struct ModelingOperationDraftTests {
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
         #expect(measurement.counts.sheets == 3)
+        // The default, Both, joins the trimmed sheets with the bridge.
+        draft.bridgeTrim = .both
+        let trimmed = CADDocumentStore(document: document)
+        _ = try trimmed.apply(draft.command(in: document))
+        #expect(try MeasurementService().measure(document: trimmed.document, ruler: .standard(for: .meter)).counts.sheets == 1)
     }
 
     @Test func aBridgeSurfaceJoinsTwoPlanarSheets() throws {
@@ -1361,6 +1367,9 @@ struct ModelingOperationDraftTests {
         var draft = makeDraft(.bridgeSurface, targets: nodes.map { .init(sceneNodeID: $0.id) })
         draft.isSurfaceCreation = true
         draft.distance = "20 mm"
+        // Trim walls opens on Both.
+        #expect(draft.bridgeTrim == .both)
+        draft.bridgeTrim = .none
         guard case .createBridgeSurface(_, let bridge, let wallByReach) = try draft.command(in: document) else {
             Issue.record("Expected a Bridge Surface.")
             return

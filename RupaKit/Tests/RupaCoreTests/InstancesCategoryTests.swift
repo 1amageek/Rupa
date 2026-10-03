@@ -47,4 +47,36 @@ import Testing
         #expect(parent(of: instance, in: document) == root)
         #expect(!document.productMetadata.sceneNodes.values.contains { $0.name == "Instances" })
     }
+
+    @Test func instancesAreNamedAfterTheirObjectWithAThreeDigitOrdinal() throws {
+        var document = DesignDocument.empty()
+        let group = try document.groupSceneNodes(name: "Main Object Group", memberIDs: [try box(&document)])
+        let first = try #require(try document.placeSceneNodes(ids: [group], placements: [.identity], output: .componentInstance).first)
+        let second = try #require(try document.placeSceneNodes(
+            ids: [group], placements: [.translation(Vector3D(x: 0.1, y: 0, z: 0))], output: .componentInstance
+        ).first)
+        #expect(document.productMetadata.sceneNodes[first]?.name == "Main Object Group.001")
+        #expect(document.productMetadata.sceneNodes[second]?.name == "Main Object Group.002")
+    }
+
+    @Test func aRealizedGroupInstanceLeavesItsMembersAtTheRootAndTheCategoryGoes() throws {
+        var document = DesignDocument.empty()
+        let group = try document.groupSceneNodes(name: "Group", memberIDs: [try box(&document)])
+        let root = try #require(document.productMetadata.rootSceneNodeIDs.first)
+        let offset = try Transform3D.translation(Vector3D(x: 0.1, y: 0, z: 0))
+        let instance = try #require(try document.placeSceneNodes(ids: [group], placements: [offset], output: .componentInstance).first)
+        let groupsBefore = document.productMetadata.sceneNodes.values.filter(\.isGroupingNode).count
+        let realized = try document.realizeComponentInstances(sceneNodeIDs: [instance])
+        #expect(realized.count == 1)
+        let member = try #require(realized.first)
+        #expect(parent(of: member, in: document) == root)
+        #expect(document.productMetadata.sceneNodes[member]?.isGroupingNode == false)
+        #expect(!document.productMetadata.sceneNodes.values.contains { $0.name == "Instances" })
+        // The category is gone and no copy of the group was made.
+        #expect(document.productMetadata.sceneNodes.values.filter(\.isGroupingNode).count == groupsBefore - 1)
+        let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
+        let world = try hierarchy.worldTransform(of: member)
+        #expect(abs(try world.applied(to: Point3D(x: 0, y: 0, z: 0)).x - 0.1) < 1e-12)
+        try document.productMetadata.validate(against: document.cadDocument, objectRegistry: .builtIn)
+    }
 }

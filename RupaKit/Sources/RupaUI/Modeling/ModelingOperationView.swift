@@ -4,6 +4,8 @@ import SwiftCAD
 
 struct ModelingOperationView: View {
     @State private var pointEntryError: String?
+    /// The field a command key (Fillet's D, C or A) last asked to type into.
+    @FocusState private var focusedField: ModelingOperationDraft.FocusField?
     @Binding var draft: ModelingOperationDraft
     /// The surface analysis's curvature-comb length (Square's Scale).
     @Binding var combScale: Double
@@ -37,7 +39,7 @@ struct ModelingOperationView: View {
         // ancestors twice.
         let refusal = planningRefusal
         VStack(alignment: .leading, spacing: 12) {
-            Text(draft.isSurfaceCreation ? "Surface Creation" : draft.kind.rawValue).font(.headline)
+            Text(draft.refitsFaces ? "Refit Face" : draft.isSurfaceCreation ? "Surface Creation" : draft.kind.rawValue).font(.headline)
             if draft.isSurfaceCreation {
                 Picker("Operation", selection: Binding(
                     get: { draft.kind },
@@ -162,6 +164,7 @@ struct ModelingOperationView: View {
         }
         .padding(16)
         .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onChange(of: draft.focusRequest) { focusedField = draft.focusRequest?.field }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("Modeling.operation")
     }
@@ -423,6 +426,14 @@ struct ModelingOperationView: View {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
+            if draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 {
+                // Plasticity's D: one tension for both ends, which the end fields can then part.
+                TextField("Tension (both ends)", text: Binding(
+                    get: { draft.loftStartContinuity != .g0 ? draft.loftStartTension : draft.loftEndTension },
+                    set: { draft.loftStartTension = $0; draft.loftEndTension = $0 }
+                ))
+                .focused($focusedField, equals: .tension)
+            }
             if draft.loftStartContinuity != .g0 {
                 TextField("Start tension", text: $draft.loftStartTension)
             }
@@ -449,6 +460,7 @@ struct ModelingOperationView: View {
                 // Plasticity's Distance: two fields, the second greyed and following the first.
                 HStack {
                     lengthField("Distance", text: $draft.distance)
+                        .focused($focusedField, equals: .distance)
                     TextField("Distance 2", text: .constant(draft.distance))
                         .disabled(true)
                         .accessibilityIdentifier("Modeling.fillet.secondDistance")
@@ -467,12 +479,14 @@ struct ModelingOperationView: View {
             }
         case .chamfer:
             lengthField("Distance", text: $draft.distance)
+                .focused($focusedField, equals: .distance)
             Picker("Mode", selection: $draft.chamferMode) {
                 ForEach(ModelingOperationDraft.ChamferModeChoice.allCases) { Text($0.rawValue).tag($0) }
             }
             .contentShape(Rectangle())
             .disabled(draft.chamferAngle.trimmingCharacters(in: .whitespaces).isEmpty == false)
             TextField("Angle (degrees; blank for Offset or Apex)", text: $draft.chamferAngle)
+                .focused($focusedField, equals: .angle)
             if draft.chamferAngle.trimmingCharacters(in: .whitespaces).isEmpty == false {
                 Toggle("Flip reference face", isOn: $draft.chamferFlipped)
             }
@@ -570,18 +584,21 @@ struct ModelingOperationView: View {
                 TextField("Spans V", text: $draft.squareVSpans)
             }
             TextField("Flatness [0–1]", text: $draft.squareFlatness)
-            TextField("Scale (curvature combs)", value: Binding(get: { combScale }, set: { if $0.isFinite, $0 > 0 { combScale = $0 } }),
-                      format: .number)
-                .help("The length of the surface analysis's curvature combs, relative to their automatic length.")
-            TextField("Weight", text: $draft.squareWeight)
-            Picker("Boundary", selection: $draft.squareBoundaryFlow) {
-                Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)
-                Text("Normal").tag(SquareFitOptions.BoundaryFlow.normal)
-                Text("Next").tag(SquareFitOptions.BoundaryFlow.next)
-                Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
+            // Refit Face keeps each face's own edges, so it has no boundary flow or analysis.
+            if draft.refitsFaces == false {
+                TextField("Scale (curvature combs)", value: Binding(get: { combScale }, set: { if $0.isFinite, $0 > 0 { combScale = $0 } }),
+                          format: .number)
+                    .help("The length of the surface analysis's curvature combs, relative to their automatic length.")
+                TextField("Weight", text: $draft.squareWeight)
+                Picker("Boundary", selection: $draft.squareBoundaryFlow) {
+                    Text("Natural").tag(SquareFitOptions.BoundaryFlow.natural)
+                    Text("Normal").tag(SquareFitOptions.BoundaryFlow.normal)
+                    Text("Next").tag(SquareFitOptions.BoundaryFlow.next)
+                    Text("Adjacent").tag(SquareFitOptions.BoundaryFlow.adjacent)
+                }
+                .contentShape(Rectangle())
+                .help("Natural: no flow. Normal: the cross flow perpendicular to each side. Next: perpendicular within the frame's mean plane. Adjacent: following the neighbouring sides.")
             }
-            .contentShape(Rectangle())
-            .help("Natural: no flow. Normal: the cross flow perpendicular to each side. Next: perpendicular within the frame's mean plane. Adjacent: following the neighbouring sides.")
             if draft.targets.contains(where: { draft.squareContinuity(of: $0).order != nil }) {
                 TextField("Tension", text: $draft.squareTension)
                 TextField("Angle allowance beside curved faces (degrees)", text: $draft.continuityAllowance)

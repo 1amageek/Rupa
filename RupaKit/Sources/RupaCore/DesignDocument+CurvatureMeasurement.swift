@@ -6,16 +6,16 @@ extension DesignDocument {
     /// The comb scale a new curvature measurement starts with.
     public static let defaultCurvatureCombScale = CurveCurvatureDisplay.defaultCombScale
 
-    /// Toggle Curvature on generated edges and sketch curves: a curvature measurement combing
-    /// exactly these curves is taken away when there is one; otherwise a new one is saved under
-    /// Measurements. Returns the measurement added, or nil when one was taken away.
+    /// Toggle Curvature on generated edges and sketch curves, one curve at a time: a curvature
+    /// measurement combing the curve is taken away when there is one; otherwise a new one combing
+    /// it alone is saved under Measurements. Returns the measurements added.
     @discardableResult
     public mutating func toggleCurvatureMeasurement(
         targets: [SelectionTarget],
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
-    ) throws -> MeasurementAnnotationID? {
+    ) throws -> [MeasurementAnnotationID] {
         let operationName = "Toggle Curvature"
         guard targets.isEmpty == false else {
             throw EditorError(code: .commandInvalid, message: "\(operationName) requires edges or curves.")
@@ -29,28 +29,35 @@ extension DesignDocument {
             let anchor = try curvatureAnchor(for: target, topology: topology, operationName: operationName)
             if anchors.contains(anchor) == false { anchors.append(anchor) }
         }
-        if let existing = productMetadata.measurements.values.first(where: {
-            $0.kind == .curvature && Set($0.anchors) == Set(anchors)
-        }) {
-            guard let sceneNodeID = existing.sceneNodeID else {
-                throw EditorError(code: .referenceUnresolved, message: "\(operationName) found a curvature measurement with no object to remove.")
+        // Each curve toggles its own measurement, as Plasticity adds one per selected edge.
+        var updated = self
+        var added: [MeasurementAnnotationID] = []
+        for anchor in anchors {
+            if let existing = updated.productMetadata.measurements.values.first(where: {
+                $0.kind == .curvature && $0.anchors.contains(anchor)
+            }) {
+                guard let sceneNodeID = existing.sceneNodeID else {
+                    throw EditorError(code: .referenceUnresolved, message: "\(operationName) found a curvature measurement with no object to remove.")
+                }
+                try updated.deleteSceneNodes(ids: [sceneNodeID], objectRegistry: objectRegistry)
+                continue
             }
-            try deleteSceneNodes(ids: [sceneNodeID], objectRegistry: objectRegistry)
-            return nil
+            let count = updated.productMetadata.measurements.values.filter { $0.kind == .curvature }.count
+            let annotation = MeasurementAnnotation(
+                name: "Curvature \(count + 1)",
+                kind: .curvature,
+                anchors: [anchor],
+                combScale: Self.defaultCurvatureCombScale
+            )
+            // A measurement that cannot comb its curve is refused rather than saved unresolved.
+            _ = try CurvatureCombService().combs(
+                for: annotation, in: updated, topology: topology,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
+            )
+            added.append(try updated.addMeasurementAnnotation(annotation, objectRegistry: objectRegistry))
         }
-        let count = productMetadata.measurements.values.filter { $0.kind == .curvature }.count
-        let annotation = MeasurementAnnotation(
-            name: "Curvature \(count + 1)",
-            kind: .curvature,
-            anchors: anchors,
-            combScale: Self.defaultCurvatureCombScale
-        )
-        // A measurement that cannot comb its curves is refused rather than saved unresolved.
-        _ = try CurvatureCombService().combs(
-            for: annotation, in: self, topology: topology,
-            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration
-        )
-        return try addMeasurementAnnotation(annotation, objectRegistry: objectRegistry)
+        self = updated
+        return added
     }
 
     /// Sets how long a curvature measurement's comb teeth are drawn.

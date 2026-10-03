@@ -264,6 +264,20 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func alignSurfacesLayoutOpensOnTheSheetsOwnDegreesAndSpans() throws {
+        let session = EditorSession()
+        let row = { (y: Double) in [Point3D(x: 0, y: y, z: 0), Point3D(x: 0.03, y: y, z: 0.03), Point3D(x: 0.07, y: y, z: 0.03), Point3D(x: 0.1, y: y, z: 0)] }
+        // Degree 2 by 1 with two spans along u.
+        _ = try session.execute(.createBSplineSurface(name: "Arch", surface: BSplineSurface3D(
+            uDegree: 2, vDegree: 1, uKnots: [0, 0, 0, 0.5, 1, 1, 1], vKnots: [0, 0, 1, 1], controlPoints: [row(0), row(0.1)]
+        )))
+        let topology = try TopologySnapshotService().snapshot(document: session.document)
+        let edge = try #require(topology.entries.first { $0.kind == .edge }?.selectionTarget())
+        let layout = try #require(try AlignSurfaceLayoutService().layout(ofFaceAlong: edge, topology: topology))
+        #expect(layout == SurfaceControlLayout(uDegree: 2, vDegree: 1, uSpans: 2, vSpans: 1))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func aPartialAlignmentOnARefittedLayoutKeepsTheEdgesEnds() throws {
         let session = EditorSession()
         let row = { (y: Double) in [Point3D(x: 0, y: y, z: 0), Point3D(x: 0.05, y: y, z: 0.05), Point3D(x: 0.1, y: y, z: 0)] }

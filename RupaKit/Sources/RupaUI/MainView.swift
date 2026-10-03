@@ -6360,7 +6360,7 @@ private struct ProjectMainViewContent: View {
             hasImprintableSelection: imprintSessionKind() != nil,
             isImprintSessionActive: imprintSession != nil,
             isFaceEditSessionActive: faceEditSession != nil,
-            isFilletDialogActive: modelingDraft?.kind == .fillet,
+            isFilletDialogActive: modelingDraft?.kind == .fillet || modelingDraft?.kind == .chamfer,
             isLoftDialogActive: modelingDraft?.kind == .loft,
             isProjectSessionActive: projectSession != nil,
             isBridgeEdgeSessionActive: bridgeEdgeSession != nil,
@@ -6806,9 +6806,19 @@ private struct ProjectMainViewContent: View {
             faceEditSession = WorkspaceFaceEditSession(kind: .match(faces: faces, reference: nil))
             reportToolStatus(faceEditSession?.missingInput ?? "Match Face: OK, Return or right-click matches the faces.")
             return .handled
+        case .focusLoftTension:
+            guard let draft = modelingDraft, draft.loftStartContinuity != .g0 || draft.loftEndContinuity != .g0 else {
+                reportToolStatus("Loft: tension applies at G1 or G2 ends; Tab steps the continuity.", severity: .warning)
+                return .handled
+            }
+            modelingDraft?.focusLoftTension()
+            return .handled
         case .cycleLoftContinuity:
             modelingDraft?.cycleLoftContinuity()
             reportToolStatus("Loft: continuity \(modelingDraft?.loftStartContinuity.rawValue ?? "").")
+            return .handled
+        case .focusEdgeTreatmentField(let key):
+            modelingDraft?.focusEdgeTreatmentField(key)
             return .handled
         case .toggleFilletTangentEdges:
             modelingDraft?.tangentEdges.toggle()
@@ -6842,6 +6852,13 @@ private struct ProjectMainViewContent: View {
             } catch {
                 reportToolStatus("PolySplines: \(error.localizedDescription)", severity: .warning)
             }
+            return .handled
+        case .beginSquare:
+            beginSurfaceModelingOperation()
+            modelingDraft?.selectSurfaceOperation(.square)
+            reportToolStatus(modelingDraft?.refitsFaces == true
+                ? "Refit Face: each selected face becomes a four-sided sheet on its own edges; Preview then Apply."
+                : "Square: select two to four sides, edges or curves; Preview then Apply.")
             return .handled
         case .beginPatch:
             beginSurfaceModelingOperation()
@@ -6927,7 +6944,21 @@ private struct ProjectMainViewContent: View {
                 let pairs = stride(from: 0, to: edges.count, by: 2).map {
                     WorkspaceFaceEditSession.AlignPair(edge: edges[$0], reference: edges[$0 + 1])
                 }
-                faceEditSession = WorkspaceFaceEditSession(kind: .alignSurface(pairs: pairs))
+                var align = WorkspaceFaceEditSession(kind: .alignSurface(pairs: pairs))
+                // Degree/Spans opens on the aligned sheet's own layout, as Plasticity shows it.
+                do {
+                    let topology = try TopologySnapshotService().snapshot(
+                        document: snapshot.document.document, objectRegistry: objectRegistry,
+                        currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+                    )
+                    if let layout = try AlignSurfaceLayoutService().layout(ofFaceAlong: pairs[0].edge, topology: topology) {
+                        align.layout = layout
+                    }
+                } catch {
+                    reportToolStatus("Align Surface: the sheet's layout cannot be read: \(error.localizedDescription)", severity: .warning)
+                    return .handled
+                }
+                faceEditSession = align
                 reportToolStatus("Align Surface: each sheet edge follows the edge selected after it; Tab steps the continuity; OK, Return or right-click aligns.")
                 return .handled
             }
@@ -6944,6 +6975,10 @@ private struct ProjectMainViewContent: View {
                 return .handled
             }
             submitSource(.unwrapFace(target: face))
+            return .handled
+        case .focusFaceEditValue:
+            guard faceEditSession != nil else { return .ignored }
+            faceEditSession?.focusPrimaryValue()
             return .handled
         case .toggleThickenLock:
             guard case .thicken = faceEditSession?.kind else { return .ignored }
@@ -10589,6 +10624,12 @@ private struct ProjectMainViewContent: View {
             dialog: Binding(get: { faceEditSession ?? edit }, set: { faceEditSession = $0 }),
             displayUnit: snapshot.workspaceState.ruler.displayUnit
         )
+        if case let .push(faces, nil) = edit.kind {
+            // Plasticity's face toolbar offers "Hollow a solid" beside the push it runs on a face.
+            workspaceIconButton(systemImage: "cube.transparent", help: "Hollow a solid", accessibilityIdentifier: "WorkspaceFaceEdit.hollow",
+                                action: { faceEditSession = WorkspaceFaceEditSession(kind: .hollow(targets: faces))
+                                          reportToolStatus("Hollow: set the wall thickness; OK, Return or right-click hollows the solid.") })
+        }
         workspaceIconButton(systemImage: "eye", help: "Preview \(edit.title)", accessibilityIdentifier: "WorkspaceFaceEdit.preview",
                             action: { previewFaceEdit() })
         workspaceIconButton(systemImage: "checkmark", help: edit.title, accessibilityIdentifier: "WorkspaceFaceEdit.apply", action: { confirmFaceEdit() })
@@ -10762,8 +10803,9 @@ private struct ProjectMainViewContent: View {
             let before = snapshot.document.document.productMetadata.measurements.count
             submitSource(.toggleCurvatureMeasurement(targets: curves)) { result in
                 guard result?.didMutate == true, let document = workspace.view?.document.document else { return }
-                reportToolStatus(document.productMetadata.measurements.count > before
-                    ? "Curvature measurement added under Measurements."
+                let after = document.productMetadata.measurements.count
+                reportToolStatus(after > before
+                    ? "\(after - before) curvature measurement(s) added under Measurements."
                     : "Curvature measurement removed.")
             }
         }

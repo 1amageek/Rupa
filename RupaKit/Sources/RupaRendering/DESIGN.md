@@ -564,13 +564,11 @@ A highlighted or curvature-toggled sketch curve draws its curvature comb from
 (`ViewportSketchPrimitive.spline` carries them) from turn-bounded samples: steps
 are halved until the tangent turns by at most 5° from one tooth to the next, so
 the comb follows a tight bend instead of joining distant teeth across it. The
-teeth point toward the center of curvature, as Plasticity's comb does, with one
-linear scale so they stay in proportion to the curvature. A tooth longer than its
-local radius would pass that center and cross its neighbours, so `displayScale`
-makes the longest tooth the comb scale's fraction of the curve's diagonal but at
-most 1 / κ²max: every tooth then stays within its own radius
-(`viewportCurveCurvatureCombTeethStayWithinTheirRadius`), and a gentle curve
-keeps the size-based scale. A curve with no curvature to comb — a spline
+teeth stand outside the bend, away from the center of curvature, as Plasticity's
+comb does (`combToothEnd`, `viewportCurveCurvatureCombTeethStandOutsideTheBend`),
+with one linear scale so they stay in proportion to the curvature: `displayScale`
+makes the longest tooth the comb scale's fraction of the curve's diagonal; outward
+teeth fan apart, so a tight hook keeps that scale too. A curve with no curvature to comb — a spline
 of straight spans, or one curved sample only — draws no comb and keeps its other
 affordances; only an invalid comb scale or a spline that cannot be evaluated
 fails the overlay (`aSelectedStraightSplineDrawsNoCombAndKeepsItsHandles`,

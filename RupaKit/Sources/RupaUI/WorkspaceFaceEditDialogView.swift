@@ -12,12 +12,19 @@ import SwiftCAD
 struct WorkspaceFaceEditDialogView: View {
     @Binding var dialog: WorkspaceFaceEditSession
     var displayUnit: LengthDisplayUnit
+    /// The command's main value (Distance, Degrees, Thickness, Front, Max Radius), which D focuses.
+    @FocusState private var primaryFocused: Bool
 
     var body: some View {
+        fields
+            .onChange(of: dialog.primaryFocusRequests) { primaryFocused = true }
+    }
+
+    @ViewBuilder private var fields: some View {
         switch dialog.kind {
         case let .push(_, onto):
             if onto == nil {
-                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.distance")
+                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.distance", primary: true)
             } else {
                 pickedLabel("Onto face", picked: true, identifier: "WorkspaceFaceEdit.ontoPicked")
             }
@@ -28,6 +35,7 @@ struct WorkspaceFaceEditDialogView: View {
             pickedLabel("Plane", picked: neutral != nil, identifier: "WorkspaceFaceEdit.referencePicked")
             pickedLabel("Faces \(faces.count)", picked: faces.isEmpty == false, identifier: "WorkspaceFaceEdit.facesPicked")
             TextField("Degrees", value: $dialog.draftAngleDegrees, format: .number)
+                .focused($primaryFocused)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.degrees")
             lengthField("Offset", meters: $dialog.neutralOffsetMeters, identifier: "WorkspaceFaceEdit.neutralOffset")
@@ -37,7 +45,7 @@ struct WorkspaceFaceEditDialogView: View {
                 .accessibilityIdentifier("WorkspaceFaceEdit.front")
         case let .extendSheet(_, limit):
             if limit == nil {
-                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.extendDistance")
+                lengthField("Distance", meters: $dialog.distanceMeters, identifier: "WorkspaceFaceEdit.extendDistance", primary: true)
             } else {
                 Picker("Limit", selection: $dialog.limitMode) {
                     ForEach(SheetExtensionLimit.Mode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
@@ -70,9 +78,17 @@ struct WorkspaceFaceEditDialogView: View {
                     }
                     .fixedSize()
                     .contentShape(Rectangle())
+                    if (dialog.pairContinuity[index] ?? dialog.continuity) != .positional {
+                        TextField("Tension \(index + 1)", value: Binding(
+                            get: { dialog.pairTension[index] ?? dialog.tension },
+                            set: { dialog.pairTension[index] = $0 }
+                        ), format: .number)
+                        .frame(width: 56)
+                        .accessibilityIdentifier("WorkspaceFaceEdit.tension\(index + 1)")
+                    }
                 }
             }
-            TextField("Tension", value: $dialog.tension, format: .number)
+            TextField("Tension", value: Binding(get: { dialog.tension }, set: { dialog.tension = $0; dialog.pairTension = [:] }), format: .number)
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.tension")
             Stepper("Blend \(dialog.blendRows)", value: $dialog.blendRows, in: 0...64)
@@ -140,9 +156,9 @@ struct WorkspaceFaceEditDialogView: View {
             Toggle("Shrink", isOn: $dialog.shrinks)
                 .accessibilityIdentifier("WorkspaceFaceEdit.shrinks")
         case .hollow:
-            lengthField("Thickness (+ outward, − inward)", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness")
+            lengthField("Thickness (+ outward, − inward)", meters: $dialog.wallThicknessMeters, identifier: "WorkspaceFaceEdit.wallThickness", primary: true)
         case .thicken:
-            lengthField("Front", meters: $dialog.frontMeters, identifier: "WorkspaceFaceEdit.front")
+            lengthField("Front", meters: $dialog.frontMeters, identifier: "WorkspaceFaceEdit.front", primary: true)
             if dialog.locksThicknesses == false {
                 lengthField("Back", meters: $dialog.backMeters, identifier: "WorkspaceFaceEdit.back")
             }
@@ -158,7 +174,7 @@ struct WorkspaceFaceEditDialogView: View {
         case .removeFillets:
             Toggle("Max Radius", isOn: $dialog.limitsRadius)
                 .accessibilityIdentifier("WorkspaceFaceEdit.limitsRadius")
-            lengthField("Max Radius", meters: $dialog.maximumRadiusMeters, identifier: "WorkspaceFaceEdit.maximumRadius")
+            lengthField("Max Radius", meters: $dialog.maximumRadiusMeters, identifier: "WorkspaceFaceEdit.maximumRadius", primary: true)
                 .disabled(dialog.limitsRadius == false)
             Picker("Convexity", selection: $dialog.convexity) {
                 ForEach(FilletConvexity.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
@@ -200,13 +216,19 @@ struct WorkspaceFaceEditDialogView: View {
             .accessibilityIdentifier(identifier)
     }
 
-    private func lengthField(_ title: String, meters: Binding<Double>, identifier: String) -> some View {
-        TextField(title, value: Binding(
+    @ViewBuilder
+    private func lengthField(_ title: String, meters: Binding<Double>, identifier: String, primary: Bool = false) -> some View {
+        let field = TextField(title, value: Binding(
             get: { meters.wrappedValue / displayUnit.metersPerUnit },
             set: { meters.wrappedValue = $0 * displayUnit.metersPerUnit }
         ), format: .number)
         .frame(width: 64)
         .accessibilityIdentifier(identifier)
+        if primary {
+            field.focused($primaryFocused)
+        } else {
+            field
+        }
     }
 }
 

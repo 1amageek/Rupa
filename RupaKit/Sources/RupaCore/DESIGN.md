@@ -182,11 +182,12 @@ Plasticity raises any face). `BoundaryEdgeSelectionService` answers Find Boundar
 Edges without changing the document: the open edges of the selected objects,
 every edge one face of the body uses (`OpenBoundaryLoopResolver.boundaryEdgeIDs`),
 as edge selections. Toggle Curvature (`toggleCurvatureMeasurement(targets:)`)
-saves a `.curvature` measurement annotation under Measurements whose anchors name
-whole generated edges or sketch curves and whose `combScale` sets the comb length
-(`setMeasurementCombScale(id:combScale:)`), or takes away the curvature
-measurement already naming exactly those curves; a measurement whose curves cannot
-be combed is refused. `CurvatureCombService` evaluates each anchored curve exactly
+toggles each selected curve on its own, as Plasticity adds one measurement per
+edge: a curve with no curvature measurement gets a `.curvature` measurement
+annotation under Measurements whose one anchor names the whole generated edge or
+sketch curve and whose `combScale` sets the comb length
+(`setMeasurementCombScale(id:combScale:)`), and a curve already combed has its
+measurement taken away; a measurement whose curve cannot be combed is refused. `CurvatureCombService` evaluates each anchored curve exactly
 through Swift-CAD under its object's placement, sampling several points per knot
 span, and `MeasurementAnnotationResolver` resolves a curvature measurement to
 `.combed` combs instead of anchor points; drawings do not project them. The

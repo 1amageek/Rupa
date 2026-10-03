@@ -218,6 +218,27 @@ import Testing
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func toggleCurvatureAddsOneMeasurementPerCurveAndTogglesEachOnItsOwn() throws {
+        let session = EditorSession()
+        for x in [0.0, 20.0] {
+            _ = try session.execute(.createCircleSketch(
+                name: "Circle", plane: .xy,
+                center: SketchPoint(x: .length(x, .millimeter), y: .length(0, .millimeter)),
+                radius: .length(5, .millimeter)
+            ))
+        }
+        let circles = try SketchEntitySnapshotService().snapshot(document: session.document).entries.filter { $0.entityKind == "circle" }
+        #expect(circles.count == 2)
+        let targets = try circles.map { try #require($0.selectionTarget()) }
+        _ = try session.execute(.toggleCurvatureMeasurement(targets: targets))
+        #expect(session.document.productMetadata.measurements.count == 2)
+        #expect(session.document.productMetadata.measurements.values.allSatisfy { $0.anchors.count == 1 })
+        // One circle again takes its own measurement away and leaves the other.
+        _ = try session.execute(.toggleCurvatureMeasurement(targets: [targets[0]]))
+        #expect(session.document.productMetadata.measurements.count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func toggleCurvatureCombsASketchCurveAndStraightEdgesHaveNoComb() throws {
         let session = EditorSession()
         _ = try session.execute(.createCircleSketch(

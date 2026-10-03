@@ -120,11 +120,18 @@ import Testing
     }
 }
 
-/// Teeth point toward the center of curvature, so a tooth longer than the local radius crosses
-/// its neighbours. On the tight hook the size-based scale would do that, so the scale is capped:
-/// every tooth stays within its own radius, the longest reaching it, and the teeth remain in
-/// proportion to the curvature.
-@Test func viewportCurveCurvatureCombTeethStayWithinTheirRadius() throws {
+/// Teeth stand outside the bend: on a circle of radius 4 mm about the origin, the tooth at
+/// (4, 0) mm runs out along +x, away from the centre, by the curvature times the scale.
+@Test func viewportCurveCurvatureCombTeethStandOutsideTheBend() throws {
+    let sample = ViewportSpatialOverlayProducer.SketchCurveCurvatureSample(
+        point: Point3D(x: 0.004, y: 0, z: 0), normal: Vector3D(x: -1, y: 0, z: 0), curvature: 250
+    )
+    let end = ViewportSpatialOverlayProducer.combToothEnd(of: sample, scaleFactor: 1e-5)
+    #expect(abs(end.x - (0.004 + 250 * 1e-5)) < 1e-15 && abs(end.y) < 1e-15)
+}
+
+/// A tight hook keeps the size-based scale too: outward teeth fan apart instead of crossing.
+@Test func viewportCurveCurvatureCombKeepsTheSizeScaleOnATightHook() throws {
     let controlPoints = [(0.0, 0.0), (-14.142, 0.0), (6.667, 6.667), (10.0, 10.0), (13.333, 13.333), (20.0, 34.142), (20.0, 20.0)]
         .map { CGPoint(x: $0.0 / 1000, y: $0.1 / 1000) }
     let comb = try #require(
@@ -132,13 +139,8 @@ import Testing
             primitive: .cubicSpline(entityID: SketchEntityID(), points: [], controlPoints: controlPoints, sketchPlane: .xy)
         )
     )
-    let scale = comb.displayScale()
     let diagonal = Double(hypot(comb.modelBounds.width, comb.modelBounds.height))
-    #expect(scale < diagonal * CurveCurvatureDisplay.defaultCombScale / comb.maxAbsCurvature)
-    for sample in comb.samples {
-        #expect(abs(sample.curvature) * scale <= 1 / abs(sample.curvature) * (1 + 1e-12))
-    }
-    #expect(abs(comb.maxAbsCurvature * scale - 1 / comb.maxAbsCurvature) <= 1e-12)
+    #expect(abs(comb.displayScale() - diagonal * CurveCurvatureDisplay.defaultCombScale / comb.maxAbsCurvature) <= 1e-18)
 }
 
 /// A gentle curve keeps the size-based scale: its longest tooth is a tenth of its diagonal.

@@ -242,6 +242,30 @@ struct ModelingOperationDraft: Equatable {
     var squareWeight = "1"
     var squareBoundaryFlow = SquareFitOptions.BoundaryFlow.adjacent
 
+    /// A field a command key asks the form to type into; `serial` makes a repeated request a change.
+    enum FocusField: Hashable { case distance, angle, tension }
+    struct FocusRequest: Equatable { var field: FocusField; var serial: Int }
+    var focusRequest: FocusRequest?
+
+    /// Fillet's keys: D types the fillet distance, C the chamfer distance and A the chamfer angle,
+    /// switching the edge form between Fillet and Chamfer as Plasticity's one command does.
+    mutating func focusEdgeTreatmentField(_ key: Character) {
+        switch key {
+        case "d": kind = .fillet
+        case "c", "a": kind = .chamfer
+        default: return
+        }
+        focusRequest = FocusRequest(field: key == "a" ? .angle : .distance, serial: (focusRequest?.serial ?? 0) + 1)
+    }
+
+    /// Loft's D: the tension both ends take.
+    mutating func focusLoftTension() {
+        focusRequest = FocusRequest(field: .tension, serial: (focusRequest?.serial ?? 0) + 1)
+    }
+
+    /// Whether Square refits the selected faces (Plasticity's Refit Face) rather than framing a sheet.
+    var refitsFaces: Bool { kind == .square && targets.isEmpty == false && targets.allSatisfy(isFace) }
+
     /// Whether `target` is a face (a Square over faces refits them).
     func isFace(_ target: SelectionTarget) -> Bool {
         if case .face = target.component { return true }
@@ -293,7 +317,8 @@ struct ModelingOperationDraft: Equatable {
         case long = "Long"
         var id: Self { self }
     }
-    var bridgeTrim = BridgeTrimChoice.none
+    /// Both by default: Plasticity joins the trimmed walls with the bridge.
+    var bridgeTrim = BridgeTrimChoice.both
 
     /// `continuityAllowance` in radians.
     private func continuityAllowanceRadians() throws -> Double {
@@ -1098,7 +1123,7 @@ struct ModelingOperationDraft: Equatable {
         case .square:
             // Faces: Refit, each replaced by a Square sheet on its own edges at the Square's
             // continuity (Free has no meaning there, the edges staying shared).
-            if targets.isEmpty == false, targets.allSatisfy(isFace) {
+            if refitsFaces {
                 guard squareContinuity != .free else {
                     throw invalid("Refit keeps a face's edges: choose G0, G1 or G2.")
                 }
@@ -1113,7 +1138,10 @@ struct ModelingOperationDraft: Equatable {
             // Square), which take G1 or G2, or whole curve sources; each side Free, G0 or its edge's
             // continuity.
             guard (2...4).contains(targets.count) else {
-                throw invalid("Square takes two to four sides: edges of bodies or curves.")
+                // One side picked: Plasticity's own words, shown by the live preview at once.
+                throw invalid(targets.count == 1
+                    ? "Cannot optimize for quad-sided surface: Square takes two to four sides, edges of bodies or curves."
+                    : "Square takes two to four sides: edges of bodies or curves.")
             }
             let continuous = targets.contains { squareContinuity(of: $0).order != nil }
             let tension = continuous ? DialogTensionScale.kernelScale(try number(squareTension, label: "Tension")) : 1

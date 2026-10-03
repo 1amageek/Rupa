@@ -64,6 +64,7 @@ struct ApplicationEditCommands: Commands {
             Button("Delete Redundant Topology") {
                 editCommands?.deleteRedundantTopology?()
             }
+            .keyboardShortcut("e", modifiers: .option)
             .disabled(editCommands?.deleteRedundantTopology == nil)
             Button("Align Vertex") {
                 editCommands?.alignVertex?()
@@ -84,6 +85,7 @@ struct ApplicationEditCommands: Commands {
             Button("Toggle Curvature") {
                 editCommands?.toggleCurvature?()
             }
+            .keyboardShortcut("x", modifiers: [.control, .shift])
             .disabled(editCommands?.toggleCurvature == nil)
             Button("Convert Vertex") {
                 editCommands?.convertVertex?()
@@ -93,9 +95,10 @@ struct ApplicationEditCommands: Commands {
                 editCommands?.rebuild?()
             }
             .disabled(editCommands?.rebuild == nil)
-            Button("Create Instance") {
+            Button("Instance") {
                 editCommands?.createInstance?()
             }
+            .keyboardShortcut("i", modifiers: .control)
             .disabled(editCommands?.createInstance == nil)
             Button("Realize Instances") {
                 editCommands?.realizeInstances?()

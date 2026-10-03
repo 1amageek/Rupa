@@ -3558,6 +3558,17 @@ extension ViewportSpatialOverlayProducer {
         )
     }
 
+    /// The far end of a comb tooth: it stands outside the bend, away from the centre of
+    /// curvature (which `normal · curvature` points toward), as long as the curvature times the
+    /// scale.
+    static func combToothEnd(of sample: SketchCurveCurvatureSample, scaleFactor: Double) -> Point3D {
+        Point3D(
+            x: sample.point.x - sample.normal.x * sample.curvature * scaleFactor,
+            y: sample.point.y - sample.normal.y * sample.curvature * scaleFactor,
+            z: sample.point.z - sample.normal.z * sample.curvature * scaleFactor
+        )
+    }
+
     static func curvatureMeshes(
         samples: [SketchCurveCurvatureSample],
         scaleFactor: Double,
@@ -3586,11 +3597,7 @@ extension ViewportSpatialOverlayProducer {
         var spine: [Point3D] = []
         spine.reserveCapacity(drawable.count)
         for sample in drawable {
-            let end = Point3D(
-                x: sample.point.x + sample.normal.x * sample.curvature * scaleFactor,
-                y: sample.point.y + sample.normal.y * sample.curvature * scaleFactor,
-                z: sample.point.z + sample.normal.z * sample.curvature * scaleFactor
-            )
+            let end = combToothEnd(of: sample, scaleFactor: scaleFactor)
             guard end.isFinite else {
                 throw RealityViewportSpatialBatch.invalid(
                     "Curvature comb endpoint is not finite."

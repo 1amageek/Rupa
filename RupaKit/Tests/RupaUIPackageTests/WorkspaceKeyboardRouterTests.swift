@@ -846,6 +846,48 @@ private func keyboardContext(
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "P", modifiers: [.shift]), context: keyboardContext()) == .beginSweep)
 }
 
+@Test func workspaceKeyboardRouterSendsFilletsDCAKeysToItsFields() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isFilletDialogActive = true
+    for key in ["d", "c", "a"] {
+        #expect(router.action(for: WorkspaceKeyboardInput(characters: key), context: context) == .focusEdgeTreatmentField(Character(key)))
+    }
+}
+
+@Test func filletsCAndAKeysSwitchTheEdgeFormToChamferAndDBackToFillet() {
+    var draft = ModelingOperationDraft(kind: .fillet, selection: SelectionModel(), ruler: .standard(for: .millimeter))
+    draft.focusEdgeTreatmentField("a")
+    #expect(draft.kind == .chamfer && draft.focusRequest?.field == .angle)
+    draft.focusEdgeTreatmentField("d")
+    #expect(draft.kind == .fillet && draft.focusRequest?.field == .distance && draft.focusRequest?.serial == 2)
+}
+
+@Test func workspaceKeyboardRouterFocusesTheFaceEditValueOnD() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.isFaceEditSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "d"), context: context) == .focusFaceEditValue)
+}
+
+@Test func workspaceKeyboardRouterStartsSquareOnOptionShiftQ() {
+    let router = WorkspaceKeyboardRouter()
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "Œ", modifiers: [.option, .shift]), context: keyboardContext()) == .beginSquare)
+}
+
+@Test func workspaceKeyboardRouterDeletesSelectedFacesOnShiftXOnlyWhileIdle() {
+    let router = WorkspaceKeyboardRouter()
+    var context = keyboardContext()
+    context.hasBodyFaceSelection = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) == .deleteSelection)
+    // During a transform Shift-X keeps bypassing snapping.
+    context.isTransformSessionActive = true
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) != .deleteSelection)
+    context.isTransformSessionActive = false
+    context.hasBodyFaceSelection = false
+    #expect(router.action(for: WorkspaceKeyboardInput(characters: "X", modifiers: [.shift]), context: context) == .beginSnapCandidateKindBypass)
+}
+
 @Test func workspaceKeyboardRouterStartsPipeOnP() {
     let router = WorkspaceKeyboardRouter()
     #expect(router.action(for: WorkspaceKeyboardInput(characters: "p"), context: keyboardContext()) == .beginPipe)
