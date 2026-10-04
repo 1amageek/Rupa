@@ -3579,7 +3579,7 @@ private func removeTemporaryDirectory(_ url: URL) {
 }
 
 /// A cube's mesh, which no rectangular grid spans (every corner of valence three), makes a
-/// PolySpline solid of six bicubic patches; it measures as a solid.
+/// PolySpline solid of bicubic patches with a G2 cap at each corner; it measures as a solid.
 @Test func polySplineOfAClosedGeneralMeshIsASolid() async throws {
     var document = DesignDocument.empty()
     var positions: [Point3D] = []
