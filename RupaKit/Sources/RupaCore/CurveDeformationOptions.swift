@@ -9,6 +9,8 @@ import SwiftCAD
 /// 2. U and V scale about the face's middle and then shift by their offset, a fraction of the
 ///    target face (s → ½ + (s − ½)·scaleU + offsetU).
 /// 3. N scales the height, adds its offset (a length) and Normal flips the result.
+///
+/// Reblend (bodies only) recomputes the body's round fillets on the deformed faces at their radii.
 public struct CurveDeformationOptions: Codable, Equatable, Sendable {
     public var scaleU: Double
     public var scaleV: Double
@@ -19,6 +21,7 @@ public struct CurveDeformationOptions: Codable, Equatable, Sendable {
     public var mirrors: Bool
     public var flipsUV: Bool
     public var flipsNormal: Bool
+    public var reblends: Bool
     /// The source curves stay; without it Deform replaces them.
     public var keepsTools: Bool
 
@@ -26,7 +29,7 @@ public struct CurveDeformationOptions: Codable, Equatable, Sendable {
         scaleU: Double = 1, scaleV: Double = 1, scaleN: Double = 1,
         offsetU: Double = 0, offsetV: Double = 0, offsetN: CADExpression = .length(0, .meter),
         mirrors: Bool = false, flipsUV: Bool = false, flipsNormal: Bool = false,
-        keepsTools: Bool = false
+        reblends: Bool = false, keepsTools: Bool = false
     ) {
         self.scaleU = scaleU
         self.scaleV = scaleV
@@ -37,14 +40,35 @@ public struct CurveDeformationOptions: Codable, Equatable, Sendable {
         self.mirrors = mirrors
         self.flipsUV = flipsUV
         self.flipsNormal = flipsNormal
+        self.reblends = reblends
         self.keepsTools = keepsTools
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case scaleU, scaleV, scaleN, offsetU, offsetV, offsetN, mirrors, flipsUV, flipsNormal, reblends, keepsTools
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        scaleU = try container.decode(Double.self, forKey: .scaleU)
+        scaleV = try container.decode(Double.self, forKey: .scaleV)
+        scaleN = try container.decode(Double.self, forKey: .scaleN)
+        offsetU = try container.decode(Double.self, forKey: .offsetU)
+        offsetV = try container.decode(Double.self, forKey: .offsetV)
+        offsetN = try container.decode(CADExpression.self, forKey: .offsetN)
+        mirrors = try container.decode(Bool.self, forKey: .mirrors)
+        flipsUV = try container.decode(Bool.self, forKey: .flipsUV)
+        flipsNormal = try container.decode(Bool.self, forKey: .flipsNormal)
+        // Values written before Reblend existed bend fillets with the body.
+        reblends = try container.decodeIfPresent(Bool.self, forKey: .reblends) ?? false
+        keepsTools = try container.decode(Bool.self, forKey: .keepsTools)
     }
 
     /// The values as Swift-CAD's UVN map.
     var wrapOptions: WrapOptions {
         WrapOptions(
             scaleU: scaleU, scaleV: scaleV, scaleN: scaleN, offsetU: offsetU, offsetV: offsetV, offsetN: offsetN,
-            mirrors: mirrors, flipsUV: flipsUV, flipsNormal: flipsNormal
+            mirrors: mirrors, flipsUV: flipsUV, flipsNormal: flipsNormal, reblends: reblends
         )
     }
 

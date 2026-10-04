@@ -11171,6 +11171,8 @@ private struct ProjectMainViewContent: View {
                 .accessibilityIdentifier("WorkspaceDeform.flipUV")
             Toggle("Normal", isOn: Binding(get: { deform.options.flipsNormal }, set: { deformSession?.options.flipsNormal = $0 }))
                 .accessibilityIdentifier("WorkspaceDeform.flipNormal")
+            Toggle("Reblend", isOn: Binding(get: { deform.options.reblends }, set: { deformSession?.options.reblends = $0 }))
+                .accessibilityIdentifier("WorkspaceDeform.reblend")
             Toggle("Keep Tools", isOn: Binding(get: { deform.options.keepsTools }, set: { deformSession?.options.keepsTools = $0 }))
                 .accessibilityIdentifier("WorkspaceDeform.keepTools")
             workspaceIconButton(

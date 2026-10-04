@@ -1590,7 +1590,9 @@ and one other features are built on is refused. `CurveDeformationTests` own this
 
 `deformBodies(targets:referenceFace:targetFace:options:)` is Deform Solid and Sheet:
 each selected body object gets one Swift-CAD `wrap` of its body with the same options
-(`CurveDeformationOptions.wrapOptions`; a body may not be flattened, N scale 0), each
+(`CurveDeformationOptions.wrapOptions`; a body may not be flattened, N scale 0; Reblend,
+`reblends`, has the kernel recompute the body's closed chains of round fillets on the deformed
+faces at their radii), each
 face placed in the body's frame where its object is displayed
 (`relativeRigidPlacement`, the rule Boolean operands follow), in one step. Without Keep
 Tools the Wrap takes over the body's object (`retargetBodyNode`); with it the body stays

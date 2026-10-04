@@ -123,4 +123,15 @@ import Testing
         }
         return sketch
     }
+
+    /// Reblend reaches the kernel's Wrap, and values written before it existed read it as off.
+    @Test func reblendCarriesToTheWrapAndDefaultsOff() throws {
+        #expect(CurveDeformationOptions(reblends: true).wrapOptions.reblends)
+        #expect(CurveDeformationOptions().wrapOptions.reblends == false)
+        var object = try #require(try JSONSerialization.jsonObject(
+            with: try JSONEncoder().encode(CurveDeformationOptions(scaleU: 2, reblends: true))) as? [String: Any])
+        object.removeValue(forKey: "reblends")
+        let legacy = try JSONDecoder().decode(CurveDeformationOptions.self, from: try JSONSerialization.data(withJSONObject: object))
+        #expect(legacy.reblends == false && legacy.scaleU == 2)
+    }
 }
