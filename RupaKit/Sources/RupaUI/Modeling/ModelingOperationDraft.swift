@@ -253,6 +253,15 @@ struct ModelingOperationDraft: Equatable {
         }
     }
     var patchContinuity = PatchContinuityChoice.g0
+    /// Patch's Faces through guides: Multiple (as Plasticity opens) divides the hole along each
+    /// guide, each part a face of its own meeting the others along it; Single fits one face
+    /// passing through the guides.
+    enum PatchFacesChoice: String, CaseIterable, Identifiable {
+        case single = "Single"
+        case multiple = "Multiple"
+        var id: Self { self }
+    }
+    var patchFaces = PatchFacesChoice.multiple
     /// Tab in Patch's dialog: Planar → G0 → G1 → G2 → Planar.
     mutating func cyclePatchContinuity() {
         let all = PatchContinuityChoice.allCases
@@ -1323,8 +1332,21 @@ struct ModelingOperationDraft: Equatable {
             && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:
             // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,
-            // each continuous with the sheet beside it, passing through the guides.
+            // each continuous with the sheet beside it, passing through the guides; with Faces
+            // Multiple the guides divide the hole into faces instead.
             let order = patchContinuity.order
+            if patchFaces == .multiple, patchGuideTargets.isEmpty == false {
+                guard order == nil else {
+                    throw invalid("Faces Multiple divides the patch along its guides at Planar or G0; choose Single for G1 or G2.")
+                }
+                let guides = try patchGuideTargets.map { target -> CurveSectionReference in
+                    guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
+                        throw invalid("A patch guide is a curve.")
+                    }
+                    return curve
+                }
+                return .createGuidedSurfaceFill(name: name, target: patchHoleEdges[0], guides: guides)
+            }
             let loop: [SelectionTarget]
             do {
                 loop = patchHoleEdges.count > 1 ? patchHoleEdges : try OpenBoundaryLoopService().loop(through: patchHoleEdges[0], in: document)

@@ -20,6 +20,7 @@ enum PreparedAutomationSourceCommandValidation {
              .createBodyEdgeTreatment,
              .createSheetSurfaceEdit,
              .createSurfaceFill,
+             .createGuidedSurfaceFill,
              .createBoundaryBridge,
              .createBodyShell,
              .createSketch,

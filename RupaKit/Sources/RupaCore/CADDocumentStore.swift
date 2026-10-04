@@ -687,13 +687,17 @@ public final class CADDocumentStore {
                 evaluateCurrentDocument()
             }
             try run()
-        case .createSurfaceFill, .createBoundaryBridge:
+        case .createSurfaceFill, .createGuidedSurfaceFill, .createBoundaryBridge:
             func run() throws {
                 let transaction: FeatureGraphTransaction
                 switch command {
                 case .createSurfaceFill(let name, let target):
                     transaction = try document.prepareSurfaceFill(
                         name: name, target: target, objectRegistry: objectRegistry,
+                        currentEvaluation: currentEvaluation, currentGeneration: generation)
+                case .createGuidedSurfaceFill(let name, let target, let guides):
+                    transaction = try document.prepareSurfaceFill(
+                        name: name, target: target, guides: guides, objectRegistry: objectRegistry,
                         currentEvaluation: currentEvaluation, currentGeneration: generation)
                 case .createBoundaryBridge(let name, let first, let second, let reverseSecondBoundary):
                     transaction = try document.prepareBoundaryBridge(

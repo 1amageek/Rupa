@@ -545,6 +545,14 @@ struct ModelingOperationView: View {
             if draft.patchContinuity.order != nil {
                 TextField("Tension", text: $draft.xnurbsTension)
             }
+            if draft.patchGuideTargets.isEmpty == false {
+                Picker("Faces", selection: $draft.patchFaces) {
+                    ForEach(ModelingOperationDraft.PatchFacesChoice.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .contentShape(Rectangle())
+                .help("Multiple divides the hole along its guides, a face each side; Single fits one face through them.")
+            }
             lengthField("Tolerance", text: $draft.xnurbsPositionTolerance)
                 .help("How far a fitted fill (G1, G2 or through guides) may stray from its edges and guides.")
         case .bridge:

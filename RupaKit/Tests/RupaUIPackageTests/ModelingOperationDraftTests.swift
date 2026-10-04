@@ -1619,8 +1619,20 @@ struct ModelingOperationDraftTests {
         var guided = makeDraft(.patch, targets: [try #require(hole.first), SelectionTarget(sceneNodeID: guideNode.id)])
         guided.isSurfaceCreation = true
         guided.patchContinuity = .g0
+        // Faces Multiple (as Plasticity opens) divides the hole along the guide.
+        #expect(guided.patchFaces == .multiple)
+        guard case let .createGuidedSurfaceFill(_, target, guides) = try guided.command(in: document) else {
+            Issue.record("A patch with a guide divides the hole along it.")
+            return
+        }
+        #expect(target == hole.first && guides == [CurveSectionReference(featureID: arc)])
+        // At G1 the division is refused: Single fits one face through the guide instead.
+        guided.patchContinuity = .g1
+        #expect(throws: (any Error).self) { try guided.command(in: document) }
+        guided.patchContinuity = .g0
+        guided.patchFaces = .single
         guard case .createXNurbs(_, let withGuide, _) = try guided.command(in: document) else {
-            Issue.record("A patch with a guide is an XNURBS through it.")
+            Issue.record("A Single patch with a guide is an XNURBS through it.")
             return
         }
         #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil })

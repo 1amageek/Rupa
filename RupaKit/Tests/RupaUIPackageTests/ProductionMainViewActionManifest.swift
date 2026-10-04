@@ -186,6 +186,7 @@ enum ProductionMainViewActionManifest {
         "createSheetSurfaceEdit",
         "createSketch",
         "createSurfaceFill",
+        "createGuidedSurfaceFill",
         "deleteSceneNodes",
         "extrudeSection",
         "createExtrusion",

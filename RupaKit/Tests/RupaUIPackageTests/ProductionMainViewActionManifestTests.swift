@@ -23,7 +23,7 @@ func productionMainViewActionManifestHasDurableRows() {
 @Test(.timeLimit(.minutes(1)))
 func productionMainViewActionManifestCountsAreFixed() {
     let rows = ProductionMainViewActionManifest.rows
-    #expect(ProductionMainViewActionManifest.sourceCommandRows.count == 177)
+    #expect(ProductionMainViewActionManifest.sourceCommandRows.count == 178)
     #expect(ProductionMainViewActionManifest.canvasRows.count == 17)
     #expect(ProductionMainViewActionManifest.patternArrayRows.count == 3)
     #expect(ProductionMainViewActionManifest.snapshotRows.count == 9)
@@ -32,7 +32,7 @@ func productionMainViewActionManifestCountsAreFixed() {
     #expect(ProductionMainViewActionManifest.workspaceRows.count == 2)
     #expect(ProductionMainViewActionManifest.transientRows.count == 5)
     #expect(ProductionMainViewActionManifest.domainRows.count == 2)
-    #expect(rows.count == 219)
+    #expect(rows.count == 220)
 }
 
 @Test(.timeLimit(.minutes(1)))

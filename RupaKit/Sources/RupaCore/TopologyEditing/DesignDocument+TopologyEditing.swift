@@ -74,6 +74,7 @@ extension DesignDocument {
         name: String,
         target: SelectionTarget,
         insertedSheet: FeatureID? = nil,
+        guides: [CurveSectionReference] = [],
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -88,7 +89,8 @@ extension DesignDocument {
         let operation = FeatureOperation.surfaceFill(SurfaceFillFeature(
             targetFeatureID: selection.sourceID,
             boundarySeed: selection.reference,
-            insertedSheet: insertedSheet
+            insertedSheet: insertedSheet,
+            guides: guides
         ))
         let feature = try FeatureNodeFactory.make(
             operation: operation,

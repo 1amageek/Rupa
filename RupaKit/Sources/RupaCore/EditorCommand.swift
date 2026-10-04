@@ -288,6 +288,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case createBodyEdgeTreatment(name: String, target: SelectionTarget, treatment: BodyEdgeTreatment)
     case createSheetSurfaceEdit(name: String, target: SelectionTarget, edit: SheetSurfaceEdit)
     case createSurfaceFill(name: String, target: SelectionTarget)
+    /// Patch Faces Multiple through guides: the opening through `target` divided along each
+    /// guide curve (each between two of its corners), each part a face of its own.
+    case createGuidedSurfaceFill(name: String, target: SelectionTarget, guides: [CurveSectionReference])
     case createBoundaryBridge(
         name: String,
         first: SelectionTarget,
@@ -888,6 +891,8 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
             "createSheetSurfaceEdit"
         case .createSurfaceFill:
             "createSurfaceFill"
+        case .createGuidedSurfaceFill:
+            "createGuidedSurfaceFill"
         case .createBoundaryBridge:
             "createBoundaryBridge"
         case .createBodyShell:
@@ -1228,6 +1233,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
              .createBodyEdgeTreatment,
              .createSheetSurfaceEdit,
              .createSurfaceFill,
+             .createGuidedSurfaceFill,
              .createBoundaryBridge,
              .createBodyShell,
              .filletBodyEdges,
