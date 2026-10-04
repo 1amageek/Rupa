@@ -543,6 +543,8 @@ struct ModelingOperationDraft: Equatable {
     var limitsReversed = false
     /// Fillet Shell's Tangent Edges: whether a selected edge takes the edges continuing it tangentially.
     var tangentEdges = true
+    /// Fillet Shell's Attempt to create Y-Blend (off by default; Chordal does not offer it).
+    var filletYBlend = false
     /// A pipe's section: its diameter, a vertex count (0 for a circle) and the angle it is turned by.
     var pipeDiameter = "10 mm"
     var pipeVertices = "0"
@@ -1540,6 +1542,10 @@ struct ModelingOperationDraft: Equatable {
             // Tangent Edges off: only the selected edges.
             if tangentEdges == false, kind != .g2Blend {
                 treatment = .tangentEdgesOff(treatment)
+            }
+            // Attempt to create Y-Blend: corner patches split in a Y.
+            if kind == .fillet, filletYBlend, effectiveFilletShape != .chordal {
+                treatment = .yBlendAttempt(treatment)
             }
             // Further edges take the same treatment, blended in turn.
             return .createBodyEdgeTreatment(name: name, target: edges[0],

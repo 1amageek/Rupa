@@ -1082,6 +1082,43 @@ struct ModelingOperationDraftTests {
         })
     }
 
+    @Test func attemptToCreateYBlendCarriesToTheFillet() throws {
+        var document = DesignDocument.empty()
+        _ = try document.createExtrudedRectangleFromCorners(
+            name: "Box", plane: .xy,
+            firstCorner: SketchPoint(x: .length(0, .meter), y: .length(0, .meter)),
+            oppositeCorner: SketchPoint(x: .length(0.02, .meter), y: .length(0.02, .meter)),
+            depth: .length(0.02, .meter), direction: .normal
+        )
+        let topology = try TopologySnapshotService().snapshot(document: document, metricPolicy: .omit)
+        let edge = try #require(topology.entries.first { entry in
+            guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+            return abs(start.z - 0.02) < 1e-9 && abs(end.z - 0.02) < 1e-9 && abs(start.y) < 1e-9 && abs(end.y) < 1e-9
+        }?.selectionTarget())
+        var draft = makeDraft(.fillet, targets: [edge])
+        draft.distance = "2 mm"
+        draft.filletYBlend = true
+        guard case .createBodyEdgeTreatment(_, _, .yBlendAttempt(.fillet)) = try draft.command(in: document) else {
+            Issue.record("Expected a fillet attempting a Y-Blend.")
+            return
+        }
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(draft.command(in: document))
+        #expect(store.document.cadDocument.designGraph.nodes.values.contains { node in
+            if case let .fillet(feature) = node.operation { return feature.yBlend }
+            return false
+        })
+        // A box's lone edge has no corner patch: the round is the same.
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(abs(measurement.totals.solidVolumeCubicMeters - (0.02 * 0.02 * 0.02 - 0.002 * 0.002 * (1 - Double.pi / 4) * 0.02)) < 1e-11)
+        // Chordal does not offer it.
+        draft.filletShape = .chordal
+        guard case .createBodyEdgeTreatment(_, _, .shapedFillet) = try draft.command(in: document) else {
+            Issue.record("Expected a chordal fillet without Y-Blend.")
+            return
+        }
+    }
+
     @Test func aVariableFilletGrowsAlongItsEdge() throws {
         var document = DesignDocument.empty()
         _ = try document.createExtrudedRectangleFromCorners(

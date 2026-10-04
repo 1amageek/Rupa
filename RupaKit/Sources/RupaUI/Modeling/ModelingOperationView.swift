@@ -501,6 +501,10 @@ struct ModelingOperationView: View {
                 TextField("Limit start (fraction of the edge; blank 0)", text: $draft.limitStart)
                 TextField("Limit end (fraction of the edge; blank 1)", text: $draft.limitEnd)
                 Toggle("Reverse limits", isOn: $draft.limitsReversed)
+                // Plasticity hides Y-Blend for Chordal.
+                if draft.filletShape != .chordal {
+                    Toggle("Attempt to create Y-Blend", isOn: $draft.filletYBlend)
+                }
                 Toggle("Tangent edges", isOn: $draft.tangentEdges)
             }
             if draft.filletShape.takesTension {

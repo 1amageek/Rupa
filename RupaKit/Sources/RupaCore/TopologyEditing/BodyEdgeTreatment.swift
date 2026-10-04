@@ -31,6 +31,9 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
     /// A fillet or chamfer `treatment` with Fillet Shell's Tangent Edges off: only the selected
     /// edges, not the edges continuing them tangentially.
     case tangentEdgesOff(BodyEdgeTreatment)
+    /// A fillet `treatment` with Fillet Shell's Attempt to create Y-Blend on: its corner patches
+    /// split into faces meeting in a Y.
+    case yBlendAttempt(BodyEdgeTreatment)
 
     static var selectionKind: TopologySummaryResult.Entry.Kind { .edge }
 
@@ -105,6 +108,12 @@ public indirect enum BodyEdgeTreatment: Codable, Equatable, Sendable, TopologyEd
             default:
                 throw EditorError(code: .commandInvalid, message: "Tangent Edges turns off for fillets and chamfers.")
             }
+        case .yBlendAttempt(let base):
+            guard case .fillet(let fillet) = try base.featureOperation(sourceID: sourceID, reference: reference, in: document),
+                  fillet.shape != .full, fillet.shape != .chordal else {
+                throw EditorError(code: .commandInvalid, message: "Attempt to create Y-Blend applies to round, conic and G2 fillets.")
+            }
+            return .fillet(fillet.with(yBlend: true))
         case .fullFillet:
             // The second edge is resolved by `DesignDocument.prepareBodyEdgeTreatment` into a
             // `FullFilletEdges`, which builds the feature.
