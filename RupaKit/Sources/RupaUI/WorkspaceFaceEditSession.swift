@@ -100,6 +100,8 @@ struct WorkspaceFaceEditSession: Equatable {
     /// `tension` (Plasticity shows one Tension per G1 or G2 edge).
     var pairContinuity: [Int: SurfaceContinuityLevel] = [:]
     var pairTension: [Int: Double] = [:]
+    /// Align Surface's sheet edge clicked in the dialog, waiting for the edge it follows.
+    private(set) var pendingAlignEdge: SelectionTarget?
     /// Align Surface's Analysis while the dialog is open: the continuity checked along the aligned
     /// edges and each one's scale (Plasticity's G0, G1 and G2 Scale, opening at 10, 10 and 0.1).
     /// They change what is drawn, never the commands.
@@ -185,6 +187,45 @@ struct WorkspaceFaceEditSession: Equatable {
         }
     }
 
+    /// Whether the dialog takes edge clicks: Align Surface's pairs are picked while it runs.
+    var takesEdgePicks: Bool {
+        if case .alignSurface = kind { return true }
+        return false
+    }
+
+    /// An edge clicked while Align Surface runs: a sheet's edge, then the edge it follows, adds a
+    /// pair; Control-click on an edge of a pair takes that pair off (its own continuity and
+    /// tension with it), or drops a sheet edge still waiting for its reference.
+    mutating func pick(edge: SelectionTarget, toggles: Bool) {
+        guard case let .alignSurface(pairs) = kind else { return }
+        if toggles {
+            if pendingAlignEdge == edge {
+                pendingAlignEdge = nil
+                return
+            }
+            guard let index = pairs.firstIndex(where: { $0.edge == edge || $0.reference == edge }) else { return }
+            var remaining = pairs
+            remaining.remove(at: index)
+            func shifted<Value>(_ values: [Int: Value]) -> [Int: Value] {
+                Dictionary(uniqueKeysWithValues: values.compactMap { key, value in
+                    key == index ? nil : (key > index ? key - 1 : key, value)
+                })
+            }
+            pairContinuity = shifted(pairContinuity)
+            pairTension = shifted(pairTension)
+            kind = .alignSurface(pairs: remaining)
+            return
+        }
+        guard pairs.contains(where: { $0.edge == edge || $0.reference == edge }) == false else { return }
+        guard let sheetEdge = pendingAlignEdge else {
+            pendingAlignEdge = edge
+            return
+        }
+        guard sheetEdge != edge else { return }
+        pendingAlignEdge = nil
+        kind = .alignSurface(pairs: pairs + [AlignPair(edge: sheetEdge, reference: edge)])
+    }
+
     /// A clicked face: Push Face pushes its faces onto it instead of by the Distance (a pushed
     /// face itself is ignored); Draft Face takes it as the reference while it has none, then adds it to
     /// the drafted faces, Control-click (`toggles`) taking a drafted face back off; Match Face
@@ -265,7 +306,11 @@ struct WorkspaceFaceEditSession: Equatable {
                 ? "Push Face: drag the face's arrow or set the Distance; click a face to push onto it." : nil
         case let .extendSheet(_, limit):
             return limit == nil && distanceMeters == 0 ? "Extend Sheet: set the Distance." : nil
-        case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace, .polySplines:
+        case let .alignSurface(pairs):
+            if pendingAlignEdge != nil { return "Align Surface: click the edge the sheet's edge follows." }
+            if pairs.isEmpty { return "Align Surface: click a sheet's edge, then the edge it follows." }
+            return nil
+        case .removeFillets, .hollow, .thicken, .rebuildFace, .polySplines:
             return nil
         }
     }
@@ -370,8 +415,9 @@ struct WorkspaceFaceEditSession: Equatable {
                 shrinks: rebuildMethod == .nominal || shrinks
             )
         case let .alignSurface(pairs):
-            // The first pair's; `commands()` gives every pair's.
-            return alignCommand(pairs[0], index: 0, keepsOtherEdges: false)
+            // The first pair's; `commands()` gives every pair's. None until a pair is picked.
+            guard let first = pairs.first else { return nil }
+            return alignCommand(first, index: 0, keepsOtherEdges: false)
         case .polySplines:
             // `commands()` gives the conversion and the mesh's removal together.
             return nil

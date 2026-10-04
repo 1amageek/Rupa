@@ -6278,6 +6278,9 @@ private struct ProjectMainViewContent: View {
             if faceEditSession?.takesFacePicks == true {
                 return .pickingCommand(.faceEdit, hitPolicy: .face, scope: selectionScope, transforming: transforming)
             }
+            if faceEditSession?.takesEdgePicks == true {
+                return .pickingCommand(.faceEdit, hitPolicy: .all, scope: selectionScope, transforming: transforming)
+            }
             if slotProfileCommandState.isCurveOffsetActive, slotProfileCommandState.isFreestyle {
                 return .pickingCommand(.freestyleOffset, hitPolicy: scopePolicy, scope: selectionScope, transforming: transforming)
             }
@@ -10951,8 +10954,28 @@ private struct ProjectMainViewContent: View {
         }
     }
 
-    /// A face clicked while Draft Face or Match Face runs: its reference or one of its faces.
+    /// A face clicked while Draft Face or Match Face runs: its reference or one of its faces; an
+    /// edge clicked while Align Surface runs: a sheet's edge, then the edge it follows.
     private func pickFaceEditFace(at target: ViewportCanvasTarget) {
+        if var edit = faceEditSession, edit.takesEdgePicks {
+            var resolver = selectionTargetResolver
+            resolver.selectionScope = .edge
+            guard let hit = target.hit, let edge = resolver.selectionTarget(for: hit), case .edge = edge.component else {
+                reportToolStatus("\(edit.title): click an edge.", severity: .warning)
+                return
+            }
+            let toggles = target.modifierFlags.containsControl
+            // A pair starts on a sheet's edge, as Plasticity aligns a sheet to its reference.
+            if toggles == false, edit.pendingAlignEdge == nil,
+               snapshot.document.document.productMetadata.sceneNodes[edge.sceneNodeID]?.object?.geometryRole != .surface {
+                reportToolStatus("\(edit.title): click an edge of a sheet first, then the edge it follows.", severity: .warning)
+                return
+            }
+            edit.pick(edge: edge, toggles: toggles)
+            faceEditSession = edit
+            reportToolStatus(edit.missingInput ?? "\(edit.title): OK, Return or right-click aligns.")
+            return
+        }
         var resolver = selectionTargetResolver
         resolver.selectionScope = .face
         guard var edit = faceEditSession, let hit = target.hit, let face = resolver.selectionTarget(for: hit),

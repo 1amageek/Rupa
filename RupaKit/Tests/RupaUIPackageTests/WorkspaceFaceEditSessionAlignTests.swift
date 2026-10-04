@@ -105,4 +105,37 @@ struct WorkspaceFaceEditSessionAlignTests {
         }
         #expect(first == 1 && second == 2)
     }
+
+    /// Pairs are picked while the dialog runs (Plasticity's align videos modify the selection in
+    /// the command): a sheet's edge, then the edge it follows; Control-click takes a pair off with
+    /// its own continuity and tension, and the later pairs' settings move down with them.
+    @Test func edgesClickedInTheDialogAddAndTakeOffPairs() {
+        let targets = (0..<6).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .alignSurface(pairs: [.init(edge: targets[0], reference: targets[1])]))
+        #expect(session.takesEdgePicks)
+        session.pick(edge: targets[2], toggles: false)
+        #expect(session.pendingAlignEdge == targets[2] && session.missingInput != nil)
+        session.pick(edge: targets[3], toggles: false)
+        session.pick(edge: targets[4], toggles: false)
+        session.pick(edge: targets[5], toggles: false)
+        guard case let .alignSurface(pairs) = session.kind else { Issue.record("Expected Align Surface."); return }
+        #expect(pairs.map(\.edge) == [targets[0], targets[2], targets[4]] && pairs.map(\.reference) == [targets[1], targets[3], targets[5]])
+        #expect(session.pendingAlignEdge == nil && session.missingInput == nil)
+        session.pairContinuity = [1: .tangentPlane, 2: .curvature]
+        session.pairTension = [2: 0.25]
+        // Control-click on the middle pair's reference takes it off; the last pair's settings follow it down.
+        session.pick(edge: targets[3], toggles: true)
+        guard case let .alignSurface(left) = session.kind else { Issue.record("Expected Align Surface."); return }
+        #expect(left.map(\.edge) == [targets[0], targets[4]])
+        #expect(session.pairContinuity == [1: .curvature] && session.pairTension == [1: 0.25])
+        #expect(session.commands().count == 2)
+        // A sheet edge waiting for its reference is dropped by Control-click.
+        session.pick(edge: targets[2], toggles: false)
+        session.pick(edge: targets[2], toggles: true)
+        #expect(session.pendingAlignEdge == nil)
+        // With every pair taken off nothing is aligned.
+        session.pick(edge: targets[0], toggles: true)
+        session.pick(edge: targets[4], toggles: true)
+        #expect(session.commands().isEmpty && session.missingInput != nil)
+    }
 }
