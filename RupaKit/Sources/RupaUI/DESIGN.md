@@ -915,7 +915,8 @@ Sweep's dialog turns its Twist by a circle about the path's end. Control-R start
 Subdivide, Count and Param in the dialog); with nothing selected it waits for a click on a
 face (`WorkspacePointPickRequest.isoparam`, Tab switching U and V) and imprints the line
 through the clicked point at once (`IsoparamPlacementResolver`), as Plasticity's click on the
-hovered face does; and Option-T Untrim (Tab toggles Keep
+hovered face does, the line under the pointer previewed meanwhile (the viewport's
+`onPointPickHover` gives the point a click would take; off any face nothing is previewed); and Option-T Untrim (Tab toggles Keep
 edges). `WorkspaceImprintDialogView` lays the options out in the context panel; while the
 dialog (and Deform's) names a command its result previews in place of the document, following
 every change (`previewDialog`); Return, right-click or OK applies as one source command, a refused one leaving the dialog

@@ -292,6 +292,9 @@ public struct Viewport: View {
     private let onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)?
     private let onMeasurementStateChange: ((ViewportMeasurementState) -> Void)?
     private let onPointPick: ((ViewportPointPick) -> Void)?
+    /// The point a pick would take under the pointer while a point pick runs (nil off any), so a
+    /// command can preview what a click there makes.
+    private let onPointPickHover: ((ViewportPickedPoint?) -> Void)?
     private let onNativeGestureRefusal: ((any Error) -> Void)?
     private let onPresentationFailure: ((any Error) -> Void)?
     /// Why a selected subshape offers no handle it would otherwise have (an edge whose faces
@@ -505,6 +508,7 @@ public struct Viewport: View {
         onProjectedGridStepChange: ((ViewportProjectedGrid.ScaleReadout.Length) -> Void)? = nil,
         onMeasurementStateChange: ((ViewportMeasurementState) -> Void)? = nil,
         onPointPick: ((ViewportPointPick) -> Void)? = nil,
+        onPointPickHover: ((ViewportPickedPoint?) -> Void)? = nil,
         onNativeGestureRefusal: ((any Error) -> Void)? = nil,
         onPresentationFailure: ((any Error) -> Void)? = nil,
         onAffordanceUnavailable: ((String) -> Void)? = nil
@@ -658,6 +662,7 @@ public struct Viewport: View {
         self.onProjectedGridStepChange = onProjectedGridStepChange
         self.onMeasurementStateChange = onMeasurementStateChange
         self.onPointPick = onPointPick
+        self.onPointPickHover = onPointPickHover
         self.onNativeGestureRefusal = onNativeGestureRefusal
         self.onPresentationFailure = onPresentationFailure
         self.onAffordanceUnavailable = onAffordanceUnavailable
@@ -4839,30 +4844,7 @@ public struct Viewport: View {
             return
         }
         if pointPickActive {
-            let resolution = measurementEndpoint(at: point)
-            if let endpoint = resolution.endpoint {
-                var picked = ViewportPickedPoint(point: endpoint.point)
-                switch endpoint.source {
-                case .presentation(let occurrenceID):
-                    picked.occurrenceID = occurrenceID
-                    do {
-                        picked.faceComponentID = try pickedFaceComponentID(
-                            at: point, occurrenceID: occurrenceID, size: size
-                        )
-                    } catch {
-                        // An unavailable frame cannot name the face the point lies on.
-                        onPointPick?(.refused(error.localizedDescription))
-                        return
-                    }
-                case .constructionPlane(let plane):
-                    picked.plane = plane
-                case .snap, .anchor:
-                    break
-                }
-                onPointPick?(.point(picked))
-            } else {
-                onPointPick?(.refused((resolution.failure ?? .viewRayUnavailable).message))
-            }
+            onPointPick?(pickedPoint(at: point, size: size))
             return
         }
         if let pendingInteractionTarget {
@@ -5543,7 +5525,39 @@ public struct Viewport: View {
         )
     }
 
+    /// The point a point pick takes at `point`: the measured endpoint there, with the face and
+    /// occurrence it lies on or the construction plane it came from.
+    private func pickedPoint(at point: CGPoint, size: CGSize) -> ViewportPointPick {
+        let resolution = measurementEndpoint(at: point)
+        guard let endpoint = resolution.endpoint else {
+            return .refused((resolution.failure ?? .viewRayUnavailable).message)
+        }
+        var picked = ViewportPickedPoint(point: endpoint.point)
+        switch endpoint.source {
+        case .presentation(let occurrenceID):
+            picked.occurrenceID = occurrenceID
+            do {
+                picked.faceComponentID = try pickedFaceComponentID(at: point, occurrenceID: occurrenceID, size: size)
+            } catch {
+                // An unavailable frame cannot name the face the point lies on.
+                return .refused(error.localizedDescription)
+            }
+        case .constructionPlane(let plane):
+            picked.plane = plane
+        case .snap, .anchor:
+            break
+        }
+        return .point(picked)
+    }
+
     private func hover(at point: CGPoint, size: CGSize) {
+        if pointPickActive, let onPointPickHover {
+            if case let .point(picked) = pickedPoint(at: point, size: size) {
+                onPointPickHover(picked)
+            } else {
+                onPointPickHover(nil)
+            }
+        }
         if measurementToolActive {
             handleMeasurementHover(at: point)
             return

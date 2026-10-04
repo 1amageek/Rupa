@@ -2559,6 +2559,7 @@ private struct ProjectMainViewContent: View {
                 }
             },
             onPointPick: handleViewportPointPick,
+            onPointPickHover: isoparamHoverHandler,
             onNativeGestureRefusal: { error in
                 // The viewport decides which native gesture refusals are
                 // reportable and filters frame readiness before this point, so
@@ -2578,6 +2579,10 @@ private struct ProjectMainViewContent: View {
         }
         .onChange(of: faceEditSession, initial: true) { _, new in
             updateRemovalPreview(new)
+        }
+        .onChange(of: pointPickRequest) { old, new in
+            // Isoparam's hover preview goes with its click placement.
+            if case .isoparam? = old, new != old { previewDialog(nil, name: "Isoparam") }
         }
         .onChange(of: imprintSession) { _, new in
             previewDialog(new?.command(), name: new?.title ?? "Imprint")
@@ -11602,6 +11607,34 @@ private struct ProjectMainViewContent: View {
 
     /// Isoparam placed by a click: the line through the clicked point of the face, imprinted at
     /// once as Plasticity's click on the hovered face does. A click off a face asks again.
+    /// While Isoparam places its line by a click, the line under the pointer previews where the
+    /// click puts it (Plasticity's yellow line following the cursor); off any face, nothing.
+    private var isoparamHoverHandler: ((ViewportPickedPoint?) -> Void)? {
+        guard case let .isoparam(direction)? = pointPickRequest else { return nil }
+        return { picked in
+            guard let picked, let occurrenceID = picked.occurrenceID, let faceComponentID = picked.faceComponentID else {
+                previewDialog(nil, name: "Isoparam")
+                return
+            }
+            do {
+                let document = snapshot.document.document
+                let topology = try TopologySnapshotService().snapshot(
+                    document: document, objectRegistry: objectRegistry,
+                    currentEvaluation: snapshot.cadInteraction, currentGeneration: snapshot.documentGeneration
+                )
+                let placement = try IsoparamPlacementResolver().placement(
+                    near: picked.point, onFace: faceComponentID, of: occurrenceID, direction: direction,
+                    document: document, topology: topology
+                )
+                previewDialog(.isoparam(name: "Isoparam", face: placement.face, direction: direction,
+                                        fractions: [placement.fraction], subdividesControlNet: false), name: "Isoparam")
+            } catch {
+                // A face the line cannot cross here (a border) previews nothing; the click says why.
+                previewDialog(nil, name: "Isoparam")
+            }
+        }
+    }
+
     private func placeIsoparam(at picked: ViewportPickedPoint, direction: SurfaceParameterDirection) {
         guard let occurrenceID = picked.occurrenceID, let faceComponentID = picked.faceComponentID else {
             reportToolStatus("Isoparam: click a face of a body.", severity: .warning)
@@ -11618,6 +11651,7 @@ private struct ProjectMainViewContent: View {
                 document: document, topology: topology
             )
             pointPickRequest = nil
+            previewDialog(nil, name: "Isoparam")
             submitSource(.isoparam(name: "Isoparam", face: placement.face, direction: direction,
                                    fractions: [placement.fraction], subdividesControlNet: false))
         } catch {
