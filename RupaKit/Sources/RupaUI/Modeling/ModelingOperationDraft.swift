@@ -1332,13 +1332,12 @@ struct ModelingOperationDraft: Equatable {
             && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:
             // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,
-            // each continuous with the sheet beside it, passing through the guides; with Faces
-            // Multiple the guides divide the hole into faces instead.
+            // each continuous with the sheet beside it, passing through the guides. With Faces
+            // Multiple the guides divide the hole into faces: at Planar or G0 Coons faces meeting
+            // along each guide, at G1 or G2 the XNURBS sheet cut along them.
             let order = patchContinuity.order
-            if patchFaces == .multiple, patchGuideTargets.isEmpty == false {
-                guard order == nil else {
-                    throw invalid("Faces Multiple divides the patch along its guides at Planar or G0; choose Single for G1 or G2.")
-                }
+            let divides = patchFaces == .multiple && patchGuideTargets.isEmpty == false
+            if divides, order == nil {
                 let guides = try patchGuideTargets.map { target -> CurveSectionReference in
                     guard case .curve(let curve) = try sectionReference(for: target.sceneNodeID, in: document) else {
                         throw invalid("A patch guide is a curve.")
@@ -1379,7 +1378,8 @@ struct ModelingOperationDraft: Equatable {
                 flatness: try number(xnurbsFlatness, label: "Flatness"), boundaryFlow: xnurbsBoundaryFlow, quality: xnurbsQuality,
                 satisfiesTolerances: xnurbsSatisfiesTolerances,
                 positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
-                angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180
+                angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180,
+                dividesAlongGuides: divides
             )
             do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)

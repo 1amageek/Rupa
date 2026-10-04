@@ -1626,16 +1626,21 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(target == hole.first && guides == [CurveSectionReference(featureID: arc)])
-        // At G1 the division is refused: Single fits one face through the guide instead.
+        // At G1 the XNURBS sheet through the guide, tangent to the plate, is cut along it.
         guided.patchContinuity = .g1
-        #expect(throws: (any Error).self) { try guided.command(in: document) }
+        guard case .createXNurbs(_, let divided, _) = try guided.command(in: document) else {
+            Issue.record("A G1 patch divided by a guide is an XNURBS cut along it.")
+            return
+        }
+        #expect(divided.dividesAlongGuides && divided.guides == [CurveSectionReference(featureID: arc)]
+            && divided.boundaries.allSatisfy { $0.continuity?.order == .tangent })
         guided.patchContinuity = .g0
         guided.patchFaces = .single
         guard case .createXNurbs(_, let withGuide, _) = try guided.command(in: document) else {
             Issue.record("A Single patch with a guide is an XNURBS through it.")
             return
         }
-        #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil })
+        #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil } && withGuide.dividesAlongGuides == false)
     }
 
     @Test func aPatchOnASolidsEdgeLoopMakesASheetOfTheFacesItEncloses() throws {
