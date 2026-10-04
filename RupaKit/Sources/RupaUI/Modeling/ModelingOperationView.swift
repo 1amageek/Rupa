@@ -449,6 +449,10 @@ struct ModelingOperationView: View {
             .help("Positive dimensionless scale inherited by sections with blank tension. Applies to smooth connectors.")
             Toggle("Closed section loop", isOn: $draft.closesSectionLoop)
             Toggle("Simplify", isOn: $draft.loftSimplify)
+            if draft.loftGuideNodeIDs.isEmpty == false || draft.loftGuideEdges.isEmpty == false {
+                Toggle("Trim overlap", isOn: $draft.loftTrimsOverlap)
+                    .help("Cut the guides where they run on past the end sections; off, the loft runs on along them to their ends.")
+            }
             Picker("Start continuity", selection: $draft.loftStartContinuity) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
             }

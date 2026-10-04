@@ -36,7 +36,9 @@ Both lists preserve selection order after filtering; reordering cannot change an
 operand's role. Section controls remain retained when its role changes, but are
 not applied to guides. The existing source-coordinate/lock checks cover both roles.
 One createLoft command carries the complete references to the existing preview
-transaction. Native evaluation owns exact guide contacts and rejects invalid curves.
+transaction. With guides the form offers Trim overlap (`loftTrimsOverlap`, on as Plasticity
+opens), carried as `LoftOptions.trimsOverlap`: off, the loft runs on along its guides to their
+ends. Native evaluation owns exact guide contacts and rejects invalid curves.
 History guide selection lists earlier, active features with a declared curve
 output, excluding section sources and already-selected guides. Existing guides
 remain visible even if no longer eligible, so they can be removed. Reordering,

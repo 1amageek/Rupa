@@ -2520,6 +2520,15 @@ struct ModelingOperationDraftTests {
         #expect(sections.count == 2)
         #expect(guides == [LoftGuideReference(featureID: guide)])
         #expect(draft.operandTitle(at: 0, in: document) == "Guide 1: Guide")
+        // Trim overlap opens on and reaches the loft's options; off, the loft runs on along its guides.
+        guard case .createLoft(_, _, _, let trimming, _) = command, trimming.trimsOverlap else {
+            Issue.record("Expected Trim overlap on."); return
+        }
+        draft.loftTrimsOverlap = false
+        guard case .createLoft(_, _, _, let running, _) = try draft.command(in: document), running.trimsOverlap == false else {
+            Issue.record("Expected Trim overlap off."); return
+        }
+        draft.loftTrimsOverlap = true
         let store = CADDocumentStore(document: document)
         _ = try store.apply(command)
         let result = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)
