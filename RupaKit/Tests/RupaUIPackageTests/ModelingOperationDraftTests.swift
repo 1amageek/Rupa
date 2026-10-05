@@ -2546,6 +2546,13 @@ struct ModelingOperationDraftTests {
             Issue.record("Expected Trim overlap off."); return
         }
         draft.loftTrimsOverlap = true
+        // Trim profiles opens off and reaches the loft's options when turned on.
+        #expect(running.trimsProfiles == false)
+        draft.loftTrimsProfiles = true
+        guard case .createLoft(_, _, _, let cutting, _) = try draft.command(in: document), cutting.trimsProfiles else {
+            Issue.record("Expected Trim profiles on."); return
+        }
+        draft.loftTrimsProfiles = false
         let store = CADDocumentStore(document: document)
         _ = try store.apply(command)
         let result = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)

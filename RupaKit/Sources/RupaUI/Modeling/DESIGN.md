@@ -38,7 +38,10 @@ not applied to guides. The existing source-coordinate/lock checks cover both rol
 One createLoft command carries the complete references to the existing preview
 transaction. With guides the form offers Trim overlap (`loftTrimsOverlap`, on as Plasticity
 opens), carried as `LoftOptions.trimsOverlap`: off, the loft runs on along its guides to their
-ends. Native evaluation owns exact guide contacts and rejects invalid curves.
+ends. Trim profiles (`loftTrimsProfiles`, off by default, `LoftOptions.trimsProfiles`) cuts open
+sections where two guides cross them and lofts only between the guides; Plasticity's documentation
+does not show its effect, so the behaviour is inferred from Trim overlap's (decided with the user
+2026-10-05). Native evaluation owns exact guide contacts and rejects invalid curves.
 History guide selection lists earlier, active features with a declared curve
 output, excluding section sources and already-selected guides. Existing guides
 remain visible even if no longer eligible, so they can be removed. Reordering,

@@ -189,6 +189,7 @@ struct ModelingOperationDraft: Equatable {
     /// Loft's Trim overlap: guides running on past the end sections are cut there (on, as
     /// Plasticity opens); off, the loft runs on along them to their ends.
     var loftTrimsOverlap = true
+    var loftTrimsProfiles = false
     var loftDefaultTension = "1"
     /// How a Loft meets the face beside an edge selected as its first or last section.
     enum LoftContinuityChoice: String, CaseIterable, Identifiable {
@@ -1182,7 +1183,7 @@ struct ModelingOperationDraft: Equatable {
             let options = LoftOptions(resultKind: lofted ? .sheet : .solid,
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"),
-                simplify: loftSimplify, trimsOverlap: loftTrimsOverlap)
+                simplify: loftSimplify, trimsOverlap: loftTrimsOverlap, trimsProfiles: loftTrimsProfiles)
             if let vertex = vertices.first {
                 let apex = try document.loftApex(for: vertex, currentEvaluation: nil)
                 guard sections.count == 1, guides.isEmpty else { throw invalid("A loft to a vertex takes one section and no guides.") }

@@ -452,6 +452,8 @@ struct ModelingOperationView: View {
             if draft.loftGuideNodeIDs.isEmpty == false || draft.loftGuideEdges.isEmpty == false {
                 Toggle("Trim overlap", isOn: $draft.loftTrimsOverlap)
                     .help("Cut the guides where they run on past the end sections; off, the loft runs on along them to their ends.")
+                Toggle("Trim profiles", isOn: $draft.loftTrimsProfiles)
+                    .help("Cut open sections where the two guides cross them, lofting only between the guides; off, the sections loft whole.")
             }
             Picker("Start continuity", selection: $draft.loftStartContinuity) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
