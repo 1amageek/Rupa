@@ -227,6 +227,7 @@ public struct Viewport: View {
     private let sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback]
     private let transformGizmo: ViewportTransformGizmoConfiguration?
     private let presentationCADInteractionSceneNodeIDs: Set<SceneNodeID>
+    private let presentationCADInteractionOccurrenceIDs: Set<SceneOccurrenceID>
     private let onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)?
     private let meshSelectionDomain: GeometryAttributeDomain
     private let meshSelectionOverlay: ViewportMeshSelectionOverlay?
@@ -362,12 +363,8 @@ public struct Viewport: View {
     }
 
     private var viewportBackground: Color {
-        switch shading.background {
-        case .theme:
-            ViewportTheme.background
-        case .custom(let color):
-            Color(red: color.r, green: color.g, blue: color.b, opacity: color.a)
-        }
+        let color = ViewportCanvasBackground.color(for: shading.background)
+        return Color(.sRGB, red: color.r, green: color.g, blue: color.b, opacity: color.a)
     }
 
     private var sceneOverlayState: ViewportSceneOverlayState {
@@ -404,6 +401,7 @@ public struct Viewport: View {
         selectionDragPreviewTargets: [SelectionTarget] = [],
         removalPreviewTargets: [SelectionTarget] = [],
         presentationPreviewSceneNodeIDs: Set<SceneNodeID> = [],
+        presentationPreviewOccurrenceIDs: Set<SceneOccurrenceID> = [],
         patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest? = nil,
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
@@ -448,6 +446,7 @@ public struct Viewport: View {
         sketchJoinEndpointFeedback: [SketchCurveJoinEndpointFeedback] = [],
         transformGizmo: ViewportTransformGizmoConfiguration? = nil,
         presentationCADInteractionSceneNodeIDs: Set<SceneNodeID> = [],
+        presentationCADInteractionOccurrenceIDs: Set<SceneOccurrenceID> = [],
         selectedPresentationHasExactCADContext: Bool,
         onPresentationOccurrencePick: ((SceneOccurrenceID, ViewportSelectionIntent) -> Void)? = nil,
         onPresentationOccurrenceHover: ((SceneOccurrenceID?) -> Void)? = nil,
@@ -603,6 +602,7 @@ public struct Viewport: View {
             ?? interactionScaleDefaults.operationStepMeters
         self.transformGizmo = transformGizmo
         self.presentationCADInteractionSceneNodeIDs = presentationCADInteractionSceneNodeIDs
+        self.presentationCADInteractionOccurrenceIDs = presentationCADInteractionOccurrenceIDs
         self.onPresentationOccurrencePick = onPresentationOccurrencePick
         self.onPresentationOccurrenceHover = onPresentationOccurrenceHover
         self.onPick = onPick
@@ -669,9 +669,13 @@ public struct Viewport: View {
         self.sceneObjectDefinitions = objectRegistry.orderedDefinitions
         self.presentationInteractionStateResolver = MeshSourcePresentationInteractionStateResolver(
             sceneNodeIDByOccurrenceID: presentationSceneNodeIDByOccurrenceID,
-            selectedSceneNodeIDs: objectSelectionIndex.sceneNodeIDs,
+            selectedSceneNodeIDs: Set(objectSelectionIndex.objectTargets.filter { $0.occurrenceID == nil }.map(\.sceneNodeID)),
             previewSceneNodeIDs: presentationPreviewSceneNodeIDs,
-            hoveredSceneNodeID: selection.hoveredSceneNodeID
+            hoveredSceneNodeID: selection.hoveredTarget?.occurrenceID == nil ? selection.hoveredSceneNodeID : nil,
+            selectedOccurrenceIDs: Set(objectSelectionIndex.objectTargets.compactMap(\.occurrenceID)),
+            previewOccurrenceIDs: presentationPreviewOccurrenceIDs,
+            hoveredOccurrenceID: selection.hoveredTarget?.occurrenceID,
+            hoveredBodyID: selection.hoveredTarget?.sourceBodyID?.description
         )
         self.selectedPresentationHasExactCADContext = selectedPresentationHasExactCADContext
     }
@@ -1338,6 +1342,27 @@ public struct Viewport: View {
             && previewEvaluationCache.displayPreview != nil
     }
 
+    private func admitOriginalCADTopology(_ topology: ViewportBodyTopology, bodyID: BodyID? = nil) throws {
+        if let bodyID, topology.selectionBinding?.bodyID != bodyID {
+            throw MeshSourcePresentationRenderError(code: .invalidSceneItem,
+                message: "Prepared topology belongs to another original body part.")
+        }
+        guard let generation = sceneDocumentGeneration else {
+            throw MeshSourcePresentationRenderError(code: .invalidSceneItem,
+                message: "Original CAD selection requires the current document generation.")
+        }
+        if let currentEvaluation, currentEvaluation.matches(document: document, generation: generation) {
+            try topology.validateCurrentEvaluation(currentEvaluation.evaluatedDocument)
+            return
+        }
+        if let evaluationCache, evaluationCache.matches(document: document, generation: generation) {
+            try topology.validateCurrentEvaluation(evaluationCache.evaluatedDocument)
+            return
+        }
+        throw MeshSourcePresentationRenderError(code: .invalidSceneItem,
+            message: "Original CAD selection has no source-matching current evaluation.")
+    }
+
     private var publishedEvaluatedDocument: EvaluatedDocument? {
         currentEvaluation?.evaluatedDocument ?? evaluationCache?.evaluatedDocument
     }
@@ -1763,7 +1788,9 @@ public struct Viewport: View {
             return nil
         }
         let scene = makeSceneContext(size: size, camera: camera, basis: currentProjectionBasis).scene
-        guard let item = scene.items.first(where: { $0.sceneNodeID == sceneNodeID }),
+        guard let item = scene.items.first(where: { $0.sceneNodeID == sceneNodeID &&
+                  $0.occurrenceID == occurrenceID &&
+                  (surface.triangle.sourceBodyID == nil || $0.sourceBodyID?.description == surface.triangle.sourceBodyID) }),
               case .body(let component) = item.kind,
               let topology = component.topology else {
             return nil
@@ -1963,20 +1990,21 @@ public struct Viewport: View {
                     best = handle
                 }
             }
-            guard presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+            guard allowsOriginalCADInteraction(item),
                   let topology = component.topology else {
                 continue
             }
+            try admitOriginalCADTopology(topology, bodyID: item.sourceBodyID)
             guard let resolved = try ViewportNativeCADTopologyResolver.resolve(
                 at: point,
                 topology: topology,
                 modelTransform: item.modelTransform,
                 selectionHitPolicy: includesSelectedObjectEdges
                     && selectionHitPolicy == .object
-                    && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID })
+                    && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID && ($0.occurrenceID == nil || $0.occurrenceID == item.occurrenceID) })
                     && document.productMetadata.sceneNodes[sceneNodeID]?.isLocked == false
                     ? .edge : selectionHitPolicy,
-                visibleSurface: sceneNodeID == visibleSceneNodeID ? visibleFace : nil,
+                visibleSurface: item.occurrenceID == visibleSurface?.triangle.occurrenceID && item.sourceBodyID?.description == visibleSurface?.triangle.sourceBodyID ? visibleFace : nil,
                 probe: probe
             ) else {
                 continue
@@ -1987,7 +2015,7 @@ public struct Viewport: View {
                     // share: the one of the body drawn at the pointer, as Plasticity picks the
                     // edge of the sheet hovered near it.
                     guard best.hit.kind == .body, best.hit.selectionComponent != nil,
-                          sceneNodeID == visibleSceneNodeID, best.hit.sceneNodeID != visibleSceneNodeID else {
+                          item.occurrenceID == visibleSurface?.triangle.occurrenceID, best.hit.occurrenceID != visibleSurface?.triangle.occurrenceID else {
                         continue
                     }
                 } else if resolved.candidate.precedes(best.candidate) == false {
@@ -1999,6 +2027,8 @@ public struct Viewport: View {
                     featureID: item.featureID,
                     sceneNodeID: sceneNodeID,
                     kind: .body,
+                    occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                    sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                     selectionComponent: resolved.component
                 ),
                 resolved.candidate
@@ -2029,15 +2059,16 @@ public struct Viewport: View {
         var resolved: [(hit: ViewportHit, candidate: ViewportNativeHitCandidate)] = []
         for item in scene.items {
             guard let sceneNodeID = item.sceneNodeID, case .body(let component) = item.kind,
-                  presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
-                  let topology = component.topology,
-                  let found = try ViewportNativeCADTopologyResolver.resolve(
+                  allowsOriginalCADInteraction(item),
+                  let topology = component.topology else { continue }
+            try admitOriginalCADTopology(topology, bodyID: item.sourceBodyID)
+            guard let found = try ViewportNativeCADTopologyResolver.resolve(
                       at: point,
                       topology: topology,
                       modelTransform: item.modelTransform,
                       selectionHitPolicy: includesSelectedObjectEdges
                           && selectionHitPolicy == .object
-                          && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID })
+                          && selection.selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID && ($0.occurrenceID == nil || $0.occurrenceID == item.occurrenceID) })
                           && document.productMetadata.sceneNodes[sceneNodeID]?.isLocked == false
                           ? .edge : selectionHitPolicy,
                       // Faces are not listed, so no drawn surface is asked about.
@@ -2045,16 +2076,16 @@ public struct Viewport: View {
                       probe: probe
                   ) else { continue }
             resolved.append((
-                ViewportHit(featureID: item.featureID, sceneNodeID: sceneNodeID, kind: .body, selectionComponent: found.component),
+                ViewportHit(featureID: item.featureID, sceneNodeID: sceneNodeID, kind: .body, occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID, sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID, selectionComponent: found.component),
                 found.candidate
             ))
         }
         guard let nearest = resolved.min(by: { $0.candidate.precedes($1.candidate) }),
               nearest.candidate.rank == .vertex || nearest.candidate.rank == .edge else { return [] }
         let ties = resolved.filter { $0.candidate.ties(with: nearest.candidate) }
-        guard Set(ties.compactMap(\.hit.sceneNodeID)).count > 1 else { return [] }
-        return ties.filter { $0.hit.sceneNodeID == visibleSceneNodeID }.map(\.hit)
-            + ties.filter { $0.hit.sceneNodeID != visibleSceneNodeID }.map(\.hit)
+        guard Set(ties.compactMap(\.hit.occurrenceID)).count > 1 || Set(ties.compactMap(\.hit.sceneNodeID)).count > 1 else { return [] }
+        return ties.filter { $0.hit.occurrenceID == visibleSurface?.triangle.occurrenceID }.map(\.hit)
+            + ties.filter { $0.hit.occurrenceID != visibleSurface?.triangle.occurrenceID }.map(\.hit)
     }
 
     /// Every family the rectangle admits, answered by the mounted native frame
@@ -2130,7 +2161,7 @@ public struct Viewport: View {
         // The bodies the face harvest can name, keyed by the scene node a drawn
         // triangle's occurrence resolves to. A placement absent here drew no
         // prepared topology, so its triangles name no CAD face.
-        var bodies: [SceneNodeID: (featureID: FeatureID, topology: ViewportBodyTopology)] = [:]
+        var bodies: [String: (item: ViewportSceneItem, topology: ViewportBodyTopology)] = [:]
         for item in scene.items {
             // A sketch item carries no scene node and no body component, so it
             // is answered before the body families rather than through them.
@@ -2202,7 +2233,7 @@ public struct Viewport: View {
                     probe: probe
                 )
             }
-            guard presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+            guard allowsOriginalCADInteraction(item),
                   let topology = component.topology else {
                 continue
             }
@@ -2217,7 +2248,10 @@ public struct Viewport: View {
                     message: "A CAD body prepared face topology without the mesh face runs that name it."
                 )
             }
-            bodies[sceneNodeID] = (featureID: item.featureID, topology: topology)
+            try admitOriginalCADTopology(topology, bodyID: item.sourceBodyID)
+            if let occurrence = item.occurrenceID, let bodyID = item.sourceBodyID {
+                bodies["\(occurrence.rawValue.utf8.count).\(occurrence.rawValue).\(bodyID.description)"] = (item: item, topology: topology)
+            }
             let components = try ViewportNativeCADTopologyResolver.resolveRegion(
                 in: rect,
                 topology: topology,
@@ -2230,6 +2264,8 @@ public struct Viewport: View {
                 components,
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 into: &hits,
                 admitted: &admitted
             )
@@ -2248,15 +2284,18 @@ public struct Viewport: View {
             guard let sceneNodeID = presentationSceneNodeIDByOccurrenceID[
                       triangle.occurrenceID
                   ],
-                  let body = bodies[sceneNodeID] else { return }
+                  let bodyID = triangle.sourceBodyID,
+                  let body = bodies["\(triangle.occurrenceID.rawValue.utf8.count).\(triangle.occurrenceID.rawValue).\(bodyID)"] else { return }
             guard let componentID = try ViewportNativeCADTopologyResolver
                 .regionFaceComponentID(
                     forTriangle: triangle, topology: body.topology
                 ) else { return }
             Self.appendRectangleSubshapeHit(
                 .face(componentID),
-                featureID: body.featureID,
+                featureID: body.item.featureID,
                 sceneNodeID: sceneNodeID,
+                occurrenceID: triangle.occurrenceID, sourceSceneNodeID: body.item.sourceSceneNodeID,
+                sourceFeatureID: body.item.occurrenceID == nil ? nil : (body.item.sourceFeatureID ?? body.item.featureID), sourceBodyID: body.item.sourceBodyID,
                 into: &hits,
                 admitted: &admitted
             )
@@ -2278,6 +2317,10 @@ public struct Viewport: View {
         _ components: [SelectionComponent],
         featureID: FeatureID,
         sceneNodeID: SceneNodeID,
+        occurrenceID: SceneOccurrenceID? = nil,
+        sourceSceneNodeID: SceneNodeID? = nil,
+        sourceFeatureID: FeatureID? = nil,
+        sourceBodyID: BodyID? = nil,
         into hits: inout [ViewportHit],
         admitted: inout Set<SelectionTarget>
     ) {
@@ -2286,6 +2329,7 @@ public struct Viewport: View {
                 selectionComponent,
                 featureID: featureID,
                 sceneNodeID: sceneNodeID,
+                occurrenceID: occurrenceID, sourceSceneNodeID: sourceSceneNodeID, sourceFeatureID: sourceFeatureID, sourceBodyID: sourceBodyID,
                 into: &hits,
                 admitted: &admitted
             )
@@ -2304,6 +2348,10 @@ public struct Viewport: View {
         _ selectionComponent: SelectionComponent,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID,
+        occurrenceID: SceneOccurrenceID? = nil,
+        sourceSceneNodeID: SceneNodeID? = nil,
+        sourceFeatureID: FeatureID? = nil,
+        sourceBodyID: BodyID? = nil,
         into hits: inout [ViewportHit],
         admitted: inout Set<SelectionTarget>
     ) {
@@ -2311,13 +2359,14 @@ public struct Viewport: View {
         // component naming no generated sub-shape has no rectangle identity
         // to report.
         guard rectangleComponentID(selectionComponent) != nil else { return }
-        let target = SelectionTarget(sceneNodeID: sceneNodeID, component: selectionComponent)
+        let target = SelectionTarget(sceneNodeID: sceneNodeID, component: selectionComponent, occurrenceID: occurrenceID, sourceSceneNodeID: sourceSceneNodeID, sourceFeatureID: sourceFeatureID, sourceBodyID: sourceBodyID)
         guard admitted.insert(target).inserted else { return }
         hits.append(
             ViewportHit(
                 featureID: featureID,
                 sceneNodeID: sceneNodeID,
                 kind: .body,
+                occurrenceID: occurrenceID, sourceSceneNodeID: sourceSceneNodeID, sourceFeatureID: sourceFeatureID, sourceBodyID: sourceBodyID,
                 selectionComponent: selectionComponent
             )
         )
@@ -3139,10 +3188,21 @@ public struct Viewport: View {
         return edit.projectedBodyProjection(layout: layout)
     }
 
+    private func allowsOriginalCADInteraction(_ item: ViewportSceneItem) -> Bool {
+        if !presentationCADInteractionOccurrenceIDs.isEmpty {
+            return item.occurrenceID.map(presentationCADInteractionOccurrenceIDs.contains) ?? false
+        }
+        return item.sceneNodeID.map(presentationCADInteractionSceneNodeIDs.contains) ?? false
+    }
+
     private func sceneItem(
         for target: SelectionTarget,
         in scene: ViewportScene
     ) -> ViewportSceneItem? {
+        if target.occurrenceID != nil {
+            guard let item = scene.item(for: target), itemContains(target.component, in: item) else { return nil }
+            return item
+        }
         if case .constructionPlane(let sourceID) = target.component {
             guard document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.constructionPlaneID == sourceID else {
                 return nil
@@ -3201,6 +3261,8 @@ public struct Viewport: View {
 
     /// A selected CAD face together with the run list that names its triangles.
     private struct SelectedGeneratedTopologyFace {
+        var sourceBodyID: BodyID?
+        var occurrenceID: SceneOccurrenceID?
         var sceneNodeID: SceneNodeID
         var componentID: SelectionComponentID
         var topology: ViewportBodyTopology
@@ -3222,12 +3284,14 @@ public struct Viewport: View {
               componentID.generatedTopologySubshapeID != nil,
               let item = sceneItem(for: target, in: scene),
               let sceneNodeID = item.sceneNodeID,
-              presentationCADInteractionSceneNodeIDs.contains(sceneNodeID),
+              allowsOriginalCADInteraction(item),
               case .body(let component) = item.kind,
               let topology = component.topology else {
             return nil
         }
         return SelectedGeneratedTopologyFace(
+            sourceBodyID: item.sourceBodyID,
+            occurrenceID: item.occurrenceID,
             sceneNodeID: sceneNodeID,
             componentID: componentID,
             topology: topology
@@ -3250,7 +3314,9 @@ public struct Viewport: View {
     ) throws -> Point3D? {
         guard let surface,
               case .cad = surface.triangle.sourceReference,
-              presentationSceneNodeIDByOccurrenceID[surface.triangle.occurrenceID] == face.sceneNodeID
+              presentationSceneNodeIDByOccurrenceID[surface.triangle.occurrenceID] == face.sceneNodeID,
+              (face.occurrenceID == nil || surface.triangle.occurrenceID == face.occurrenceID),
+              (face.sourceBodyID == nil || surface.triangle.sourceBodyID == face.sourceBodyID?.description)
         else {
             return nil
         }
@@ -3265,7 +3331,8 @@ public struct Viewport: View {
                 message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
             )
         }
-        guard face.topology.componentID(forTriangle: triangleIndex) == face.componentID else {
+        try admitOriginalCADTopology(face.topology, bodyID: face.sourceBodyID)
+        guard try face.topology.validatedComponentID(forTriangle: triangleIndex) == face.componentID else {
             return nil
         }
         return surface.point
@@ -5649,8 +5716,9 @@ public struct Viewport: View {
         let hit = nativeCADHit
         if let hit, let nodeID = hit.sceneNodeID,
            let component = hit.selectionComponent, case .edge = component,
-           selection.selectedTargets.contains(where: { $0.sceneNodeID == nodeID }) {
-            edgeTreatmentHoverTarget = SelectionTarget(sceneNodeID: nodeID, component: component)
+           selection.selectedTargets.contains(where: { $0.sceneNodeID == nodeID && ($0.occurrenceID == nil || $0.occurrenceID == hit.occurrenceID) }) {
+            edgeTreatmentHoverTarget = SelectionTarget(sceneNodeID: nodeID, component: component,
+                occurrenceID: hit.occurrenceID, sourceSceneNodeID: hit.sourceSceneNodeID, sourceFeatureID: hit.sourceFeatureID, sourceBodyID: hit.sourceBodyID)
         } else {
             edgeTreatmentHoverTarget = nil
         }

@@ -21,7 +21,8 @@ public struct SelectionDimensionTargetResolver: Sendable {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionReference {
-        guard document.productMetadata.sceneNodes[target.sceneNodeID] != nil else {
+        _ = try OriginalOccurrenceSelectionResolver(document: document).resolve(target)
+        guard document.productMetadata.sceneNodes[target.sourceSceneNodeID ?? target.sceneNodeID] != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Selection dimension target requires an existing scene node."
@@ -101,9 +102,10 @@ public struct SelectionDimensionTargetResolver: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
+        try OriginalBodyTopologyMembership.validate(target, in: topology.evaluatedDocument)
         guard let entry = topology.entries.first(where: {
             $0.kind == kind &&
-                $0.sceneNodeID == target.sceneNodeID.description &&
+                $0.sceneNodeID == (target.sourceSceneNodeID ?? target.sceneNodeID).description &&
                 $0.subshapeID == identity
         }) else {
             throw EditorError(
@@ -301,7 +303,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         )
         let entries = summary.entries.filter { entry in
             entry.sourceFeatureID == featureID.description &&
-                entry.sceneNodeID == target.sceneNodeID.description
+                entry.sceneNodeID == (target.sourceSceneNodeID ?? target.sceneNodeID).description
         }
         guard entries.contains(where: { $0.entityID == entityID.description }) else {
             throw EditorError(
@@ -335,7 +337,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         )
         let found = summary.entries.contains { entry in
             entry.sourceFeatureID == featureID.description &&
-                entry.sceneNodeID == target.sceneNodeID.description &&
+                entry.sceneNodeID == (target.sourceSceneNodeID ?? target.sceneNodeID).description &&
                 entry.entityID == entityID.description
         }
         guard found else {

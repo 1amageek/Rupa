@@ -39,7 +39,8 @@ enum ViewportNativeOverlayHitResolver {
     ) -> (hit: ViewportHit, candidate: ViewportNativeHitCandidate)? {
         guard selectionHitPolicy.allowsObjectHits,
               let sceneNodeID = navigation[drawnTriangle.occurrenceID],
-              let item = items.first(where: { $0.sceneNodeID == sceneNodeID }) else {
+              let item = items.first(where: { $0.sceneNodeID == sceneNodeID && $0.occurrenceID == drawnTriangle.occurrenceID &&
+                    (drawnTriangle.sourceBodyID == nil || $0.sourceBodyID?.description == drawnTriangle.sourceBodyID) }) else {
             return nil
         }
         return (
@@ -47,6 +48,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 selectionComponent: .object
             ),
             ViewportNativeHitCandidate(rank: .object, metric: 0)
@@ -136,6 +139,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 selectionReference: best.reference
             ),
             ViewportNativeHitCandidate(rank: .vertex, metric: best.distance)
@@ -190,6 +195,8 @@ enum ViewportNativeOverlayHitResolver {
                     featureID: item.featureID,
                     sceneNodeID: sceneNodeID,
                     kind: item.kind.selectableKind,
+                    occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                    sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                     selectionReference: reference
                 )
             )
@@ -257,6 +264,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 sketchEntityID: entityID,
                 sketchControlPointIndex: controlPointIndex
             )
@@ -374,6 +383,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 sketchEntityID: entityID,
                 sketchControlPointIndex: controlPointIndex
             )
@@ -475,6 +486,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 selectionComponent: .region(best.componentID)
             ),
             ViewportNativeHitCandidate(rank: .region, metric: best.distance)
@@ -522,6 +535,8 @@ enum ViewportNativeOverlayHitResolver {
                     featureID: item.featureID,
                     sceneNodeID: item.sceneNodeID,
                     kind: item.kind.selectableKind,
+                    occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                    sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                     selectionComponent: .region(region.componentID)
                 )
             )
@@ -591,6 +606,8 @@ enum ViewportNativeOverlayHitResolver {
                 featureID: item.featureID,
                 sceneNodeID: item.sceneNodeID,
                 kind: item.kind.selectableKind,
+                occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                 selectionReference: best.reference
             ),
             ViewportNativeHitCandidate(rank: .edge, metric: best.distance)
@@ -641,6 +658,8 @@ enum ViewportNativeOverlayHitResolver {
                         featureID: item.featureID,
                         sceneNodeID: item.sceneNodeID,
                         kind: item.kind.selectableKind,
+                        occurrenceID: item.occurrenceID, sourceSceneNodeID: item.sourceSceneNodeID,
+                        sourceFeatureID: item.occurrenceID == nil ? nil : (item.sourceFeatureID ?? item.featureID), sourceBodyID: item.sourceBodyID,
                         selectionReference: segment.selectionReference
                     )
                 )

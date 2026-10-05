@@ -10,6 +10,51 @@ import Testing
 
 @MainActor
 @Test(.timeLimit(.minutes(1)))
+func projectAgentViewportReadPreservesLiteralNativeSceneIdentityWire() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    var document = session.document
+    let originalID = try #require(document.productMetadata.sceneNodes.first {
+        $0.value.reference?.kind == .body
+    }?.key)
+    let literalID = SceneNodeID(UUID(uuid: (
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x46, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
+    )))
+    var node = try #require(document.productMetadata.sceneNodes.removeValue(forKey: originalID))
+    node.id = literalID
+    document.productMetadata.sceneNodes[literalID] = node
+    document.productMetadata.rootSceneNodeIDs = document.productMetadata.rootSceneNodeIDs.map {
+        $0 == originalID ? literalID : $0
+    }
+    for id in Array(document.productMetadata.sceneNodes.keys) {
+        var existing = try #require(document.productMetadata.sceneNodes[id])
+        existing.childIDs = existing.childIDs.map {
+            $0 == originalID ? literalID : $0
+        }
+        document.productMetadata.sceneNodes[id] = existing
+    }
+    let workspace = try DefaultProjectWorkspaceFactory().makeWorkspace(document: document)
+    _ = try await workspace.evaluate()
+    let controller = ProjectAgentCommandController(semanticProgramCompiler: try projectAgentSemanticCompiler())
+    let sessionID = try await controller.register(workspace: workspace)
+    let published = try #require(workspace.view)
+    let response = await controller.projectAgentHandle(.viewportSnapshot(
+        sessionID: sessionID, expectedGeneration: published.documentGeneration
+    ))
+    guard case .viewportSnapshot(let snapshot) = response else {
+        Issue.record("Expected the actual published viewport projection.")
+        return
+    }
+    let item = try #require(snapshot.items.first { $0.sceneNodeID == literalID })
+    let wire = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(item)) as? [String: Any])
+    #expect(wire["sceneNodeID"] as? String == "00112233-4455-4677-8899-AABBCCDDEEFF")
+    #expect(workspace.view?.publicationSequence == published.publicationSequence)
+    #expect(snapshot.coordinates.documentGeneration == published.documentGeneration)
+}
+
+@MainActor
+@Test(.timeLimit(.minutes(1)))
 func projectAgentViewportReadUsesTheExactPublishedViewportAndRejectsStaleGeneration() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

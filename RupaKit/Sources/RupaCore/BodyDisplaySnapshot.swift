@@ -32,10 +32,12 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
         private final class Storage: Sendable {
             let positions: [Point3D]
             let indices: [UInt32]
+            let selectionBinding: OriginalMeshSelectionBinding?
 
-            init(positions: [Point3D], indices: [UInt32]) {
+            init(positions: [Point3D], indices: [UInt32], selectionBinding: OriginalMeshSelectionBinding?) {
                 self.positions = positions
                 self.indices = indices
+                self.selectionBinding = selectionBinding
             }
         }
 
@@ -54,12 +56,15 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
             storage.indices
         }
 
+        public var selectionBinding: OriginalMeshSelectionBinding? { storage.selectionBinding }
+
         public var storageIdentity: StorageIdentity {
             StorageIdentity(value: ObjectIdentifier(storage))
         }
 
-        public init(positions: [Point3D], indices: [UInt32]) {
-            self.storage = Storage(positions: positions, indices: indices)
+        public init(positions: [Point3D], indices: [UInt32],
+                    selectionBinding: OriginalMeshSelectionBinding? = nil) {
+            self.storage = Storage(positions: positions, indices: indices, selectionBinding: selectionBinding)
         }
 
         public init(from decoder: any Decoder) throws {
@@ -80,7 +85,8 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
             if lhs.sharesStorage(with: rhs) {
                 return true
             }
-            return lhs.positions == rhs.positions && lhs.indices == rhs.indices
+            return lhs.selectionBinding == rhs.selectionBinding
+                && lhs.positions == rhs.positions && lhs.indices == rhs.indices
         }
 
         public func sharesStorage(with other: Mesh) -> Bool {

@@ -6,15 +6,16 @@ import SwiftCAD
 
 /// Owns the native RealityKit material policy for one mounted viewport.
 ///
-/// Built-in materials are the default path. Custom materials are reserved for
-/// MatCap and signed-normal presentation because RealityKit does not provide
-/// those two viewport responses as built-in material modes. Section clipping is
+/// Built-in materials are the default path. Custom materials own MatCap,
+/// signed-normal presentation, and the bounded advanced studio payload that
+/// RealityKit's native PBR material cannot represent. Section clipping is
 /// owned by the mounted scene's native `ClippingComponent` and is therefore not
 /// represented by a material parameter or shader fallback here.
 @MainActor
 struct RealityViewportMaterial {
     private let matCapPrograms: BlendedPrograms
     private let normalsPrograms: BlendedPrograms
+    private let advancedStudioPrograms: BlendedPrograms
 
     /// The two compilations of one custom surface shader.
     ///
@@ -31,11 +32,11 @@ struct RealityViewportMaterial {
         }
     }
 
-    /// Loads the package Metal library and asynchronously prepares the four
+    /// Loads the package Metal library and asynchronously prepares the six
     /// custom RealityKit programs required by the viewport.
     ///
     /// Native program generation is allowed to suspend. Resolving a surface
-    /// cannot, so both blend compilations of both custom shaders are prepared
+    /// cannot, so both blend compilations of all custom shaders are prepared
     /// here rather than on first use. No entity or scene mutation is performed
     /// by this initializer, and callers must check their request identity after
     /// the await before publishing the resulting material owner.
@@ -56,6 +57,7 @@ struct RealityViewportMaterial {
 
         let matCapFunction = "rupaMatCapSurface"
         let normalsFunction = "rupaNormalsSurface"
+        let advancedStudioFunction = "rupaAdvancedStudioSurface"
         guard library.makeFunction(name: matCapFunction) != nil else {
             throw Self.failure(
                 .gpuFailure,
@@ -68,12 +70,20 @@ struct RealityViewportMaterial {
                 "RealityKit material library is missing the \(normalsFunction) surface shader."
             )
         }
+        guard library.makeFunction(name: advancedStudioFunction) != nil else {
+            throw Self.failure(
+                .gpuFailure,
+                "RealityKit material library is missing the \(advancedStudioFunction) surface shader."
+            )
+        }
 
         let matCapShader = CustomMaterial.SurfaceShader(named: matCapFunction, in: library)
         let normalsShader = CustomMaterial.SurfaceShader(named: normalsFunction, in: library)
+        let advancedStudioShader = CustomMaterial.SurfaceShader(named: advancedStudioFunction, in: library)
 
         matCapPrograms = try await Self.programs(for: matCapShader)
         normalsPrograms = try await Self.programs(for: normalsShader)
+        advancedStudioPrograms = try await Self.programs(for: advancedStudioShader, lightingModel: .lit)
     }
 
     /// Compiles `shader` once for the opaque pass and once for alpha blending.
@@ -83,10 +93,11 @@ struct RealityViewportMaterial {
     /// body is two programs rather than one value carrying two responses. See
     /// `RealityViewport/DESIGN.md`.
     private static func programs(
-        for shader: CustomMaterial.SurfaceShader
+        for shader: CustomMaterial.SurfaceShader,
+        lightingModel: CustomMaterial.LightingModel = .unlit
     ) async throws -> BlendedPrograms {
         var opaqueDescriptor = CustomMaterial.Program.Descriptor()
-        opaqueDescriptor.lightingModel = .unlit
+        opaqueDescriptor.lightingModel = lightingModel
         var alphaDescriptor = opaqueDescriptor
         alphaDescriptor.blendMode = .alpha
         let opaque = try await program(for: shader, descriptor: opaqueDescriptor)
@@ -120,9 +131,8 @@ struct RealityViewportMaterial {
     /// The surface carries the base color the shading policy and any highlight
     /// decided together with the appearance the document authored, so the lit
     /// preset draws a metal as a metal rather than as a tinted default. The
-    /// unlit preset and the two custom programs own their own shading response
-    /// and their native materials expose no metallic or roughness parameter, so
-    /// they read base color and opacity alone. See `RealityViewport/DESIGN.md`.
+    /// unlit, MatCap, normal, and advanced studio programs own their documented
+    /// shading responses. See `RealityViewport/DESIGN.md`.
     ///
     /// Section clipping is intentionally absent from this API. The scene owner
     /// applies the native RealityKit clipping component to the relevant root,
@@ -131,7 +141,8 @@ struct RealityViewportMaterial {
     func surface(
         displayMode: ViewportDisplayMode,
         shading: ViewportShading,
-        surface: ViewportSurface
+        surface: ViewportSurface,
+        volumeTransportAvailable: Bool = false
     ) throws -> any RealityKit.Material {
         do {
             try shading.validate()
@@ -153,11 +164,17 @@ struct RealityViewportMaterial {
         case .solid, .solidWithEdges:
             switch shading.style {
             case .studio:
-                return Self.makeStudioMaterial(
-                    surface: surface,
-                    shading: shading,
-                    displayMode: displayMode
-                )
+                guard surface.transmission == 0 || surface.thickness == 0 || volumeTransportAvailable else {
+                    throw Self.failure(.gpuFailure, "Transmitting volume requires the original-scene optical producer.")
+                }
+                if surface.usesAdvancedMaterialShader {
+                    return try makeAdvancedStudioMaterial(
+                        surface: surface,
+                        shading: shading,
+                        displayMode: displayMode
+                    )
+                }
+                return Self.makeStudioMaterial(surface: surface, shading: shading, displayMode: displayMode)
             case .matCap:
                 return makeCustomMaterial(
                     programs: matCapPrograms,
@@ -203,6 +220,69 @@ struct RealityViewportMaterial {
         return material
     }
 
+    private func makeAdvancedStudioMaterial(
+        surface: ViewportSurface,
+        shading: ViewportShading,
+        displayMode: ViewportDisplayMode
+    ) throws -> CustomMaterial {
+        let transparentOpacity = Self.transparentOpacity(of: surface)
+        var material = CustomMaterial(
+            program: advancedStudioPrograms.program(transparent: transparentOpacity != nil)
+        )
+        material.baseColor = .init(tint: Self.nsColor(surface.color))
+        material.metallic = .init(floatLiteral: Float(surface.metallic))
+        material.roughness = .init(floatLiteral: Float(surface.roughness))
+        let specularIntensity = shading.isSpecularEnabled ? surface.specularIntensity : 0
+        material.specular = .init(floatLiteral: Float(specularIntensity))
+        material.clearcoat = .init(floatLiteral: Float(surface.clearcoat))
+        material.clearcoatRoughness = .init(floatLiteral: Float(surface.clearcoatRoughness))
+        material.custom = .init(texture: try Self.advancedMaterialTexture(
+            for: surface,
+            specularIntensity: specularIntensity
+        ))
+        if let transparentOpacity {
+            material.blending = .transparent(opacity: .init(floatLiteral: transparentOpacity))
+        }
+        material.faceCulling = shading.isBackfaceCullingActive(in: displayMode) ? .back : .none
+        material.readsDepth = true
+        material.writesDepth = true
+        return material
+    }
+
+    private static func advancedMaterialTexture(
+        for surface: ViewportSurface,
+        specularIntensity: Double
+    ) throws -> CustomMaterial.Texture {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            throw Self.failure(.gpuUnavailable, "RealityKit advanced material payload requires a Metal device.")
+        }
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba32Float,
+            width: 4,
+            height: 1,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+        guard let texture = device.makeTexture(descriptor: descriptor) else {
+            throw Self.failure(.gpuFailure, "RealityKit could not allocate the advanced material payload texture.")
+        }
+        let values: [Float] = [
+            Float(surface.ior), Float(surface.iridescence), Float(surface.iridescenceIOR), 0,
+            Float(surface.sheen.r), Float(surface.sheen.g), Float(surface.sheen.b), Float(surface.sheenRoughness),
+            Float(surface.specularColor.r), Float(surface.specularColor.g), Float(surface.specularColor.b), Float(specularIntensity),
+            Float(surface.transmission), Float(surface.displayedOpacity), 0, 0
+        ]
+        values.withUnsafeBytes { bytes in
+            texture.replace(
+                region: MTLRegionMake2D(0, 0, 4, 1),
+                mipmapLevel: 0,
+                withBytes: bytes.baseAddress!,
+                bytesPerRow: values.count * MemoryLayout<Float>.stride
+            )
+        }
+        return CustomMaterial.Texture(TextureResource.__texture(from: texture))
+    }
+
     private static func makeStudioMaterial(
         surface: ViewportSurface,
         shading: ViewportShading,
@@ -221,11 +301,9 @@ struct RealityViewportMaterial {
         material.specular = .init(floatLiteral: shading.isSpecularEnabled ? Float(0.9 * surface.specularIntensity) : 0.0)
         material.clearcoat = .init(floatLiteral: Float(surface.clearcoat))
         material.clearcoatRoughness = .init(floatLiteral: Float(surface.clearcoatRoughness))
-        // FIXME(INCOMPLETE_IMPLEMENTATION): The native physically based material has no index of
-        // refraction, iridescence, thickness, sheen roughness or specular color, so those authored
-        // layers are stored, edited and exported but not drawn; transmission is drawn only as
-        // blending. Production path: every studio-lit body surface. Completion requires a custom
-        // surface shader that reads those layers, with a rendering test per layer.
+        // The advanced non-default fields select the custom studio shader before this
+        // native path is reached. This branch therefore only receives the fields that
+        // RealityKit's native PBR material represents directly.
         if surface.sheen.r > 0 || surface.sheen.g > 0 || surface.sheen.b > 0 {
             material.sheen = .init(tint: nsColor(surface.sheen))
         }
@@ -290,6 +368,20 @@ struct RealityViewportMaterial {
         try validate(unitValue: material.opacity, field: "\(field) opacity")
         try validate(unitValue: material.metallic, field: "\(field) metallic")
         try validate(unitValue: material.roughness, field: "\(field) roughness")
+        try validate(rangeValue: material.ior, range: 1...3, field: "\(field) ior")
+        try validate(unitValue: material.clearcoat, field: "\(field) clearcoat")
+        try validate(unitValue: material.clearcoatRoughness, field: "\(field) clearcoat roughness")
+        try validate(unitValue: material.sheen, field: "\(field) sheen")
+        try validate(color: material.sheenColor, field: "\(field) sheen color")
+        try validate(unitValue: material.sheenRoughness, field: "\(field) sheen roughness")
+        try validate(color: material.specularColor, field: "\(field) specular color")
+        try validate(unitValue: material.specularIntensity, field: "\(field) specular intensity")
+        try validate(unitValue: material.iridescence, field: "\(field) iridescence")
+        try validate(rangeValue: material.iridescenceIOR, range: 1...3, field: "\(field) iridescence IOR")
+        guard material.thickness.isFinite, material.thickness >= 0 else {
+            throw Self.failure(.invalidLimit, "\(field) thickness must be finite and non-negative.")
+        }
+        try validate(unitValue: material.transmission, field: "\(field) transmission")
     }
 
     /// Validates one resolved surface before it reaches a native material.
@@ -298,11 +390,30 @@ struct RealityViewportMaterial {
         try validate(unitValue: surface.opacity, field: "\(field) opacity")
         try validate(unitValue: surface.metallic, field: "\(field) metallic")
         try validate(unitValue: surface.roughness, field: "\(field) roughness")
+        try validate(rangeValue: surface.ior, range: 1...3, field: "\(field) ior")
+        try validate(unitValue: surface.clearcoat, field: "\(field) clearcoat")
+        try validate(unitValue: surface.clearcoatRoughness, field: "\(field) clearcoat roughness")
+        try validate(color: surface.sheen, field: "\(field) sheen")
+        try validate(unitValue: surface.sheenRoughness, field: "\(field) sheen roughness")
+        try validate(color: surface.specularColor, field: "\(field) specular color")
+        try validate(unitValue: surface.specularIntensity, field: "\(field) specular intensity")
+        try validate(unitValue: surface.iridescence, field: "\(field) iridescence")
+        try validate(rangeValue: surface.iridescenceIOR, range: 1...3, field: "\(field) iridescence IOR")
+        guard surface.thickness.isFinite, surface.thickness >= 0 else {
+            throw Self.failure(.invalidLimit, "\(field) thickness must be finite and non-negative.")
+        }
+        try validate(unitValue: surface.transmission, field: "\(field) transmission")
     }
 
     static func validate(unitValue: Double, field: String) throws {
         guard unitValue.isFinite, (0...1).contains(unitValue) else {
             throw Self.failure(.invalidLimit, "\(field) must be a finite value in 0...1.")
+        }
+    }
+
+    static func validate(rangeValue: Double, range: ClosedRange<Double>, field: String) throws {
+        guard rangeValue.isFinite, range.contains(rangeValue) else {
+            throw Self.failure(.invalidLimit, "\(field) must be finite and in \(range.lowerBound)...\(range.upperBound).")
         }
     }
 

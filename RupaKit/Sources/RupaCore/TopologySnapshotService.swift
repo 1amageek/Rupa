@@ -77,6 +77,18 @@ public struct TopologySnapshotService: Sendable {
             failurePrefix: "Document must evaluate successfully before topology snapshot"
         )
 
+        return try snapshot(document: document, evaluatedDocument: evaluatedDocument, metricPolicy: metricPolicy)
+    }
+
+    /// Summarizes the same original exact evaluation retained by its public caller.
+    public func snapshot(document: DesignDocument, evaluatedDocument: EvaluatedDocument,
+                         metricPolicy: MetricPolicy = .include) throws -> TopologySnapshot {
+        try Task.checkCancellation()
+        guard evaluatedDocument.document == document.cadDocument else {
+            throw EditorError(code: .referenceUnresolved,
+                message: "Topology snapshot requires the complete current original source.")
+        }
+        try evaluatedDocument.brep.validate(tolerance: evaluatedDocument.configuration.tolerance)
         // Entries without a presenting scene node stay in the snapshot as kernel topology, but carry
         // no scene node, so no scene-qualified selection or placement can resolve against them.
         let hierarchy = try SceneNodeHierarchy(metadata: document.productMetadata)
@@ -483,6 +495,26 @@ public struct TopologySnapshotService: Sendable {
             )
         case .affineImage:
             return CurveSummary(kind: "affineImage")
+        case .parameterImage:
+            return CurveSummary(kind: "parameterImage")
+        case .originalConstructionChart:
+            return CurveSummary(kind: "originalConstructionChart")
+        case .originalEndpointConnector:
+            return CurveSummary(kind: "originalEndpointConnector")
+        case .originalPlaneDerivative:
+            return CurveSummary(kind: "originalPlaneDerivative")
+        case .originalDrafted:
+            return CurveSummary(kind: "originalDrafted")
+        case .originalAngularTransport:
+            return CurveSummary(kind: "originalAngularTransport")
+        case .originalAffineWord:
+            return CurveSummary(kind: "originalAffineWord")
+        case .originalGuideTraversalChain:
+            return CurveSummary(kind: "originalGuideTraversalChain")
+        case .originalGuideEndpointConnector:
+            return CurveSummary(kind: "originalGuideEndpointConnector")
+        case .originalPolyline:
+            return CurveSummary(kind: "originalPolyline")
         }
     }
 
@@ -587,6 +619,22 @@ public struct TopologySnapshotService: Sendable {
                 return SurfaceSummary(kind: "ruled")
             case .rollingBall:
                 return SurfaceSummary(kind: "rollingBall")
+            case .originalAngularTransport:
+                return SurfaceSummary(kind: "originalAngularTransport")
+            case .originalAffineWord:
+                return SurfaceSummary(kind: "originalAffineWord")
+            case .originalImage:
+                return SurfaceSummary(kind: "originalImage")
+            case .originalRevolution:
+                return SurfaceSummary(kind: "originalRevolution")
+            case .originalCoons:
+                return SurfaceSummary(kind: "originalCoons")
+            case .originalBoundaryCorrected:
+                return SurfaceSummary(kind: "originalBoundaryCorrected")
+            case .originalPlaneDerivative:
+                return SurfaceSummary(kind: "originalPlaneDerivative")
+            case .originalDrafted:
+                return SurfaceSummary(kind: "originalDrafted")
             }
         }
     }

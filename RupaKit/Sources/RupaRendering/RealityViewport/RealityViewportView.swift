@@ -91,6 +91,7 @@ struct RealityViewportView: View {
                                          occurrenceMaterials: occurrenceMaterials,
                                          componentInstanceOccurrenceIDs: componentInstanceOccurrenceIDs, interaction: interaction,
                                          sectionPlane: sectionPlane, retainedSide: retainedSide, sectionTolerance: sectionTolerance)
+            try viewport.installOpticalEffect(in: &content)
             mount.schedule(in: content, viewport: viewport,
                            objectPreviews: objectPreviewTransforms, previewSnapshotID: objectPreviewSnapshotID,
                            displayMode: displayMode,
@@ -177,7 +178,7 @@ struct RealityViewportView: View {
         func cancelPending() { pending = nil }
 
         func updatePending() {
-            if pending == nil, let current, current.owesSpatialPlacementForAppliedCamera,
+            if pending == nil, let current, (current.owesSpatialPlacementForAppliedCamera || current.opticalFrameNeedsAttention),
                current.isBound(to: ObjectIdentifier(self)) {
                 pending = scheduled
             }
@@ -203,6 +204,24 @@ struct RealityViewportView: View {
                                                      snapshotID: previewSnapshotID)
                     let error = try viewport.updateSpatialCamera(safeRect: safeRect, excludedRects: excludedRects,
                                                                 gridRuler: gridRuler, gridSpacing: gridSpacing)
+                    if let error {
+                        viewport.setPresentationEnabled(false)
+                        report(error, gridError: error, gridReadout: nil, boundsRulerAxes: nil,
+                               appliedRevision: nil, callback: callback, gridCallback: gridCallback,
+                               boundsRulerCallback: boundsRulerCallback, revisionCallback: revisionCallback)
+                        return error.code != .frameNotReady
+                    }
+                    var opticalContent = content
+                    try viewport.installOpticalEffect(in: &opticalContent)
+                    guard viewport.opticalFrameIsReady else {
+                        viewport.setPresentationEnabled(false)
+                        report(.init(code: .frameNotReady, message: "Waiting for complete native optical GPU execution."),
+                               gridError: error, gridReadout: viewport.gridScaleReadout,
+                               boundsRulerAxes: viewport.boundsRulerDisabledAxes, appliedRevision: nil,
+                               callback: callback, gridCallback: gridCallback, boundsRulerCallback: boundsRulerCallback,
+                               revisionCallback: revisionCallback)
+                        return false
+                    }
                     publish(viewport)
                     report(nil, gridError: error, gridReadout: viewport.gridScaleReadout,
                            boundsRulerAxes: viewport.boundsRulerDisabledAxes,
@@ -211,6 +230,13 @@ struct RealityViewportView: View {
                            boundsRulerCallback: boundsRulerCallback,
                            revisionCallback: revisionCallback)
                     return true
+                } catch RealityViewportSpatialResources.CameraReadinessError.glyphsPreparing {
+                    viewport.setPresentationEnabled(false)
+                    report(.init(code: .frameNotReady, message: "Waiting for the original native glyph meshes."),
+                           gridError: nil, gridReadout: nil, boundsRulerAxes: nil,
+                           appliedRevision: nil, callback: callback, gridCallback: gridCallback,
+                           boundsRulerCallback: boundsRulerCallback, revisionCallback: revisionCallback)
+                    return false
                 } catch RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable {
                     viewport.setPresentationEnabled(false)
                     report(.init(code: .failed, message: "Waiting for the mounted native camera projection."),

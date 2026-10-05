@@ -10,9 +10,7 @@ public struct MeshSourcePresentationNavigationMap: Sendable {
         mappings: [(occurrenceID: SceneOccurrenceID, sceneNodeID: SceneNodeID)]
     ) throws {
         var sceneNodeIDsByOccurrence: [SceneOccurrenceID: SceneNodeID] = [:]
-        var occurrenceIDsBySceneNode: [SceneNodeID: SceneOccurrenceID] = [:]
         sceneNodeIDsByOccurrence.reserveCapacity(mappings.count)
-        occurrenceIDsBySceneNode.reserveCapacity(mappings.count)
         for mapping in mappings {
             do {
                 try mapping.occurrenceID.validate()
@@ -22,15 +20,13 @@ public struct MeshSourcePresentationNavigationMap: Sendable {
                     message: error.message
                 )
             }
-            guard sceneNodeIDsByOccurrence[mapping.occurrenceID] == nil,
-                  occurrenceIDsBySceneNode[mapping.sceneNodeID] == nil else {
+            guard sceneNodeIDsByOccurrence[mapping.occurrenceID] == nil else {
                 throw MeshSourcePresentationPickError(
                     code: .duplicateNavigationMapping,
-                    message: "Presentation navigation mappings must be one-to-one."
+                    message: "Presentation navigation requires one owner per original occurrence."
                 )
             }
             sceneNodeIDsByOccurrence[mapping.occurrenceID] = mapping.sceneNodeID
-            occurrenceIDsBySceneNode[mapping.sceneNodeID] = mapping.occurrenceID
         }
         self.sceneNodeIDsByOccurrence = sceneNodeIDsByOccurrence
     }

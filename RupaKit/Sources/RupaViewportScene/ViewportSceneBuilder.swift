@@ -47,9 +47,17 @@ public struct ViewportSceneBuilder {
             evaluationCache: evaluationCache,
             evaluationPolicy: evaluationPolicy
         )
-        let bodyDisplaySnapshots = evaluatedDocument.map {
-            BodyDisplaySnapshotService().snapshots(evaluatedDocument: $0)
-        } ?? [:]
+        let bodyDisplayParts: [FeatureID: [BodyDisplaySnapshot]]
+        let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
+        do {
+            bodyDisplayParts = try evaluatedDocument.map {
+                try BodyDisplaySnapshotService().bodySnapshots(evaluatedDocument: $0)
+            } ?? [:]
+            bodyDisplaySnapshots = bodyDisplayParts.compactMapValues { $0.first }
+        } catch {
+            return ViewportScene(items: [], failure: EditorError(code: .referenceUnresolved,
+                message: "Original body mesh provenance could not be prepared: \(error)."))
+        }
 
         let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
             in: document,
@@ -440,17 +448,43 @@ public struct ViewportSceneBuilder {
                 )
             }
         }
+        // Expand original body outputs before applying their shared authored placement.
+        var completeItems: [ViewportSceneItem] = []
+        for base in baseItems {
+            guard case let .body(originalComponent) = base.kind,
+                  let parts = bodyDisplayParts[base.featureID], parts.isEmpty == false else {
+                completeItems.append(base); continue
+            }
+            for part in parts {
+                var item = base
+                var component = originalComponent
+                component.bodyID = part.bodyID
+                component.subshapeID = part.subshapeID
+                component.mesh = part.mesh
+                component.topology = ViewportBodyTopology(part.topology, selectionBinding: part.mesh.selectionBinding)
+                component.sizeXMeters = max(part.bounds.maxX - part.bounds.minX, 1e-9)
+                component.sizeYMeters = max(part.bounds.maxY - part.bounds.minY, 1e-9)
+                component.sizeZMeters = max(part.bounds.maxZ - part.bounds.minZ, 1e-9)
+                component.yMinMeters = part.bounds.minY; component.yMaxMeters = part.bounds.maxY
+                component.cylinder = nil
+                item.id = "\(base.id):\(part.bodyID)"
+                item.kind = .body(component: component)
+                item.modelBounds = CGRect(x: part.bounds.minX, y: part.bounds.minZ,
+                    width: component.sizeXMeters, height: component.sizeZMeters)
+                completeItems.append(item)
+            }
+        }
         // Evaluated geometry is placed by the occurrences of its presenting scene node. A feature
         // without one has no product placement and is drawn once in the world frame, the same
         // rule section analysis and measurement apply.
         var unpresentedItems: [ViewportSceneItem] = []
-        var baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem] = [:]
+        var baseItemsBySceneNodeID: [SceneNodeID: [ViewportSceneItem]] = [:]
         var featureOrderBySceneNodeID: [SceneNodeID: Int] = [:]
-        for (order, item) in baseItems.enumerated() {
+        for (order, item) in completeItems.enumerated() {
             if let sceneNodeID = sceneTransformIndex.presentingSceneNodeID(for: item.featureID) {
                 var presentedItem = item
                 presentedItem.sceneNodeID = sceneNodeID
-                baseItemsBySceneNodeID[sceneNodeID] = presentedItem
+                baseItemsBySceneNodeID[sceneNodeID, default: []].append(presentedItem)
                 featureOrderBySceneNodeID[sceneNodeID] = order
             } else {
                 unpresentedItems.append(item)
@@ -482,7 +516,7 @@ public struct ViewportSceneBuilder {
     /// and component instance, so the builder keeps no second visibility walk. Direct items keep
     /// the feature graph order; expanded component items follow, ordered by occurrence path.
     private func occurrenceItems(
-        baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem],
+        baseItemsBySceneNodeID: [SceneNodeID: [ViewportSceneItem]],
         featureOrderBySceneNodeID: [SceneNodeID: Int],
         sceneTransformIndex: ViewportSceneTransformIndex
     ) throws -> [ViewportSceneItem] {
@@ -490,12 +524,14 @@ public struct ViewportSceneBuilder {
         var instanceItems: [ViewportSceneItem] = []
         for occurrence in try sceneTransformIndex.resolvedOccurrences() {
             guard occurrence.isVisible,
-                  let baseItem = baseItemsBySceneNodeID[occurrence.sourceSceneNodeID] else {
+                  let bodyParts = baseItemsBySceneNodeID[occurrence.sourceSceneNodeID] else {
                 continue
             }
+            for baseItem in bodyParts {
             var item = try transformedSceneTreeItem(baseItem, transform: occurrence.worldTransform)
             item.sceneNodeID = occurrence.sceneNodeID
             item.occurrenceID = occurrence.id
+            item.sourceSceneNodeID = occurrence.sourceSceneNodeID
             if let instanceID = occurrence.componentInstanceID {
                 item.id = "\(occurrence.id.rawValue):\(baseItem.id)"
                 item.componentInstanceID = instanceID
@@ -504,7 +540,10 @@ public struct ViewportSceneBuilder {
                 directItems.append((featureOrderBySceneNodeID[occurrence.sourceSceneNodeID] ?? 0, item))
             }
         }
-        let orderedDirectItems = directItems.sorted { $0.order < $1.order }.map(\.item)
+        }
+        let orderedDirectItems = directItems.sorted {
+            $0.order == $1.order ? $0.item.id < $1.item.id : $0.order < $1.order
+        }.map(\.item)
         return orderedDirectItems + instanceItems.sorted { $0.id < $1.id }
     }
 
@@ -1489,7 +1528,7 @@ public struct ViewportSceneBuilder {
             yMinMeters: snapshot.bounds.minY,
             yMaxMeters: snapshot.bounds.maxY,
             mesh: snapshot.mesh,
-            topology: ViewportBodyTopology(snapshot.topology),
+            topology: ViewportBodyTopology(snapshot.topology, selectionBinding: snapshot.mesh.selectionBinding),
             surfaceControlPointDisplays: controlSourceID.flatMap { surfaceControlPointDisplaysByFeatureID[$0] } ?? [],
             surfaceTrimEndpointDisplays: surfaceTrimEndpointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimControlPointDisplays: surfaceTrimControlPointDisplaysByFeatureID[featureID] ?? [],

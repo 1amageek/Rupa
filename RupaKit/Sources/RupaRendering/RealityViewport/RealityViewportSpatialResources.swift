@@ -13,8 +13,27 @@ import simd
 /// Prepared resources only. The viewport cache owns request identity and publication.
 @MainActor
 final class RealityViewportSpatialResources {
+    struct OpticalPrimitive: Sendable {
+        enum Topology: Sendable { case triangle, line }
+        let topology: Topology
+        let first: SIMD3<Float>
+        let second: SIMD3<Float>
+        let third: SIMD3<Float>
+        let radiance: SIMD4<Float>
+        let readsDepth: Bool
+        let followsSection: Bool
+    }
+    private struct OpticalAppearance {
+        let radiance: SIMD4<Float>
+        let readsDepth: Bool
+    }
+    private var lineRibbonResources: [ObjectIdentifier: NativeLineRasterizer] = [:]
+
+    private var opticalAppearances: [ObjectIdentifier: [OpticalAppearance]] = [:]
+
     enum CameraReadinessError: Error {
         case projectionUnavailable
+        case glyphsPreparing
     }
     let root = Entity()
     let sectionedRoot = Entity()
@@ -26,9 +45,194 @@ final class RealityViewportSpatialResources {
     private var cameraPaths: [(Entity, RealityViewportSpatialBatch.CameraPath, Entity?)] = []
     private var boundsRulers: [(ViewportMeasurementRulerAxis, Entity, ModelEntity, LowLevelMesh)] = []
     private var grid: (entity: ModelEntity, mesh: LowLevelMesh)?
+    private var gridGlyphResources: [String: MeshResource] = [:]
+    private var gridGlyphRequest: [String]?
+    private var gridGlyphTask: Task<Void, Never>?
+    private var gridGlyphFailure: MeshSourcePresentationRenderError?
+    private var gridGlyphPositionCount = 0
+    private var gridGlyphTriangleCount = 0
+    private var gridGlyphByteCount = 0
+    private var opticalStorageAdmission: RealityViewportSpatialStorageAdmission?
+    private var storagePreparation: RealityViewportSpatialPreparation?
+    private var preparationByteLimit: Int?
+    private let inheritedByteCount: Int
+    private var cameraCheckpointDepth = 0
+    private var cameraCheckpointByteCount = 0
+    private var unleasedCameraCheckpointByteCount = 0
+    private var effectiveByteLimit: Int {
+        min(byteLimit - cameraCheckpointByteCount, preparationByteLimit ?? byteLimit)
+    }
+
+    func retainedNativeByteCount() throws -> Int {
+        let owned = preparedByteCount.subtractingReportingOverflow(inheritedByteCount)
+        let glyphTotal = owned.partialValue.addingReportingOverflow(gridGlyphByteCount)
+        let total = glyphTotal.partialValue.addingReportingOverflow(unleasedCameraCheckpointByteCount)
+        guard !glyphTotal.overflow, !owned.overflow, owned.partialValue >= 0, !total.overflow, gridGlyphByteCount >= 0 else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        return total.partialValue
+    }
+
+    func takePreparationLease() -> OpticalVolumeFrameStore.StorageLease? {
+        let result = storagePreparation?.takeLease()
+        storagePreparation = nil
+        preparationByteLimit = nil
+        return result
+    }
+
+    private func beginStoragePreparation(_ admission: RealityViewportSpatialStorageAdmission?) throws {
+        guard let admission else { return }
+        let preparation = try RealityViewportSpatialPreparation(admission: admission,
+            maximumBytes: byteLimit - inheritedByteCount)
+        let capacity = inheritedByteCount.addingReportingOverflow(preparation.admittedBytes)
+        guard !capacity.overflow, try retainedNativeByteCount() <= preparation.admittedBytes else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        opticalStorageAdmission = admission
+        preparationByteLimit = capacity.partialValue
+        storagePreparation = preparation
+    }
+
+    func bindOpticalStorageAdmission(images: OpticalVolumeFrameStore,
+                                    begin: @escaping @MainActor () throws -> Void,
+                                    finish: @escaping @MainActor (OpticalVolumeFrameStore.StorageLease?) throws -> Void,
+                                    abort: @escaping @MainActor () -> Void) {
+        opticalStorageAdmission = .init(images: images, begin: begin, finish: finish, abort: abort)
+    }
+
+    /// Captures original decorations; the requested camera belongs to the viewport.
+    func cameraStateCheckpoint() throws -> RealityViewportSpatialCameraCheckpoint {
+        func visitMeshes(_ visit: (LowLevelMesh) throws -> Void) throws {
+            if let grid { try visit(grid.mesh) }
+            for axis in axes { try visit(axis.mesh) }
+            for ruler in boundsRulers { try visit(ruler.3) }
+            for line in cameraLines { try visit(line.1) }
+            for marker in markers { if let mesh = marker.2 { try visit(mesh) } }
+            for raster in lineRibbonResources.values { try visit(raster.mesh) }
+        }
+        var additional = MemoryLayout<RealityViewportSpatialCameraCheckpoint>.stride
+        func charge(_ count: Int, _ stride: Int) throws {
+            let size = count.multipliedReportingOverflow(by: stride)
+            let sum = additional.addingReportingOverflow(size.partialValue)
+            guard count >= 0, !size.overflow, !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            additional = sum.partialValue
+        }
+        try charge(lineCollisions.count, MemoryLayout<LineCollision>.stride)
+        try charge(gridLabels.count, MemoryLayout<(Entity, String)>.stride)
+        try charge(opticalAppearances.count, MemoryLayout<(ObjectIdentifier, [OpticalAppearance])>.stride * 2)
+        try charge(lineRibbonResources.count, MemoryLayout<(NativeLineRasterizer, LowLevelMesh)>.stride)
+        try charge(1, MemoryLayout<BoundingBox?>.stride + MemoryLayout<Set<ViewportMeasurementRulerAxis>?>.stride
+                   + MemoryLayout<ViewportProjectedGrid.ScaleReadout?>.stride)
+        let footprint = try RealityViewportSpatialCameraCheckpoint.measure(owner: root,
+            secondary: sectionedRoot, additionalBytes: additional, visitMeshes: visitMeshes)
+        let retained = preparedByteCount.addingReportingOverflow(gridGlyphByteCount)
+        let peak = retained.partialValue.addingReportingOverflow(footprint.bytes)
+        guard !retained.overflow, !peak.overflow, peak.partialValue <= effectiveByteLimit else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        let nextDepth = cameraCheckpointDepth.addingReportingOverflow(1)
+        let nextBytes = cameraCheckpointByteCount.addingReportingOverflow(footprint.bytes)
+        let nextUnleased = unleasedCameraCheckpointByteCount.addingReportingOverflow(opticalStorageAdmission == nil ? footprint.bytes : 0)
+        guard !nextDepth.overflow, !nextBytes.overflow, !nextUnleased.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+        let admission = opticalStorageAdmission
+        var lease: OpticalVolumeFrameStore.StorageLease?
+        var opened = false
+        defer { if opened { admission?.abort() } }
+        if let admission {
+            try admission.begin(); opened = true
+            lease = try admission.images.retainStorage(bytes: footprint.bytes)
+        }
+        // All COW copies below are already admitted, including copies caused by
+        // subsequent source mutation. No suspension can change the original owner.
+        let oldLines = lineCollisions; let oldLabels = gridLabels; let oldAppearances = opticalAppearances
+        let oldBounds = collisionBounds; let oldDisabled = disabledRulerAxes; let oldScale = scaleReadout
+        var oldRasters: [(NativeLineRasterizer, LowLevelMesh)] = []
+        oldRasters.reserveCapacity(lineRibbonResources.count)
+        for raster in lineRibbonResources.values { oldRasters.append((raster, raster.mesh)) }
+        let originalRasters = oldRasters
+        let token = try RealityViewportSpatialCameraCheckpoint(owner: root, secondary: sectionedRoot,
+            footprint: footprint, visitMeshes: visitMeshes, lease: lease, restoreLogicalState: {
+                for label in self.gridLabels where !oldLabels.contains(where: { $0.entity === label.entity }) {
+                    label.entity.removeFromParent()
+                }
+                self.lineCollisions = oldLines; self.gridLabels = oldLabels; self.opticalAppearances = oldAppearances
+                self.collisionBounds = oldBounds; self.disabledRulerAxes = oldDisabled; self.scaleReadout = oldScale
+                for (raster, mesh) in originalRasters { try raster.restorePublishedMesh(mesh) }
+            }, release: {
+                self.cameraCheckpointDepth -= 1
+                self.cameraCheckpointByteCount -= footprint.bytes
+                if admission == nil { self.unleasedCameraCheckpointByteCount -= footprint.bytes }
+            })
+        cameraCheckpointDepth = nextDepth.partialValue; cameraCheckpointByteCount = nextBytes.partialValue
+        unleasedCameraCheckpointByteCount = nextUnleased.partialValue
+        if let admission { try admission.finish(nil); opened = false }
+        return token
+    }
+
+    func restoreCameraState(_ checkpoint: RealityViewportSpatialCameraCheckpoint) throws {
+        try checkpoint.restore(owner: root)
+    }
+
+    private func withCameraRollback<Result>(isFailure: (Result) -> Bool,
+                                            _ operation: () throws -> Result) throws -> Result {
+        guard cameraCheckpointDepth == 0 else { return try operation() }
+        let checkpoint = try cameraStateCheckpoint()
+        return try withExtendedLifetime(checkpoint) {
+            do {
+                let result = try operation()
+                if isFailure(result) { try restoreCameraState(checkpoint) }
+                return result
+            } catch {
+                let originalFailure = error
+                do { try restoreCameraState(checkpoint) }
+                catch {
+                    opticalStorageAdmission?.images.failStoragePublication()
+                    throw error
+                }
+                throw originalFailure
+            }
+        }
+    }
+
+    /// Admits synchronous native placement against the original mounted pool.
+    private func withStoragePreparation<Result>(_ operation: () throws -> Result) throws -> Result {
+        guard let admission = opticalStorageAdmission else { return try operation() }
+        try admission.begin()
+        var finished = false
+        let previousLimit = preparationByteLimit
+        defer {
+            preparationByteLimit = previousLimit
+            if !finished { admission.abort() }
+        }
+        do {
+            let retained = preparedByteCount.addingReportingOverflow(gridGlyphByteCount)
+            let capacity = retained.partialValue.addingReportingOverflow(try admission.images.remainingPreparationBytes())
+            guard !retained.overflow, !capacity.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            // No actor suspension occurs in this scope. The owner cap consumes
+            // this shared remainder cumulatively across all new ribbon buffers.
+            preparationByteLimit = min(previousLimit ?? byteLimit, capacity.partialValue)
+            let result = try operation()
+            try admission.finish(nil)
+            finished = true
+            return result
+        } catch {
+            let originalFailure = error
+            do {
+                // A failed staged ribbon can still own admitted buffers. Retain
+                // their actual contribution before propagating the source failure.
+                try admission.finish(nil)
+                finished = true
+            } catch {
+                admission.images.failStoragePublication()
+            }
+            throw originalFailure
+        }
+    }
+
     private var gridLabels: [(entity: Entity, text: String)] = []
     private var referenceAnnotationRoot: Entity?
     private var gridPlacement: ModelEntity?
+    private var gridPlacementMesh: LowLevelMesh?
     private var handleIndices: [ObjectIdentifier: UInt32] = [:]
     /// One native entity per world-mesh group: a handle's mesh alone, or every handle-free mesh
     /// of one attachment as parts of one mesh. `parts` are the prepared parts, in the order of
@@ -135,6 +339,139 @@ final class RealityViewportSpatialResources {
         var meshIndices: [Int]
     }
 
+    private func recordOpticalAppearance(_ entity: ModelEntity, colors: [SIMD4<Float>],
+                                         depths: [RealityViewportSpatialBatch.Depth]) {
+        opticalAppearances[ObjectIdentifier(entity)] = zip(colors, depths).map {
+            OpticalAppearance(radiance: $0.0, readsDepth: $0.1 == .scene)
+        }
+    }
+
+    /// Call after camera placement and suppression. Pointers are scoped to synchronous
+    /// MainActor borrows from initialized native buffers; only immutable values escape.
+    func opticalPrimitives(maximumPrimitiveCount: Int, maximumRetainedByteCount: Int) throws -> [OpticalPrimitive] {
+        guard maximumPrimitiveCount > 0, maximumRetainedByteCount > 0 else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        var output: [OpticalPrimitive] = []
+        var retainedBytes = 0
+        func append(_ topology: OpticalPrimitive.Topology, _ first: SIMD3<Float>,
+                    _ second: SIMD3<Float>, _ third: SIMD3<Float>, appearance: OpticalAppearance,
+                    section: Bool) throws {
+            try Task.checkCancellation()
+            let bytes = retainedBytes.addingReportingOverflow(MemoryLayout<OpticalPrimitive>.stride)
+            guard output.count < maximumPrimitiveCount, !bytes.overflow,
+                  bytes.partialValue <= maximumRetainedByteCount else { throw RealityViewportSpatialBatch.exhausted() }
+            guard (0..<3).allSatisfy({ first[$0].isFinite && second[$0].isFinite && third[$0].isFinite }),
+                  (0..<4).allSatisfy({ appearance.radiance[$0].isFinite }) else {
+                throw RealityViewportSpatialBatch.invalid("Optical spatial primitive contains invalid native values.")
+            }
+            retainedBytes = bytes.partialValue
+            output.append(.init(topology: topology, first: first, second: second, third: third,
+                radiance: appearance.radiance, readsDepth: appearance.readsDepth, followsSection: section))
+        }
+        func dynamicMesh(_ entity: ModelEntity) -> LowLevelMesh? {
+            if let ribbon = lineRibbonResources[ObjectIdentifier(entity)] { return ribbon.mesh }
+            if let found = worldMeshGroups.first(where: { $0.entity === entity }) { return found.mesh }
+            if let grid, grid.entity === entity { return grid.mesh }
+            if gridPlacement === entity { return gridPlacementMesh }
+            if let found = cameraLines.first(where: { $0.0 === entity }) { return found.1 }
+            if let found = markers.first(where: { $0.0 === entity }) { return found.2 }
+            if let found = boundsRulers.first(where: { $0.2 === entity }) { return found.3 }
+            return axes.first(where: { $0.line === entity })?.mesh
+        }
+        func visit(_ entity: Entity, section: Bool) throws {
+            guard entity.isEnabled else { return }
+            try Task.checkCancellation()
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Native TextComponent glyph geometry is not
+            // exposed by this port. Optical frame publication must fail for enabled text
+            // until actual native glyph triangles and camera billboarding are retained.
+            if entity.components[TextComponent.self] != nil {
+                throw RealityViewportSpatialBatch.invalid("Optical spatial snapshot has unresolved native text geometry.")
+            }
+            if let model = entity as? ModelEntity, let component = model.model {
+                guard let appearances = opticalAppearances[ObjectIdentifier(model)] else {
+                    throw RealityViewportSpatialBatch.invalid("Optical spatial model has no retained material authority.")
+                }
+                let world = model.transformMatrix(relativeTo: nil)
+                func appearance(_ index: Int) throws -> OpticalAppearance {
+                    guard appearances.indices.contains(index) else {
+                        throw RealityViewportSpatialBatch.invalid("Optical spatial part has no original appearance.")
+                    }
+                    return appearances[index]
+                }
+                if let mesh = dynamicMesh(model) {
+                    var borrowFailure: (any Error)?
+                    mesh.withUnsafeBytes(bufferIndex: 0) { vertexBytes in
+                        mesh.withUnsafeIndices { indexBytes in
+                            do {
+                                guard vertexBytes.count.isMultiple(of: MemoryLayout<SIMD3<Float>>.stride),
+                                      indexBytes.count.isMultiple(of: MemoryLayout<UInt32>.stride) else {
+                                    throw RealityViewportSpatialBatch.invalid("Optical native buffer stride is invalid.")
+                                }
+                                let vertices = vertexBytes.bindMemory(to: SIMD3<Float>.self)
+                                let indices = indexBytes.bindMemory(to: UInt32.self)
+                                func point(_ index: UInt32) throws -> SIMD3<Float> {
+                                    guard let offset = Int(exactly: index), vertices.indices.contains(offset) else {
+                                        throw RealityViewportSpatialBatch.invalid("Optical native index exceeds initialized vertices.")
+                                    }
+                                    let value = world * SIMD4(vertices[offset], 1)
+                                    return SIMD3(value.x, value.y, value.z)
+                                }
+                                for part in mesh.parts {
+                                    guard part.indexOffset >= 0, part.indexOffset.isMultiple(of: MemoryLayout<UInt32>.stride),
+                                          part.indexCount >= 0 else { throw RealityViewportSpatialBatch.invalid("Optical part range is invalid.") }
+                                    let start = part.indexOffset / MemoryLayout<UInt32>.stride
+                                    let end = start.addingReportingOverflow(part.indexCount)
+                                    let size: Int
+                                    let topology: OpticalPrimitive.Topology
+                                    if part.topology == .triangle { size = 3; topology = .triangle }
+                                    else if part.topology == .line { size = 2; topology = .line }
+                                    else { throw RealityViewportSpatialBatch.invalid("Optical native topology is unsupported.") }
+                                    guard !end.overflow, end.partialValue <= indices.count, part.indexCount.isMultiple(of: size) else {
+                                        throw RealityViewportSpatialBatch.invalid("Optical native part exceeds initialized indices.")
+                                    }
+                                    let color = try appearance(part.materialIndex)
+                                    for offset in stride(from: start, to: end.partialValue, by: size) {
+                                        let a = try point(indices[offset]), b = try point(indices[offset + 1])
+                                        let c = size == 3 ? try point(indices[offset + 2]) : b
+                                        try append(topology, a, b, c, appearance: color, section: section)
+                                    }
+                                }
+                            } catch { borrowFailure = error }
+                        }
+                    }
+                    if let borrowFailure { throw borrowFailure }
+                } else {
+                    try Self.pathParts(component.mesh.contents) { part, transform in
+                        guard let triangles = part.triangleIndices else {
+                            throw RealityViewportSpatialBatch.invalid("Optical static primitive has no original triangles.")
+                        }
+                        let positions = part.positions.elements
+                        let matrix = world * transform
+                        let color = try appearance(part.materialIndex)
+                        func point(_ index: UInt32) throws -> SIMD3<Float> {
+                            guard let offset = Int(exactly: index), positions.indices.contains(offset) else {
+                                throw RealityViewportSpatialBatch.invalid("Optical static primitive index is invalid.")
+                            }
+                            let value = matrix * SIMD4(positions[offset], 1)
+                            return SIMD3(value.x, value.y, value.z)
+                        }
+                        try triangles.forEach { a, b, c in
+                            try append(.triangle, point(a), point(b), point(c), appearance: color, section: section)
+                        }
+                    }
+                }
+            }
+            for child in entity.children { try visit(child, section: section) }
+        }
+        try visit(root, section: false)
+        try visit(sectionedRoot, section: true)
+        if let referenceAnnotationRoot, referenceAnnotationRoot !== root, referenceAnnotationRoot !== sectionedRoot {
+            try visit(referenceAnnotationRoot, section: false)
+        }
+        return output
+    }
+
     /// Lookup coordinates only; the host owns CAD identity and frame matching.
     func handleIndex(for entity: Entity) -> UInt32? {
         var candidate: Entity? = entity
@@ -231,12 +568,25 @@ final class RealityViewportSpatialResources {
     /// collision bounds, leaving the grid, axes and rulers as they are. A hover delta changes
     /// which items are drawn, not where the camera is.
     func updatePlacement(camera: Entity, content: RealityViewCameraContent,
-                         objectPreviews: [String: Transform3D]) throws {
+                         objectPreviews: [String: Transform3D],
+                         nativePixelsPerPoint: CGFloat? = nil) throws {
+        try withCameraRollback(isFailure: { (_: Void) in false }) {
+            try withStoragePreparation {
+                try updatePreparedPlacement(camera: camera, content: content,
+                    objectPreviews: objectPreviews, nativePixelsPerPoint: nativePixelsPerPoint)
+            }
+        }
+    }
+
+    private func updatePreparedPlacement(camera: Entity, content: RealityViewCameraContent,
+                         objectPreviews: [String: Transform3D],
+                         nativePixelsPerPoint: CGFloat?) throws {
         guard let projection = cameraProjection(camera: camera, content: content) else {
             throw CameraReadinessError.projectionUnavailable
         }
         try place(projection: projection, objectPreviews: objectPreviews)
         try updateCollisionBounds(projection: projection)
+        try updateLineRibbons(projection: projection, nativePixelsPerPoint: nativePixelsPerPoint)
     }
 
     func projectedHandleDistance(
@@ -502,7 +852,7 @@ final class RealityViewportSpatialResources {
         func charge(_ count: Int, _ stride: Int) throws {
             let size = count.multipliedReportingOverflow(by: stride)
             guard !size.overflow else { throw RealityViewportSpatialBatch.exhausted() }
-            try add(&preparedByteCount, size.partialValue, limit: byteLimit)
+            try add(&preparedByteCount, size.partialValue, limit: effectiveByteLimit)
         }
         try add(&preparedItemCount, edges, limit: batch.limits.maxItemCount)
         try add(&preparedPositionCount, positions, limit: batch.limits.maxPositionCount)
@@ -696,56 +1046,7 @@ final class RealityViewportSpatialResources {
         collisionBounds = hasBounds ? bounds : nil
     }
 
-    private struct CameraProjection {
-        let worldFromCamera: simd_float4x4
-        let cameraFromWorld: simd_float4x4
-        let forward: CGAffineTransform
-        let inverseOffset: CGAffineTransform
-        let sampleDepth: Float
-        let perspective: Bool
-        let annotationDepth: Float
-        let near: Float
-        let far: Float
-
-        func local(_ point: SIMD3<Float>) -> SIMD3<Float> {
-            let value = cameraFromWorld * SIMD4(point, 1)
-            return SIMD3(value.x, value.y, value.z)
-        }
-
-        func depthScale(_ local: SIMD3<Float>) -> Float { perspective ? -local.z / sampleDepth : 1 }
-
-        func project(_ point: SIMD3<Float>) -> CGPoint? {
-            let point = local(point)
-            guard point.x.isFinite, point.y.isFinite, point.z.isFinite, point.z < 0 else { return nil }
-            let scale = depthScale(point)
-            let result = CGPoint(x: CGFloat(point.x / scale), y: CGFloat(point.y / scale)).applying(forward)
-            return result.x.isFinite && result.y.isFinite ? result : nil
-        }
-
-        func point(at screen: CGPoint, depth: Float) -> SIMD3<Float> {
-            let offset = CGPoint(x: screen.x - forward.tx, y: screen.y - forward.ty).applying(inverseOffset)
-            let scale = perspective ? depth / sampleDepth : 1
-            let value = worldFromCamera * SIMD4(Float(offset.x) * scale, Float(offset.y) * scale, -depth, 1)
-            return SIMD3(value.x, value.y, value.z)
-        }
-
-        func unproject(_ screen: CGPoint, onto plane: ViewportCanvasPlane, origin: Point3D) -> Point3D? {
-            guard let normal = plane.normal else { return nil }
-            let sample = point(at: screen, depth: sampleDepth)
-            let start = perspective ? SIMD3(worldFromCamera.columns.3.x, worldFromCamera.columns.3.y, worldFromCamera.columns.3.z)
-                : point(at: screen, depth: 0)
-            let direction = SIMD3<Double>(sample - start)
-            let worldStart = SIMD3<Double>(start) + SIMD3(origin.x, origin.y, origin.z)
-            let n = SIMD3(normal.x, normal.y, normal.z)
-            let denominator = simd_dot(direction, n)
-            guard denominator.isFinite, abs(denominator) > 1e-12 else { return nil }
-            let distance = -simd_dot(worldStart, n) / denominator
-            guard distance.isFinite, distance >= 0 else { return nil }
-            let result = worldStart + direction * distance
-            guard result.x.isFinite, result.y.isFinite, result.z.isFinite else { return nil }
-            return Point3D(x: result.x, y: result.y, z: result.z)
-        }
-    }
+    private typealias CameraProjection = NativeLineCameraProjection
 
     private init(batch: RealityViewportSpatialBatch, surfacePlan: MeshSourcePresentationRenderPlan?) {
         self.batch = batch
@@ -753,6 +1054,7 @@ final class RealityViewportSpatialResources {
         preparedPositionCount = batch.positionCount + (surfacePlan?.positionCount ?? 0)
         preparedTriangleCount = batch.triangleCount + (surfacePlan?.triangleCount ?? 0)
         preparedByteCount = batch.admittedByteCount
+        inheritedByteCount = batch.retainedSurfaceByteCount
         surfacePositionCount = surfacePlan?.positionCount ?? 0
         byteLimit = min(batch.limits.maxRetainedByteCount, surfacePlan?.nativePreparationByteLimit ?? batch.limits.maxRetainedByteCount)
         hasSectionedCameraGeometry = batch.labels.contains { $0.attachment == .sectionedGeometry }
@@ -779,6 +1081,7 @@ final class RealityViewportSpatialResources {
             return total.partialValue
         }
         self.batch = batch
+        inheritedByteCount = base.preparedByteCount
         preparedItemCount = try sum(base.preparedItemCount, batch.itemCount, limit: batch.limits.maxItemCount)
         preparedPositionCount = try sum(base.preparedPositionCount, batch.positionCount, limit: batch.limits.maxPositionCount)
         preparedTriangleCount = try sum(base.preparedTriangleCount, batch.triangleCount, limit: batch.limits.maxTriangleCount)
@@ -797,23 +1100,47 @@ final class RealityViewportSpatialResources {
 
     static func prepare(batch: RealityViewportSpatialBatch,
                         surfacePlan: MeshSourcePresentationRenderPlan? = nil,
-                        reusing previous: RealityViewportSpatialResources? = nil) async throws -> RealityViewportSpatialResources {
+                        reusing previous: RealityViewportSpatialResources? = nil,
+                        storageAdmission: RealityViewportSpatialStorageAdmission? = nil) async throws -> RealityViewportSpatialResources {
         try Task.checkCancellation()
         try batch.validate(surfacePlan: surfacePlan)
-        return try await populate(RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan), reusing: previous)
+        let result = RealityViewportSpatialResources(batch: batch, surfacePlan: surfacePlan)
+        try result.beginStoragePreparation(storageAdmission)
+        let prepared = try await populate(result, reusing: previous)
+        try prepared.storagePreparation?.refine(bytes: prepared.retainedNativeByteCount())
+        return prepared
     }
 
     /// Prepares the items a hover delta adds over the mounted `base`, off-scene. Its handle
     /// indexes name the complete overlay's records; its admission continues `base`'s.
     static func prepareDelta(batch: RealityViewportSpatialBatch,
-                             over base: RealityViewportSpatialResources) async throws -> RealityViewportSpatialResources {
+                             over base: RealityViewportSpatialResources,
+                             storageAdmission: RealityViewportSpatialStorageAdmission? = nil) async throws -> RealityViewportSpatialResources {
         try Task.checkCancellation()
-        return try await populate(RealityViewportSpatialResources(delta: batch, over: base), reusing: base)
+        let result = try RealityViewportSpatialResources(delta: batch, over: base)
+        try result.beginStoragePreparation(storageAdmission)
+        let prepared = try await populate(result, reusing: base)
+        try prepared.storagePreparation?.refine(bytes: prepared.retainedNativeByteCount())
+        return prepared
     }
 
     private static func populate(_ result: RealityViewportSpatialResources,
                                  reusing previous: RealityViewportSpatialResources?) async throws -> RealityViewportSpatialResources {
         let batch = result.batch
+        if batch.includesGrid, let previous {
+            guard previous.gridGlyphPositionCount <= batch.limits.maxPositionCount - result.preparedPositionCount,
+                  previous.gridGlyphTriangleCount <= batch.limits.maxTriangleCount - result.preparedTriangleCount,
+                  previous.gridGlyphByteCount <= result.effectiveByteLimit - result.preparedByteCount,
+                  previous.gridGlyphResources.count <= batch.limits.maxItemCount - result.preparedItemCount else {
+                throw RealityViewportSpatialBatch.exhausted()
+            }
+            // Immutable native glyph resources cross the same-owner preparation handoff
+            // without regeneration. Their retained counts continue the new candidate's ledger.
+            result.gridGlyphResources = previous.gridGlyphResources
+            result.gridGlyphPositionCount = previous.gridGlyphPositionCount
+            result.gridGlyphTriangleCount = previous.gridGlyphTriangleCount
+            result.gridGlyphByteCount = previous.gridGlyphByteCount
+        }
         result.lineCollisions.reserveCapacity(batch.lineCollisionCount)
         result.lineCollisionIndex.reserveCapacity(batch.lineCollisionCount)
         if batch.includesGrid {
@@ -842,6 +1169,7 @@ final class RealityViewportSpatialResources {
                 return line
             }
             let entity = ModelEntity(mesh: resource, materials: materials)
+            result.recordOpticalAppearance(entity, colors: [SIMD4<Float>(1, 1, 1, 0.012), SIMD4<Float>(1, 1, 1, 0.028), SIMD4<Float>(1, 1, 1, 0.055)], depths: [.scene, .scene, .scene])
             entity.isEnabled = false
             result.grid = (entity, mesh)
             result.root.addChild(entity)
@@ -866,8 +1194,10 @@ final class RealityViewportSpatialResources {
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(placement.color, depth: .annotation)])
+            result.recordOpticalAppearance(entity, colors: [placement.color], depths: [.annotation])
             entity.isEnabled = false
             result.gridPlacement = entity
+            result.gridPlacementMesh = mesh
             result.root.addChild(entity)
         }
         if batch.includesAxes {
@@ -889,19 +1219,23 @@ final class RealityViewportSpatialResources {
                 let resource = try RealityViewport.nativeResource(from: mesh)
                 try Task.checkCancellation()
                 let line = ModelEntity(mesh: resource, materials: [material(axisColor(axis), depth: .annotation)])
+                result.recordOpticalAppearance(line, colors: [axisColor(axis)], depths: [.annotation])
                 line.name = "Reference Axis \(axis.label)"
                 line.isEnabled = false
 
-                let label = Entity()
-                label.name = "Reference Axis \(axis.label) Label"
-                var text = TextComponent()
                 let attributed = NSAttributedString(string: axis.label, attributes: [
                     .font: font,
                     .foregroundColor: NSColor.white
                 ])
-                text.text = AttributedString(attributed)
-                text.size = CGSize(width: 14, height: 14)
-                label.components.set(text)
+                let styled = try AttributedString(attributed, including: \.appKit)
+                var extrusion = MeshResource.ShapeExtrusionOptions()
+                extrusion.extrusionMethod = .linear(depth: 0)
+                let glyphs = try await MeshResource(extruding: styled, extrusionOptions: extrusion)
+                try Task.checkCancellation()
+                try result.admitNativeGlyph(glyphs, text: axis.label)
+                let label = ModelEntity(mesh: glyphs, materials: [material([1, 1, 1, 1], depth: .annotation)])
+                result.recordOpticalAppearance(label, colors: [[1, 1, 1, 1]], depths: [.annotation])
+                label.name = "Reference Axis \(axis.label) Label"
                 label.components.set(BillboardComponent())
                 label.isEnabled = false
 
@@ -947,6 +1281,7 @@ final class RealityViewportSpatialResources {
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: geometry.appearances.map { material($0.color, depth: $0.depth) })
+            result.recordOpticalAppearance(entity, colors: geometry.appearances.map(\.color), depths: geometry.appearances.map(\.depth))
             result.worldMeshGroups.append(.init(entity: entity, mesh: mesh, parts: geometry.parts,
                                                 meshOrdinals: group.meshIndices))
             result.register(entity, handleIndex: group.handleIndex)
@@ -985,9 +1320,10 @@ final class RealityViewportSpatialResources {
             try Task.checkCancellation()
             let resource = try await pathResource(planarPath(path), cache: &pathResources,
                 additionalPositionLimit: batch.limits.maxPositionCount - result.preparedPositionCount,
-                additionalByteLimit: result.byteLimit - result.preparedByteCount)
+                additionalByteLimit: result.effectiveByteLimit - result.preparedByteCount)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(path.color, depth: path.depth)])
+            result.recordOpticalAppearance(entity, colors: [path.color], depths: [path.depth])
             entity.position = try RealityViewportSpatialBatch.nativePoint(path.origin, relativeTo: batch.renderOrigin)
             orient(entity, on: path)
             result.planarPaths.append(entity)
@@ -1027,9 +1363,10 @@ final class RealityViewportSpatialResources {
         var quadCollision = previous?.quadCollision
         for label in batch.labels {
             try Task.checkCancellation()
-            let resource = try await textResource(label.text, cache: &textResources)
+            let resource = try await textResource(label.text, cache: &textResources, owner: result)
             try Task.checkCancellation()
             let glyph = ModelEntity(mesh: resource, materials: [material(label.color, depth: label.depth)])
+            result.recordOpticalAppearance(glyph, colors: [label.color], depths: [label.depth])
             let bounds = resource.bounds
             switch label.alignment {
             case .leading: glyph.position.x = -bounds.min.x
@@ -1111,6 +1448,7 @@ final class RealityViewportSpatialResources {
                 mesh = cone
             }
             let entity = ModelEntity(mesh: mesh, materials: [material(marker.color, depth: marker.depth)])
+            result.recordOpticalAppearance(entity, colors: [marker.color], depths: [marker.depth])
             let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(marker.anchor, relativeTo: batch.renderOrigin)
             entity.position = nativeAnchor
             if case .cone = marker.shape {
@@ -1175,6 +1513,7 @@ final class RealityViewportSpatialResources {
             let resource = try RealityViewport.nativeResource(from: mesh)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(line.color, depth: line.depth)])
+            result.recordOpticalAppearance(entity, colors: [line.color], depths: [line.depth])
             entity.isEnabled = false
             var proxies: [Entity] = []
             if let index = line.handleIndex, let tolerance = line.hitTolerancePoints {
@@ -1190,6 +1529,7 @@ final class RealityViewportSpatialResources {
                 guard let box else { throw RealityViewportSpatialBatch.invalid("Native line resource is unavailable.") }
                 for _ in 1..<count {
                     let stroke = ModelEntity(mesh: box, materials: [material(line.color, depth: line.depth)])
+                    result.recordOpticalAppearance(stroke, colors: [line.color], depths: [line.depth])
                     entity.addChild(stroke)
                     strokes.append(stroke)
                 }
@@ -1202,9 +1542,10 @@ final class RealityViewportSpatialResources {
             try Task.checkCancellation()
             let resource = try await pathResource(path.path.applying(.init(scaleX: 1, y: -1)), cache: &pathResources,
                 additionalPositionLimit: batch.limits.maxPositionCount - result.preparedPositionCount,
-                additionalByteLimit: result.byteLimit - result.preparedByteCount)
+                additionalByteLimit: result.effectiveByteLimit - result.preparedByteCount)
             try Task.checkCancellation()
             let entity = ModelEntity(mesh: resource, materials: [material(path.color, depth: path.depth)])
+            result.recordOpticalAppearance(entity, colors: [path.color], depths: [path.depth])
             entity.components.set(BillboardComponent())
             entity.isEnabled = false
             var collider: Entity?
@@ -1236,8 +1577,9 @@ final class RealityViewportSpatialResources {
         if let group = batch.boundsRulers {
             for axis in ViewportMeasurementRulerAxis.allCases {
                 guard let text = group.input.labels[axis] else { continue }
-                let resource = try await textResource(text, cache: &textResources)
+                let resource = try await textResource(text, cache: &textResources, owner: result)
                 let glyph = ModelEntity(mesh: resource, materials: [material(group.color, depth: .annotation)])
+                result.recordOpticalAppearance(glyph, colors: [group.color], depths: [.annotation])
                 glyph.position.x = -resource.bounds.center.x
                 glyph.position.y = -resource.bounds.center.y
                 let label = Entity()
@@ -1259,6 +1601,7 @@ final class RealityViewportSpatialResources {
                 let lineResource = try RealityViewport.nativeResource(from: mesh)
                 try Task.checkCancellation()
                 let line = ModelEntity(mesh: lineResource, materials: [material(group.color, depth: .annotation)])
+                result.recordOpticalAppearance(line, colors: [group.color], depths: [.annotation])
                 line.isEnabled = false
                 result.root.addChild(label)
                 result.root.addChild(line)
@@ -1329,8 +1672,25 @@ final class RealityViewportSpatialResources {
                       safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
                       gridRuler: RulerConfiguration? = nil, gridBasis: ViewportProjectionBasis = .isometric,
                       gridSize: CGSize = .zero, gridSpacing: ViewportGridVisualSpacingMode = .adaptive,
-                      objectPreviews: [String: Transform3D] = [:]) throws -> MeshSourcePresentationRenderError? {
-        guard grid != nil || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !lineCollisions.isEmpty || !fillCollisions.isEmpty || !boundsRulers.isEmpty else { return nil }
+                      objectPreviews: [String: Transform3D] = [:],
+                      nativePixelsPerPoint: CGFloat? = nil) throws -> MeshSourcePresentationRenderError? {
+        try withCameraRollback(isFailure: { $0 != nil }) {
+            try withStoragePreparation {
+                try updatePreparedCamera(camera: camera, content: content, safeRect: safeRect,
+                    excludedRects: excludedRects, gridRuler: gridRuler, gridBasis: gridBasis,
+                    gridSize: gridSize, gridSpacing: gridSpacing, objectPreviews: objectPreviews,
+                    nativePixelsPerPoint: nativePixelsPerPoint)
+            }
+        }
+    }
+
+    private func updatePreparedCamera(camera: Entity, content: RealityViewCameraContent,
+                      safeRect: CGRect, excludedRects: [CGRect],
+                      gridRuler: RulerConfiguration?, gridBasis: ViewportProjectionBasis,
+                      gridSize: CGSize, gridSpacing: ViewportGridVisualSpacingMode,
+                      objectPreviews: [String: Transform3D],
+                      nativePixelsPerPoint: CGFloat?) throws -> MeshSourcePresentationRenderError? {
+        guard grid != nil || gridPlacement != nil || worldMeshGroups.contains(where: { $0.parts.contains(where: { $0.topology == .line }) }) || !axes.isEmpty || !cameraPaths.isEmpty || !labels.isEmpty || !markers.isEmpty || !cameraLines.isEmpty || !lineCollisions.isEmpty || !fillCollisions.isEmpty || !boundsRulers.isEmpty else { return nil }
         guard let projection = cameraProjection(camera: camera, content: content) else {
             for (entity, _, collider) in cameraPaths {
                 entity.isEnabled = false
@@ -1372,6 +1732,7 @@ final class RealityViewportSpatialResources {
                 }
                 guard let scaleAnchor else {
                     hideGrid()
+                    try updateLineRibbons(projection: projection, nativePixelsPerPoint: nativePixelsPerPoint)
                     return nil
                 }
                 let nativeAnchor = try RealityViewportSpatialBatch.nativePoint(scaleAnchor, relativeTo: batch.renderOrigin)
@@ -1396,11 +1757,14 @@ final class RealityViewportSpatialResources {
             } else {
                 hideGrid()
             }
+        } catch let error as CameraReadinessError {
+            throw error
         } catch let error as MeshSourcePresentationRenderError {
             return error
         } catch {
             return RealityViewportSpatialBatch.invalid("Native grid frame failed: \(error)")
         }
+        try updateLineRibbons(projection: projection, nativePixelsPerPoint: nativePixelsPerPoint)
         return nil
     }
 
@@ -1571,6 +1935,15 @@ final class RealityViewportSpatialResources {
             gridLabels = previous.gridLabels
             previous.gridLabels = []
         }
+        func transferAppearance(_ entity: Entity) {
+            let key = ObjectIdentifier(entity)
+            if let appearance = previous.opticalAppearances.removeValue(forKey: key) {
+                opticalAppearances[key] = appearance
+            }
+            for child in entity.children { transferAppearance(child) }
+        }
+        for label in gridLabels { transferAppearance(label.entity) }
+        for axis in axes { transferAppearance(axis.label) }
         previous.clearReferenceAnnotations()
         let parent = referenceAnnotationRoot ?? root
         for label in gridLabels where label.entity.parent !== parent { parent.addChild(label.entity) }
@@ -1717,7 +2090,7 @@ final class RealityViewportSpatialResources {
                     throw RealityViewportSpatialBatch.invalid("The native reference-axis label endpoint is not finite.")
                 }
             }
-            let scale = unitsPerPoint * 72 / 0.0254
+            let scale = unitsPerPoint * 72
             guard scale.isFinite, scale > 0 else {
                 throw RealityViewportSpatialBatch.invalid("The native reference-axis label scale is invalid.")
             }
@@ -1803,6 +2176,133 @@ final class RealityViewportSpatialResources {
         return nil
     }
 
+    /// The mounting owner calls this at shutdown; source and generated resources
+    /// otherwise stay owned by this MainActor resource until normal release.
+    func shutdownGlyphPreparation() {
+        gridGlyphTask?.cancel()
+        gridGlyphTask = nil
+        gridGlyphRequest = nil
+        gridGlyphFailure = nil
+    }
+
+    private func admitGridGlyphs(_ texts: [String], font: NSFont) throws {
+        let keys = Array(Set(texts)).sorted()
+        if keys.allSatisfy({ gridGlyphResources[$0] != nil }) { return }
+        if gridGlyphRequest == keys {
+            if let gridGlyphFailure { throw gridGlyphFailure }
+            throw CameraReadinessError.glyphsPreparing
+        }
+        let missing = keys.filter { gridGlyphResources[$0] == nil }
+        guard missing.count <= batch.limits.maxItemCount - preparedItemCount - gridGlyphResources.count else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        gridGlyphTask?.cancel()
+        gridGlyphRequest = keys
+        gridGlyphFailure = nil
+        gridGlyphTask = Task { @MainActor [weak self] in
+            // The task's capture is MainActor isolated. It retains no shared raw state
+            // or escaping buffer; a suspended candidate cannot publish after key change.
+            guard let self else { return }
+            let admission = self.opticalStorageAdmission
+            var lease: OpticalVolumeFrameStore.StorageLease?
+            var preparationActive = false
+            defer {
+                lease = nil
+                if preparationActive { admission?.abort() }
+            }
+            do {
+                var reservedByteLimit = self.byteLimit - self.preparedByteCount - self.gridGlyphByteCount
+                if let admission {
+                    try admission.begin()
+                    preparationActive = true
+                    let available = min(try admission.images.remainingPreparationBytes(),
+                        self.byteLimit - self.preparedByteCount - self.gridGlyphByteCount)
+                    guard available > 0 else { throw RealityViewportSpatialBatch.exhausted() }
+                    lease = try admission.images.retainStorage(bytes: available)
+                    reservedByteLimit = available
+                }
+                var candidates: [(String, MeshResource)] = []
+                var positions = 0, triangles = 0, bytes = 0
+                for text in missing {
+                    try Task.checkCancellation()
+                    let styled = NSAttributedString(string: text, attributes: [
+                        .font: font, .foregroundColor: NSColor(white: 0.75, alpha: 1)
+                    ])
+                    var extrusion = MeshResource.ShapeExtrusionOptions()
+                    extrusion.extrusionMethod = .linear(depth: 0)
+                    let attributed = try AttributedString(styled, including: \.appKit)
+                    let resource = try await MeshResource(extruding: attributed, extrusionOptions: extrusion)
+                    try Task.checkCancellation()
+                    guard self.gridGlyphRequest == keys else { return }
+                    var addedPositions = 0, addedTriangles = 0, addedBytes = 0
+                    func add(_ value: inout Int, _ amount: Int, maximum: Int) throws {
+                        let total = value.addingReportingOverflow(amount)
+                        guard amount >= 0, !total.overflow, total.partialValue <= maximum else {
+                            throw RealityViewportSpatialBatch.exhausted()
+                        }
+                        value = total.partialValue
+                    }
+                    try Self.pathParts(resource.contents) { part, _ in
+                        guard let indices = part.triangleIndices, indices.count.isMultiple(of: 3) else {
+                            throw RealityViewportSpatialBatch.invalid("Prepared grid glyph has invalid native topology.")
+                        }
+                        try add(&addedPositions, part.positions.count, maximum: self.batch.limits.maxPositionCount)
+                        try add(&addedTriangles, indices.count / 3, maximum: self.batch.limits.maxTriangleCount)
+                        let vertexBytes = part.positions.count.multipliedReportingOverflow(by: MemoryLayout<SIMD3<Float>>.stride)
+                        let indexBytes = indices.count.multipliedReportingOverflow(by: MemoryLayout<UInt32>.stride)
+                        guard !vertexBytes.overflow, !indexBytes.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                        try add(&addedBytes, vertexBytes.partialValue, maximum: self.byteLimit)
+                        try add(&addedBytes, indexBytes.partialValue, maximum: self.byteLimit)
+                    }
+                    let stringBytes = text.utf8.count.multipliedReportingOverflow(by: 4)
+                    guard !stringBytes.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                    try add(&addedBytes, stringBytes.partialValue, maximum: self.byteLimit)
+                    try add(&addedBytes, MemoryLayout<(String, MeshResource)>.stride, maximum: self.byteLimit)
+                    try add(&positions, addedPositions,
+                        maximum: self.batch.limits.maxPositionCount - self.preparedPositionCount - self.gridGlyphPositionCount)
+                    try add(&triangles, addedTriangles,
+                        maximum: self.batch.limits.maxTriangleCount - self.preparedTriangleCount - self.gridGlyphTriangleCount)
+                    try add(&bytes, addedBytes,
+                        maximum: min(reservedByteLimit,
+                            self.byteLimit - self.preparedByteCount - self.gridGlyphByteCount))
+                    candidates.append((text, resource))
+                }
+                guard self.gridGlyphRequest == keys else { return }
+                try Task.checkCancellation()
+                try lease?.resize(bytes: bytes)
+                let oldResources = self.gridGlyphResources
+                let oldPositions = self.gridGlyphPositionCount
+                let oldTriangles = self.gridGlyphTriangleCount
+                let oldBytes = self.gridGlyphByteCount
+                self.gridGlyphPositionCount += positions
+                self.gridGlyphTriangleCount += triangles
+                self.gridGlyphByteCount += bytes
+                for (text, resource) in candidates { self.gridGlyphResources[text] = resource }
+                do {
+                    try admission?.finish(lease)
+                    preparationActive = false
+                    lease = nil
+                } catch {
+                    self.gridGlyphResources = oldResources
+                    self.gridGlyphPositionCount = oldPositions
+                    self.gridGlyphTriangleCount = oldTriangles
+                    self.gridGlyphByteCount = oldBytes
+                    throw error
+                }
+                self.gridGlyphTask = nil
+            } catch is CancellationError {
+                // A replaced key owns the successor. Shutdown publishes nothing.
+                return
+            } catch {
+                guard self.gridGlyphRequest == keys else { return }
+                self.gridGlyphFailure = error as? MeshSourcePresentationRenderError
+                    ?? RealityViewportSpatialBatch.invalid("Native grid glyph preparation failed: \(error)")
+                self.gridGlyphTask = nil
+            }
+        }
+        throw CameraReadinessError.glyphsPreparing
+    }
+
     private func updateGrid(_ frame: ViewportProjectedGrid.NativeFrame, projection: CameraProjection) throws {
         guard let grid, frame.worldLines.count <= ViewportProjectedGrid.maximumGridLineCount else {
             throw RealityViewportSpatialBatch.exhausted()
@@ -1814,17 +2314,17 @@ final class RealityViewportSpatialResources {
         guard slotCount <= batch.limits.maxItemCount - preparedItemCount else {
             throw RealityViewportSpatialBatch.exhausted()
         }
-        var byteCount = preparedByteCount
-        var positionCount = preparedPositionCount
+        var byteCount = preparedByteCount + gridGlyphByteCount
+        var positionCount = preparedPositionCount + gridGlyphPositionCount
         func charge(_ count: Int, _ stride: Int) throws {
             let size = count.multipliedReportingOverflow(by: stride)
             let sum = byteCount.addingReportingOverflow(size.partialValue)
-            guard !size.overflow, !sum.overflow, sum.partialValue <= byteLimit else {
+            guard !size.overflow, !sum.overflow, sum.partialValue <= effectiveByteLimit else {
                 throw RealityViewportSpatialBatch.exhausted()
             }
             byteCount = sum.partialValue
         }
-        try charge(slotCount, MemoryLayout<(Entity, String)>.stride + MemoryLayout<TextComponent>.stride)
+        try charge(slotCount, MemoryLayout<(Entity, String)>.stride + MemoryLayout<ModelComponent>.stride)
         try charge(frame.worldLines.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.WorldLine>.stride + 2 * MemoryLayout<SIMD3<Float>>.stride)
         try charge(frame.screenLabels.count, MemoryLayout<ViewportProjectedGrid.NativeFrame.ScreenLabel>.stride)
         try charge(frame.screenLabels.count, MemoryLayout<(Entity, String, Transform)>.stride + MemoryLayout<Int>.stride)
@@ -1857,6 +2357,7 @@ final class RealityViewportSpatialResources {
                                bounds: vertices.count == start ? .init(min: .zero, max: .zero) : bounds))
         }
         let font = NSFont.monospacedSystemFont(ofSize: ViewportProjectedGrid.labelFontSize, weight: .semibold)
+        try admitGridGlyphs(frame.screenLabels.map(\.text), font: font)
         var text: [(Entity, String, Transform)] = []
         text.reserveCapacity(frame.screenLabels.count)
         var used = Set<Int>()
@@ -1868,19 +2369,12 @@ final class RealityViewportSpatialResources {
                 used.insert(index)
                 entity = gridLabels[index].entity
             } else {
-                let attributed = NSAttributedString(string: label.text, attributes: [
-                    .font: font, .foregroundColor: NSColor(white: 0.75, alpha: 1)
-                ])
-                let size = attributed.size()
-                guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0 else {
-                    throw RealityViewportSpatialBatch.invalid("Native grid text has invalid measured bounds.")
+                guard let resource = gridGlyphResources[label.text] else {
+                    throw CameraReadinessError.glyphsPreparing
                 }
-                var component = TextComponent()
-                component.edgeInsets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-                component.size = CGSize(width: ceil(size.width) + 2, height: ceil(size.height) + 2)
-                component.text = AttributedString(attributed)
-                entity = Entity()
-                entity.components.set(component)
+                let glyph = ModelEntity(mesh: resource, materials: [material([0.75, 0.75, 0.75, 1], depth: .annotation)])
+                recordOpticalAppearance(glyph, colors: [[0.75, 0.75, 0.75, 1]], depths: [.annotation])
+                entity = glyph
             }
             guard let worldPoint = projection.unproject(label.position, onto: frame.plane, origin: batch.renderOrigin) else {
                 throw RealityViewportSpatialBatch.invalid("Grid text cannot be placed on its coordinate plane.")
@@ -1904,7 +2398,7 @@ final class RealityViewportSpatialResources {
             }
             let normal = simd_cross(x, y)
             text.append((entity, label.text, Transform(
-                scale: .init(repeating: unitsPerPoint * 72 / 0.0254),
+                scale: .init(repeating: unitsPerPoint * 72),
                 rotation: simd_quatf(simd_float3x3(x, y, normal)),
                 translation: point + normal * unitsPerPoint
             )))
@@ -1926,7 +2420,7 @@ final class RealityViewportSpatialResources {
             let parent = referenceAnnotationRoot ?? root
             if label.parent !== parent { parent.addChild(label) }
             gridLabels.append((label, value))
-            // TextComponent's native plane uses typographic points (1/72 inch).
+            // Native glyph extrusion uses 72 authored font points per mesh unit.
             if label.transform != transform { label.transform = transform }
             if !label.isEnabled { label.isEnabled = true }
         }
@@ -2018,7 +2512,8 @@ final class RealityViewportSpatialResources {
     /// unit. Pinned by `boundsRulerLabelsDrawVisibleGlyphs`.
     private static let textPointsPerMeshUnit: CGFloat = 72
 
-    private static func textResource(_ value: String, cache: inout [String: MeshResource]) async throws -> MeshResource {
+    private static func textResource(_ value: String, cache: inout [String: MeshResource],
+                                     owner: RealityViewportSpatialResources) async throws -> MeshResource {
         try Task.checkCancellation()
         if let existing = cache[value] { return existing }
         // Shape extrusion emits one mesh unit per `textPointsPerMeshUnit`
@@ -2044,8 +2539,42 @@ final class RealityViewportSpatialResources {
         extrusion.extrusionMethod = .linear(depth: 0)
         let resource = try await MeshResource(extruding: text, extrusionOptions: extrusion)
         try Task.checkCancellation()
+        try owner.admitNativeGlyph(resource, text: value)
         cache[value] = resource
         return resource
+    }
+
+    private func admitNativeGlyph(_ resource: MeshResource, text: String) throws {
+        var positions = 0, triangles = 0, bytes = 0
+        func add(_ value: inout Int, _ amount: Int, limit: Int) throws {
+            let sum = value.addingReportingOverflow(amount)
+            guard amount >= 0, !sum.overflow, sum.partialValue <= limit else {
+                throw RealityViewportSpatialBatch.exhausted()
+            }
+            value = sum.partialValue
+        }
+        func charge(_ count: Int, stride: Int) throws {
+            let product = count.multipliedReportingOverflow(by: stride)
+            guard !product.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            try add(&bytes, product.partialValue, limit: effectiveByteLimit - preparedByteCount - gridGlyphByteCount)
+        }
+        try Self.pathParts(resource.contents) { part, _ in
+            try Task.checkCancellation()
+            guard let indices = part.triangleIndices, indices.count.isMultiple(of: 3) else {
+                throw RealityViewportSpatialBatch.invalid("Native glyph has incomplete original triangles.")
+            }
+            try add(&positions, part.positions.count,
+                limit: batch.limits.maxPositionCount - preparedPositionCount - gridGlyphPositionCount)
+            try add(&triangles, indices.count / 3,
+                limit: batch.limits.maxTriangleCount - preparedTriangleCount - gridGlyphTriangleCount)
+            try charge(part.positions.count, stride: MemoryLayout<SIMD3<Float>>.stride)
+            try charge(indices.count, stride: MemoryLayout<UInt32>.stride)
+        }
+        try charge(text.utf8.count, stride: 4)
+        try charge(1, stride: MemoryLayout<(String, MeshResource)>.stride)
+        preparedPositionCount += positions
+        preparedTriangleCount += triangles
+        preparedByteCount += bytes
     }
 
     private func root(for attachment: RealityViewportSpatialBatch.Attachment) -> Entity {
@@ -2101,37 +2630,75 @@ final class RealityViewportSpatialResources {
         return WorldGeometry(positions: positions, indices: indices, parts: parts, appearances: appearances)
     }
 
-    private func cameraProjection(camera: Entity, content: RealityViewCameraContent) -> CameraProjection? {
-        let orthographic = camera.components[OrthographicCameraComponent.self]
-        let perspective = camera.components[PerspectiveCameraComponent.self]
-        guard (orthographic != nil) != (perspective != nil) else { return nil }
-        let near: Float
-        let far: Float
-        if let orthographic { near = orthographic.near; far = orthographic.far }
-        else if let perspective { near = perspective.near; far = perspective.far }
-        else { return nil }
-        guard near.isFinite, near > 0, far > near,
-              orthographic == nil || far.isFinite else { return nil }
-        let depth = Float(min((Double(near) + Double(far)) / 2, max(Double(near) * 2, 1)))
-        let step = orthographic?.scale ?? depth
-        guard depth.isFinite, depth > 0, step.isFinite, step > 0 else { return nil }
-        func project(_ local: SIMD3<Float>) -> CGPoint? {
-            content.project(point: camera.convert(position: local, to: nil), to: .local)
+    private func updateLineRibbons(projection: CameraProjection, nativePixelsPerPoint: CGFloat?) throws {
+        func update(_ entity: ModelEntity, _ source: LowLevelMesh, lines: Int, partCount: Int) throws {
+            guard entity.isEnabled, lines > 0 else { return }
+            guard let nativePixelsPerPoint, nativePixelsPerPoint.isFinite, nativePixelsPerPoint > 0 else {
+                throw RealityViewportSpatialBatch.invalid("Native line ribbons require the actual backing pixel scale.")
+            }
+            let key = ObjectIdentifier(entity)
+            let draw: NativeLineRasterizer
+            if let existing = lineRibbonResources[key] {
+                guard existing.source === source else { throw RealityViewportSpatialBatch.invalid("Native line source identity changed.") }
+                draw = existing
+            } else {
+                let mapBytes = MemoryLayout<(ObjectIdentifier, NativeLineRasterizer)>.stride
+                var remainingBytes = effectiveByteLimit - gridGlyphByteCount - preparedByteCount - mapBytes
+                if let admission = opticalStorageAdmission {
+                    remainingBytes = min(remainingBytes, try admission.images.remainingPreparationBytes() - mapBytes)
+                }
+                draw = try NativeLineRasterizer(source: source, maximumLineCount: lines, maximumPartCount: partCount,
+                    limits: .init(maximumPositionCount: batch.limits.maxPositionCount - gridGlyphPositionCount - preparedPositionCount,
+                                  maximumTriangleCount: batch.limits.maxTriangleCount - gridGlyphTriangleCount - preparedTriangleCount,
+                                  maximumRetainedByteCount: remainingBytes))
+                preparedPositionCount += draw.positionCount
+                preparedTriangleCount += draw.triangleCount
+                preparedByteCount += draw.retainedByteCount + mapBytes
+                lineRibbonResources[key] = draw
+            }
+            try draw.stage(entity: entity, projection: projection, nativePixelsPerPoint: nativePixelsPerPoint)
         }
-        guard let a = project([0, 0, -depth]), let b = project([step, 0, -depth]),
-              let c = project([0, step, -depth]), a.x.isFinite, a.y.isFinite,
-              b.x.isFinite, b.y.isFinite, c.x.isFinite, c.y.isFinite else { return nil }
-        let mapping = CGAffineTransform(a: (b.x - a.x) / CGFloat(step), b: (b.y - a.y) / CGFloat(step),
-                                        c: (c.x - a.x) / CGFloat(step), d: (c.y - a.y) / CGFloat(step), tx: a.x, ty: a.y)
-        let determinant = mapping.a * mapping.d - mapping.b * mapping.c
-        guard determinant.isFinite, determinant != 0 else { return nil }
-        var offsetMapping = mapping
-        offsetMapping.tx = 0; offsetMapping.ty = 0
-        let transform = camera.transformMatrix(relativeTo: nil)
-        return CameraProjection(worldFromCamera: transform, cameraFromWorld: simd_inverse(transform),
-                                forward: mapping, inverseOffset: offsetMapping.inverted(),
-                                sampleDepth: depth, perspective: perspective != nil, annotationDepth: near * 1.01,
-                                near: near, far: far)
+        func visitSources(_ visit: (ModelEntity, LowLevelMesh, Int, Int) throws -> Void) throws {
+            for group in worldMeshGroups {
+                var lines = 0
+                for part in group.parts where part.topology == .line {
+                    let sum = lines.addingReportingOverflow(part.indexCount / 2)
+                    guard part.indexCount >= 0, part.indexCount.isMultiple(of: 2), !sum.overflow else {
+                        throw RealityViewportSpatialBatch.invalid("Original line capacity is invalid.")
+                    }
+                    lines = sum.partialValue
+                }
+                try visit(group.entity, group.mesh, lines, group.parts.count)
+            }
+            if let grid { try visit(grid.entity, grid.mesh, grid.mesh.indexCapacity / 2, grid.mesh.parts.count) }
+            if let gridPlacement, let gridPlacementMesh {
+                try visit(gridPlacement, gridPlacementMesh, gridPlacementMesh.indexCapacity / 2, gridPlacementMesh.parts.count)
+            }
+            for axis in axes { try visit(axis.line, axis.mesh, 1, axis.mesh.parts.count) }
+            for ruler in boundsRulers { try visit(ruler.2, ruler.3, ruler.3.indexCapacity / 2, ruler.3.parts.count) }
+            for line in cameraLines { try visit(line.0, line.1, line.1.indexCapacity / 2, line.1.parts.count) }
+        }
+        do {
+            try visitSources { entity, source, lines, count in
+                try update(entity, source, lines: lines, partCount: count)
+            }
+            try visitSources { entity, _, lines, _ in
+                guard entity.isEnabled, lines > 0, let draw = lineRibbonResources[ObjectIdentifier(entity)] else { return }
+                try draw.validateStagedFrame(entity: entity)
+            }
+            // MainActor does not suspend between validation and complete commit.
+            try visitSources { entity, _, lines, _ in
+                guard entity.isEnabled, lines > 0, let draw = lineRibbonResources[ObjectIdentifier(entity)] else { return }
+                try draw.commit(entity: entity)
+            }
+        } catch {
+            for rasterizer in lineRibbonResources.values { rasterizer.discardStagedFrame() }
+            throw error
+        }
+    }
+
+    private func cameraProjection(camera: Entity, content: RealityViewCameraContent) -> CameraProjection? {
+        NativeLineCameraProjection.capture(camera: camera, content: content)
     }
 
     private static func unitQuadCollision() async throws -> ShapeResource {

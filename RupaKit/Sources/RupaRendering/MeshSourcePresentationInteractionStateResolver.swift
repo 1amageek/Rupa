@@ -10,15 +10,19 @@ struct MeshSourcePresentationInteractionStateResolver {
     let selectedSceneNodeIDs: Set<SceneNodeID>
     let previewSceneNodeIDs: Set<SceneNodeID>
     let hoveredSceneNodeID: SceneNodeID?
+    var selectedOccurrenceIDs: Set<SceneOccurrenceID> = []
+    var previewOccurrenceIDs: Set<SceneOccurrenceID> = []
+    var hoveredOccurrenceID: SceneOccurrenceID? = nil
+    var hoveredBodyID: String? = nil
 
-    func state(for occurrenceID: SceneOccurrenceID) -> State {
+    func state(for occurrenceID: SceneOccurrenceID, sourceBodyID: String? = nil) -> State {
         guard let sceneNodeID = sceneNodeIDByOccurrenceID[occurrenceID] else {
             return .normal
         }
-        if selectedSceneNodeIDs.contains(sceneNodeID) {
+        if selectedOccurrenceIDs.contains(occurrenceID) || selectedSceneNodeIDs.contains(sceneNodeID) {
             return .selected
         }
-        if previewSceneNodeIDs.contains(sceneNodeID) || hoveredSceneNodeID == sceneNodeID {
+        if previewOccurrenceIDs.contains(occurrenceID) || previewSceneNodeIDs.contains(sceneNodeID) || (hoveredOccurrenceID == occurrenceID && (hoveredBodyID == nil || hoveredBodyID == sourceBodyID)) || hoveredSceneNodeID == sceneNodeID {
             return .hovered
         }
         return .normal

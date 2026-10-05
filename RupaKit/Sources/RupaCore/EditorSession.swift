@@ -192,7 +192,7 @@ public final class EditorSession {
     ) {
         let document = store.document
         var initialSelection = selection
-        initialSelection.pruneMissingReferences(in: document)
+        initialSelection.pruneMissingReferences(in: document, evaluation: store.currentEvaluation, generation: store.generation)
         var initialWorkspaceState = workspaceState
         initialWorkspaceState.pruneMissingReferences(in: document)
         self.transactionOwnerID = UUID()
@@ -239,7 +239,7 @@ public final class EditorSession {
             redoEntries: snapshot.commandStack.redoEntries
         )
         var restoredSelection = snapshot.selection
-        restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        restoredSelection.pruneMissingReferences(in: restoredStore.document, evaluation: restoredStore.currentEvaluation, generation: restoredStore.generation)
         var restoredWorkspaceState = snapshot.workspaceState
         restoredWorkspaceState.pruneMissingReferences(
             in: restoredStore.document,
@@ -303,7 +303,7 @@ public final class EditorSession {
             after: prepared.after.store.document
         )
         var restoredSelection = prepared.after.selection
-        restoredSelection.pruneMissingReferences(in: restoredStore.document)
+        restoredSelection.pruneMissingReferences(in: restoredStore.document, evaluation: restoredStore.currentEvaluation, generation: restoredStore.generation)
         var restoredWorkspaceState = prepared.after.workspaceState
         restoredWorkspaceState.pruneMissingReferences(
             in: restoredStore.document,
@@ -644,7 +644,7 @@ public final class EditorSession {
                 in: store,
                 expectedGeneration: expectedGeneration
             )
-            selection.pruneMissingReferences(in: document)
+            selection.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             workspaceState.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             return result
         }
@@ -685,7 +685,7 @@ public final class EditorSession {
                 using: applier,
                 in: store
             )
-            selection.pruneMissingReferences(in: document)
+            selection.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             workspaceState.pruneMissingReferences(in: document, evaluation: currentEvaluation, generation: generation)
             return result
         }

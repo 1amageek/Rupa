@@ -15,38 +15,45 @@ struct WorkspaceSelectionTargetResolver {
         guard let sceneNodeID = sceneNodeID(for: hit) else {
             return nil
         }
+        func boundTarget(_ component: SelectionComponent) -> SelectionTarget? {
+            let target = SelectionTarget(sceneNodeID: sceneNodeID, component: component,
+                occurrenceID: hit.occurrenceID, sourceSceneNodeID: hit.sourceSceneNodeID,
+                sourceFeatureID: hit.sourceFeatureID, sourceBodyID: component == .object ? nil : hit.sourceBodyID)
+            do { _ = try OriginalOccurrenceSelectionResolver(document: document).resolve(target); return target }
+            catch { return nil }
+        }
         if let component = directSelectionComponent(for: hit) {
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         }
 
         switch selectionScope {
         case .object:
-            return SelectionTarget(sceneNodeID: sceneNodeID)
+            return boundTarget(.object)
         case .face:
             guard let component = faceSelectionComponent(for: hit, sceneNodeID: sceneNodeID) else {
                 return nil
             }
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         case .edge:
             guard let component = edgeSelectionComponent(for: hit, sceneNodeID: sceneNodeID) else {
                 return nil
             }
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         case .vertex:
             guard let component = directSelectionComponent(for: hit) else {
                 return nil
             }
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         case .region:
             guard let component = directSelectionComponent(for: hit) else {
                 return nil
             }
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         case .sketchEntity:
             guard let component = sketchEntitySelectionComponent(for: hit) else {
                 return nil
             }
-            return SelectionTarget(sceneNodeID: sceneNodeID, component: component)
+            return boundTarget(component)
         }
     }
 
@@ -291,10 +298,8 @@ struct WorkspaceSelectionTargetResolver {
         var targets: [SelectionTarget] = []
         var seenTargets: Set<SelectionTarget> = []
         for hit in hits {
-            guard let id = sceneNodeID(for: hit) else {
-                continue
-            }
-            let target = SelectionTarget(sceneNodeID: id)
+            guard var target = selectionTarget(for: hit) else { continue }
+            target.component = .object
             guard seenTargets.insert(target).inserted else {
                 continue
             }

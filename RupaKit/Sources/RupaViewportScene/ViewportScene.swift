@@ -1,3 +1,4 @@
+import Foundation
 import RupaCoreTypes
 import CoreGraphics
 import RupaCore
@@ -505,17 +506,20 @@ public struct ViewportBodyTopology: Equatable, Sendable {
     public var edges: [Edge]
     public var vertices: [Vertex]
     public var meshFaceRuns: [MeshFaceRun]
+    public var selectionBinding: OriginalMeshSelectionBinding?
 
     public init(
         faces: [Face] = [],
         edges: [Edge] = [],
         vertices: [Vertex] = [],
-        meshFaceRuns: [MeshFaceRun] = []
+        meshFaceRuns: [MeshFaceRun] = [],
+        selectionBinding: OriginalMeshSelectionBinding? = nil
     ) {
         self.faces = faces
         self.edges = edges
         self.vertices = vertices
         self.meshFaceRuns = meshFaceRuns
+        self.selectionBinding = selectionBinding
     }
 
     /// The prepared CAD sub-shape of the triangle the native frame hit.
@@ -532,10 +536,54 @@ public struct ViewportBodyTopology: Equatable, Sendable {
     /// evaluation gave no stable sub-shape identity, so there is no CAD name to
     /// select. It is never a substituted neighbouring face.
     public func componentID(forTriangle index: Int) -> SelectionComponentID? {
-        for run in meshFaceRuns where run.triangleRange.contains(index) {
-            return run.componentID
+        guard index >= 0 else { return nil }
+        var result: SelectionComponentID?
+        for run in meshFaceRuns {
+            guard run.triangleRange.lowerBound >= 0, !run.triangleRange.isEmpty else { return nil }
+            if run.triangleRange.contains(index) {
+                guard result == nil else { return nil }
+                result = run.componentID
+            }
         }
-        return nil
+        return result
+    }
+
+    /// Preserves malformed provenance as failure instead of answering with an arbitrary face.
+    public func validatedComponentID(forTriangle index: Int) throws -> SelectionComponentID? {
+        guard index >= 0 else {
+            throw EditorError(code: .referenceUnresolved, message: "Drawn CAD triangle identity is negative.")
+        }
+        var result: SelectionComponentID?
+        for run in meshFaceRuns {
+            guard run.triangleRange.lowerBound >= 0, !run.triangleRange.isEmpty else {
+                throw EditorError(code: .referenceUnresolved, message: "CAD face-run range is malformed.")
+            }
+            if run.triangleRange.contains(index) {
+                guard result == nil else {
+                    throw EditorError(code: .referenceUnresolved, message: "Drawn CAD triangle has more than one face owner.")
+                }
+                result = run.componentID
+            }
+        }
+        if let selectionBinding {
+            let original = try selectionBinding.componentID(forTriangle: index)
+            guard result == original else {
+                throw EditorError(code: .referenceUnresolved,
+                    message: "Drawn triangle application identity differs from its original B-rep snapshot.")
+            }
+        } else if result?.generatedTopologySubshapeID != nil {
+            throw EditorError(code: .referenceUnresolved,
+                message: "Generated CAD triangle has no retained original selection authority.")
+        }
+        return result
+    }
+
+    public func validateCurrentEvaluation(_ current: EvaluatedDocument) throws {
+        guard let selectionBinding else {
+            throw EditorError(code: .referenceUnresolved,
+                message: "CAD topology has no retained original selection authority.")
+        }
+        try selectionBinding.validateCurrentEvaluation(current)
     }
 
     public struct Face: Equatable, Sendable {
@@ -611,7 +659,7 @@ public struct ViewportBodyTopology: Equatable, Sendable {
 }
 
 extension ViewportBodyTopology {
-    init(_ topology: BodyDisplaySnapshot.Topology) {
+    init(_ topology: BodyDisplaySnapshot.Topology, selectionBinding: OriginalMeshSelectionBinding? = nil) {
         self.init(
             faces: topology.faces.map { face in
                 ViewportBodyTopology.Face(
@@ -643,6 +691,7 @@ extension ViewportBodyTopology {
                 )
             }
         )
+        self.selectionBinding = selectionBinding
     }
 }
 
@@ -681,9 +730,15 @@ public struct ViewportCylinderComponent: Equatable, Sendable {
 }
 
 public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
+    public var sourceBodyID: BodyID? {
+        guard case let .body(component) = kind, let raw = component.bodyID,
+              let uuid = UUID(uuidString: raw) else { return nil }
+        return BodyID(uuid)
+    }
     public var id: String
     public var featureID: FeatureID
     public var sceneNodeID: SceneNodeID?
+    public var sourceSceneNodeID: SceneNodeID?
     public var occurrenceID: SceneOccurrenceID?
     public var componentInstanceID: ComponentInstanceID?
     public var sourceFeatureID: FeatureID?
@@ -696,6 +751,7 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
         id: String,
         featureID: FeatureID,
         sceneNodeID: SceneNodeID? = nil,
+        sourceSceneNodeID: SceneNodeID? = nil,
         occurrenceID: SceneOccurrenceID? = nil,
         componentInstanceID: ComponentInstanceID? = nil,
         sourceFeatureID: FeatureID? = nil,
@@ -707,6 +763,7 @@ public struct ViewportSceneItem: Equatable, Identifiable, Sendable {
         self.id = id
         self.featureID = featureID
         self.sceneNodeID = sceneNodeID
+        self.sourceSceneNodeID = sourceSceneNodeID
         self.occurrenceID = occurrenceID
         self.componentInstanceID = componentInstanceID
         self.sourceFeatureID = sourceFeatureID
@@ -730,9 +787,11 @@ public struct ViewportScene: Equatable, Sendable {
     private struct Lookup: Sendable {
         var bySceneNodeID: [SceneNodeID: Int] = [:]
         var byFeatureID: [FeatureID: Int] = [:]
+        var byOccurrenceID: [SceneOccurrenceID: [Int]] = [:]
 
         init(_ items: [ViewportSceneItem]) {
             for (index, item) in items.enumerated() {
+                if let occurrence = item.occurrenceID { byOccurrenceID[occurrence, default: []].append(index) }
                 if let sceneNodeID = item.sceneNodeID, bySceneNodeID[sceneNodeID] == nil {
                     bySceneNodeID[sceneNodeID] = index
                 }
@@ -761,6 +820,19 @@ public struct ViewportScene: Equatable, Sendable {
     /// The first item of `featureID`, as `items.first { $0.featureID == featureID }`.
     public func firstItem(featureID: FeatureID) -> ViewportSceneItem? {
         lookup.byFeatureID[featureID].map { items[$0] }
+    }
+
+    public func item(for target: SelectionTarget) -> ViewportSceneItem? {
+        if let occurrence = target.occurrenceID {
+            guard let indices = lookup.byOccurrenceID[occurrence],
+                  let index = indices.first(where: { target.sourceBodyID == nil || items[$0].sourceBodyID == target.sourceBodyID }) else { return nil }
+            let item = items[index]
+            guard item.sceneNodeID == target.sceneNodeID,
+                  item.sourceSceneNodeID == target.sourceSceneNodeID,
+                  target.sourceFeatureID == nil || target.sourceFeatureID == (item.sourceFeatureID ?? item.featureID) else { return nil }
+            return item
+        }
+        return firstItem(sceneNodeID: target.sceneNodeID)
     }
 
     public var modelBounds: CGRect? {
@@ -2690,6 +2762,10 @@ public struct ViewportSceneContext {
 public struct ViewportHit: Equatable, Sendable {
     public var featureID: FeatureID
     public var sceneNodeID: SceneNodeID?
+    public var occurrenceID: SceneOccurrenceID?
+    public var sourceSceneNodeID: SceneNodeID?
+    public var sourceFeatureID: FeatureID?
+    public var sourceBodyID: BodyID?
     public var kind: ViewportSelectableKind
     public var sketchEntityID: SketchEntityID?
     public var sketchPointHandle: SketchEntityPointHandle?
@@ -2703,6 +2779,10 @@ public struct ViewportHit: Equatable, Sendable {
         featureID: FeatureID,
         sceneNodeID: SceneNodeID? = nil,
         kind: ViewportSelectableKind,
+        occurrenceID: SceneOccurrenceID? = nil,
+        sourceSceneNodeID: SceneNodeID? = nil,
+        sourceFeatureID: FeatureID? = nil,
+        sourceBodyID: BodyID? = nil,
         sketchEntityID: SketchEntityID? = nil,
         sketchPointHandle: SketchEntityPointHandle? = nil,
         sketchControlPointIndex: Int? = nil,
@@ -2714,6 +2794,10 @@ public struct ViewportHit: Equatable, Sendable {
         self.featureID = featureID
         self.sceneNodeID = sceneNodeID
         self.kind = kind
+        self.occurrenceID = occurrenceID
+        self.sourceSceneNodeID = sourceSceneNodeID
+        self.sourceFeatureID = sourceFeatureID
+        self.sourceBodyID = sourceBodyID
         self.sketchEntityID = sketchEntityID
         self.sketchPointHandle = sketchPointHandle
         self.sketchControlPointIndex = sketchControlPointIndex

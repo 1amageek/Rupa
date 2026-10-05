@@ -98,6 +98,23 @@ struct CADTessellationAdmission {
         return universal
     }
 
+    /// Charges retained provider output records under the same invocation allowance.
+    mutating func admitPartMetadata(_ bytes: Int) throws {
+        guard bytes >= 0 else {
+            throw CADIntegrationError(code: .resourceExhausted, message: "Output-part metadata byte count is invalid.")
+        }
+        var usage = MeshResourceUsage.zero
+        usage.byteCount = bytes
+        let total: MeshResourceUsage
+        do { total = try usedUniversal.adding(usage) }
+        catch { throw CADIntegrationError(code: .resourceExhausted, message: "Output-part metadata size is not representable.") }
+        if let exceeded = firstResourceExceeded(total) {
+            throw CADIntegrationError(code: .resourceExhausted,
+                message: "Original output-part metadata exceeds the same invocation \(exceeded.rawValue) allowance.")
+        }
+        usedUniversal = total
+    }
+
     /// Returns the kernel ceiling remaining before the next fresh source evaluation.
     ///
     /// Kernel limits are per evaluator invocation, while this admission spans all

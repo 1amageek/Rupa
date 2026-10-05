@@ -16,9 +16,9 @@ struct WorkspaceObjectShapeInspectorStateBuilder {
                     message: "The object source is unavailable.")
             }
             var bounds = snapshot.viewport.items.first {
-                snapshot.sceneNodeID(for: $0.id) == node.id
+                snapshot.sceneNodeID(for: $0.occurrenceID) == node.id
             }?.worldBounds
-            for item in snapshot.viewport.items where snapshot.sceneNodeID(for: item.id) == node.id {
+            for item in snapshot.viewport.items where snapshot.sceneNodeID(for: item.occurrenceID) == node.id {
                 guard var aggregate = bounds else { continue }
                 aggregate.minimum.x = min(aggregate.minimum.x, item.worldBounds.minimum.x)
                 aggregate.minimum.y = min(aggregate.minimum.y, item.worldBounds.minimum.y)

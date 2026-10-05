@@ -75,7 +75,7 @@ extension ViewportSpatialOverlayProducer {
     static func dialogCurveFrame(
         _ anchor: ViewportDialogValueHandle.Anchor, target: SelectionTarget, in scene: ViewportScene
     ) throws -> (point: Point3D, tangent: Vector3D, across: Vector3D, length: Double)? {
-        guard let item = scene.firstItem(sceneNodeID: target.sceneNodeID) else { return nil }
+        guard let item = scene.item(for: target) else { return nil }
         var local: [Point3D]
         switch (item.kind, target.component) {
         case (.curve(let component), _):

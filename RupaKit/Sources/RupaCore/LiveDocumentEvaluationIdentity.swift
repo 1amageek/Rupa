@@ -1,6 +1,7 @@
 import SwiftCAD
 
 struct LiveDocumentEvaluationIdentity: Sendable, Equatable {
+    private let sourceDocument: CADDocument
     var documentID: DocumentID
     var schemaVersion: SchemaVersion
     var units: UnitSystem
@@ -8,6 +9,7 @@ struct LiveDocumentEvaluationIdentity: Sendable, Equatable {
     var parameterRevision: DocumentRevision
 
     init(document: CADDocument) {
+        sourceDocument = document
         documentID = document.id
         schemaVersion = document.schemaVersion
         units = document.units
@@ -21,5 +23,6 @@ struct LiveDocumentEvaluationIdentity: Sendable, Equatable {
             && units == document.units
             && designRevision == document.designGraph.revision
             && parameterRevision == document.parameters.revision
+            && sourceDocument == document
     }
 }

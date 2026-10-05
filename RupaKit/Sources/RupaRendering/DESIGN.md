@@ -2935,3 +2935,56 @@ provenance, resource limits, or native RealityKit availability require checking
 the parent package/system designs, `RealityViewport`, `ViewportMeasurement`,
 and the application composition. RK-5 owned removal of the remaining
 migration-only routes; no CPU or offscreen test implies that removal.
+
+Native CAD face pointer and rectangle resolution use the fallible viewport
+FaceRun provenance lookup. Malformed/overlapping runs propagate typed failure
+through the existing input boundary; no first-owner choice or deselection
+substitute is published. Core admits complete current CAD source equality.
+
+## Optical Volume Transport Composition
+
+[OpticalVolumeTransport](OpticalVolumeTransport/DESIGN.md) is a direct child.
+It owns authored finite thickness/transmission throughput using the native
+postprocess effect and admitted mounted-scene inputs. RealityViewport owns scene,
+camera and effect publication; ViewportSurface owns native blend opacity. For
+positive thickness and transmission, displayedOpacity is authored opacity:
+volume throughput must be applied by the optical owner exactly once. Thin
+transmitting surfaces retain the existing transparent presentation factor.
+Actual Metal execution and native update evidence follow the source gate.
+
+### Current original mesh selection admission
+
+Exact CAD presentation admission compares the displayed universal source's
+positions, source-order triangular faces and corner vertex identities with the
+current evaluated body's original mesh. Identity strings alone do not grant CAD
+affordances. Every mounted pointer and rectangle topology query then checks its
+retained selection binding against a complete source-matching current evaluation.
+Missing, stale, cancelled and mismatched inputs refuse selection explicitly.
+The universal buffers are borrowed without intermediate mesh materialization.
+
+Occurrence admission retains one index of the current original scene hierarchy
+per project publication. Presented occurrence ID, selection owner, actual source
+node, visibility and complete affine world matrix must all agree. Component
+instances resolve their original source body node rather than treating the
+instance container as the CAD body. A foreign prepared metadata index fails.
+Mesh-source identity and current generation remain independent admission checks.
+
+ViewportCanvasBackground owns the exact constant/theme or authored custom canvas
+color used by both SwiftUI background and optical capture. The encoded sRGB color
+and straight linear radiance share one producer; no environment image or generated
+lighting substitute is introduced. Alpha remains authored. A partially transparent
+canvas does not authorize a fabricated opaque backing color.
+
+## Native Line Rasterization
+
+[NativeLineRasterizer](NativeLineRasterizer/DESIGN.md) owns the actual one-pixel ribbon buffer used by both native drawing and optical capture. SpatialResources and body-wire callers retain original source meshes and charge their remaining aggregate resource allowance before service allocation.
+
+### Multi-body presentation identity
+
+The render plan retains separate presentationID and original occurrenceID
+for each body part, with its original provider BodyID/feature/role witnesses.
+Native resource dictionaries use presentationID; navigation and object
+selection use the original occurrence. Face hits retain the BodyID witness
+and original triangle ordinal. Current B-rep admission compares that exact
+body mesh and complete current source/configuration before enabling CAD
+affordances. Multiple original bodies may share one feature and occurrence.

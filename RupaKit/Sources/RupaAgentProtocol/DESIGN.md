@@ -203,3 +203,10 @@ explicit UUID and revision fields, malformed/non-finite rejection, exact
 method/response compatibility, and bounded response planning for list/state/
 execution receipts. They cover both lens modes, strict field-of-view pairing,
 `setProjection` round trips, and exact non-default perspective state projection.
+
+### Original viewport output parts
+
+AgentProjectViewportItem preserves original occurrenceID and optionally
+retains presentationID, sourceBodyID, sourceFeatureID and outputRole.
+The original occurrence may have multiple body item records; presentationID
+uniquely identifies those records. Legacy payloads omit optional witnesses.

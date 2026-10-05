@@ -6,6 +6,10 @@ import RupaProjectModel
 /// A geometry-buffer-free summary of one item visible in the published viewport.
 public struct AgentProjectViewportItem: Codable, Equatable, Sendable {
     public let occurrenceID: SceneOccurrenceID
+    public let presentationID: SceneOccurrenceID?
+    public let sourceBodyID: String?
+    public let sourceFeatureID: String?
+    public let outputRole: String?
     public let sceneNodeID: SceneNodeID
     public let definitionID: ObjectDefinitionID
     public let displayName: String
@@ -30,9 +34,15 @@ public struct AgentProjectViewportItem: Codable, Equatable, Sendable {
         vertexCount: UInt64,
         faceCount: UInt64,
         cornerCount: UInt64,
-        triangleCount: UInt64
+        triangleCount: UInt64,
+        presentationID: SceneOccurrenceID? = nil,
+        sourceBodyID: String? = nil, sourceFeatureID: String? = nil, outputRole: String? = nil
     ) {
         self.occurrenceID = occurrenceID
+        self.presentationID = presentationID
+        self.sourceBodyID = sourceBodyID
+        self.sourceFeatureID = sourceFeatureID
+        self.outputRole = outputRole
         self.sceneNodeID = sceneNodeID
         self.definitionID = definitionID
         self.displayName = displayName

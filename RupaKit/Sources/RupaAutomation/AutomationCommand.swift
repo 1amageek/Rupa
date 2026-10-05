@@ -13,6 +13,8 @@ public indirect enum AutomationCommand: Codable, Equatable, Sendable {
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
     case generateDrawingProjection(query: DrawingProjectionQuery)
+    case generateDrawingPage(request: DrawingPageAutomationRequest)
+    case exportDrawingPage(request: DrawingPageAutomationRequest, to: URL)
     case generateDrawingProjectionFromView(
         savedView: SavedView,
         toleranceMeters: Double?,

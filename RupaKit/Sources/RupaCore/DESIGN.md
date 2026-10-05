@@ -37,6 +37,14 @@ does not re-derive or approximate kernel geometry. The owner of each geometric
 capability and the migrations still in progress are recorded in the
 [system kernel/application boundary](../../../DESIGN.md#kernel-and-application-boundary).
 
+`TopologySnapshotService` borrows the current evaluated geometry and preserves
+each original curve/surface family in its display summary. It exposes primitive
+center/radius metadata only from an actual authored primitive or an admitted
+retained rigid primitive transform. Parameter charts, spatial words, corrections
+and drafted sources retain generic original-family labels and directly known raw
+structure; construction nets and edge midpoints do not become primitive geometry.
+Drawing measurements consume the kernel's original geometric receipt separately.
+
 Revolve source creation consumes the shared section reference and explicit body
 kind. Its transaction preserves the source and commits the feature, section
 provenance and matching Solid/Surface object metadata together. Curve sections
@@ -605,6 +613,32 @@ unique copy to satisfy a single scene selection.
 
 ## Contracts and Invariants
 
+### Native CAD identity canonical text
+
+`SceneNodeID`, component definition/instance IDs, construction-plane IDs and
+export-preset IDs use SwiftCAD's `TaggedID`; `MaterialID` forwards the same
+CAD identity contract. Their `description` is the existing uppercase 36-byte
+hyphenated UUID spelling. Consumers use that public text contract rather than
+assuming `rawValue` is Foundation.UUID. Both the old UUID-backed and portable
+128-bit backing preserve the same bits, Native Codable wire, string ordering
+and canonical spelling; this boundary adds no parsing, identity generation or
+Native UUID adapter.
+
+`ProjectionDependencyIdentityBuilder` uses that text for scene/component/plane/
+material ordering and scene-reference keys. Its payload, sorted-key encoding,
+SHA-256 signature, dependency closure and failure meanings remain unchanged.
+`DocumentExportService` uses the same text in the missing-preset diagnostic;
+the same commandInvalid failure occurs before evaluation or staging. Rupa's
+independent `TopologyMaterialBinding.ID` and `SemanticExtensionID` UUID wrappers
+retain their existing UUID representation and are not CAD TaggedID consumers.
+
+`ProjectionDependencyIdentityTests` verifies Native literal identity wire and
+insertion-independent source-reference fingerprints alongside the existing
+dependency-scope tests. The missing-preset fixture in
+`ProjectAgentCommandControllerTests` verifies the exact canonical diagnostic.
+Verification must compile and execute against the intended frozen SwiftCAD
+dependency; source migration alone is not integrated App success.
+
 Extrude section authoring routes profile and curve inputs through the same
 transaction in `DesignDocument+Solid`. The source reference determines the input
 port and retained object provenance. Curve sheets never enter primitive profile
@@ -903,6 +937,18 @@ identity, input or projective substitute; a non-finite input maps to a
 non-finite output, which the consuming boundary rejects. Viewport items and
 interaction records hold `ScenePlacement`, never a raw `Transform3D`, so no
 presentation mapping can run on an unvalidated matrix.
+
+Drawing consumers use `resolvedOriginalOccurrences` and retain each occurrence's
+`originalTransformFactors` in actual
+application order. The source node/root-placement factor is followed by the
+original component-instance prefix and the retained original parent factors.
+Numeric local/world matrices remain display candidates; original drawing
+geometry must not promote their rounded composition into source coefficients.
+The added immutable factors preserve all original identities and nested expansion
+without changing viewport transforms or visibility. Legacy `resolvedOccurrences`
+retains no new factor arrays, preserving the native viewport allocation path.
+Deferred evidence covers
+nested instance/root/parent order and cancellation/stale source publication.
 
 `SceneNodeHierarchy` also resolves component expansion. Each resolved occurrence
 retains its source node, selectable outer instance node, parent occurrence, local
@@ -2816,3 +2862,54 @@ persists its root-content placements; ProductMetadata upgrades legacy definition
 on construction/decoding, and SceneNodeHierarchy composes the owned baseline when
 expanding instances. Scene placement commands edit individual nodes. All consumers
 of definition content (copy, realization and array identity) use that baseline.
+
+### Original drawing geometry integration
+
+[DrawingGeometry](DrawingGeometry/DESIGN.md) owns saved-view admission for the
+retained B-rep edge projection entry. Full visibility, scene occurrence, section
+material and page publication remain required; legacy mesh strokes do not prove
+D1/D2 geometric drawing completion.
+
+## Live Evaluation Source Admission
+
+LiveDocumentEvaluationIdentity retains the complete immutable CADDocument value.
+Generation, document ID and graph/parameter revisions are cheap rejection keys,
+not proof that original geometry, Foundation references, independent shapes or
+product attachments stayed unchanged. Context/cache admission also compares
+the supplied current source to the actual evaluated and validated document.
+A same-generation, same-revision source mutation is therefore rejected before
+Mesh or stable topology is exposed. Copy-on-write source buffers are retained;
+no serialization or source hashing is performed per pointer query. Scene
+occurrence placement and mounted frame identity remain rendering-owned.
+
+Committed/restored EditorSession selection pruning supplies the current exact
+evaluation and generation. Generated runtime face/edge/vertex identities must
+still exist with the selected topology kind in that admitted evaluation. An
+old name removed by an edit is cleared together with hover before publication;
+placed component identity remains owned by the original SelectionTarget and
+existing component-definition compatibility check. Symbolic document attributes
+and long-lived dimension references are not deleted by runtime target pruning.
+
+[OriginalMassProperties](OriginalMassProperties/DESIGN.md) owns public composition
+of original solid mass properties for explicit placed scene occurrences. Density
+is a physical source property; appearance materials do not supply guessed
+physical density. The service consumes the kernel's moment enclosures.
+
+BodyDisplaySnapshot.Mesh retains immutable original selection authority in its
+runtime storage. BodyDisplaySnapshotService constructs it from the same actual
+evaluation and propagates malformed provenance as failure. Native mesh codecs
+serialize only geometry; a decoded mesh cannot grant original CAD authority
+until rebuilt from the current evaluation. See [Original Mesh Selection](OriginalMeshSelection/DESIGN.md).
+
+## Original Occurrence Selection
+
+[OriginalOccurrenceSelection](OriginalOccurrenceSelection/DESIGN.md) owns the original occurrence/source-body identity retained in SelectionTarget; node-only authoring selection remains compatible.
+
+### Complete evaluated body display parts
+
+BodyDisplaySnapshotService.bodySnapshots returns every distinct original
+BodyID per generating feature in deterministic order. Each topology contains
+only faces/edges/vertices incident to that body, with original per-body mesh
+face runs and sealed current-source selection binding. The legacy feature
+map is a primary-part convenience, not complete display authority. Scene
+composition expands all parts before applying original occurrence placements.

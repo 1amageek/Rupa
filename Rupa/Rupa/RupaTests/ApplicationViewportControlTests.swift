@@ -117,6 +117,24 @@ func applicationViewportControlTargetsOneMountedWindowAndNeverPublishesProjectSt
     #expect(perspective.zoomFactor == applied.zoomFactor)
     #expect(perspective.orientation == applied.orientation)
     #expect(try second.snapshot().camera.projection == .parallel)
+
+    let displayed = try registry.execute(
+        sessionID: sessionID, viewportID: first.id.rawValue,
+        expectedRevision: parallel.revision, operation: .setDisplayMode(.normals)
+    )
+    #expect(displayed.displayMode == .normals)
+    #expect(try first.snapshot().displayMode == .normals)
+    let styled = try first.perform(.setShading(ViewportShading(
+        style: .flat,
+        solidColor: .single(ColorRGBA(r: 0.2, g: 0.4, b: 0.8, a: 1)),
+        background: .custom(ColorRGBA(r: 0.05, g: 0.05, b: 0.08, a: 1))
+    )))
+    #expect(styled.shading.style == .flat)
+    #expect(styled.shading.solidColor == .single(ColorRGBA(r: 0.2, g: 0.4, b: 0.8, a: 1)))
+    #expect(styled.shading.background == .custom(ColorRGBA(r: 0.05, g: 0.05, b: 0.08, a: 1)))
+    #expect(coordinator.snapshot?.authorityCoordinate == before.authorityCoordinate)
+    #expect(coordinator.snapshot?.isDirty == before.isDirty)
+
     _ = try first.perform(.setProjection(.perspective(fieldOfViewRadians: 0.9)))
     let custom = try registry.state(sessionID: sessionID, viewportID: first.id.rawValue)
     #expect(try registry.execute(

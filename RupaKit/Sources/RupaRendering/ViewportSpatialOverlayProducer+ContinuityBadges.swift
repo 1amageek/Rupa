@@ -20,7 +20,7 @@ extension ViewportSpatialOverlayProducer {
             try Task.checkCancellation()
             // A boundary the drawn scene does not have (a preview that rebuilt its body) has no
             // place to draw a badge at; the dialog still lists its continuity.
-            guard let item = scene.firstItem(sceneNodeID: badge.target.sceneNodeID) else { continue }
+            guard let item = scene.item(for: badge.target) else { continue }
             let points: [Point3D]
             switch (item.kind, badge.target.component) {
             case (.body(let component), .edge(let componentID)):

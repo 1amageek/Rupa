@@ -189,8 +189,8 @@ public struct CADGeometryExchange: Sendable {
         }
     }
 
-    /// Resolves an output coordinate using the same direct-body or unique
-    /// feature-body semantics as the CAD source provider.
+    /// Legacy single-body lookup. Complete provider/presentation routes use resolvedBodyIDs.
+    @available(*, deprecated, message: "Use resolvedBodyIDs for complete original output parts.")
     package static func resolvedBodyID(
         outputID: String,
         in evaluatedDocument: EvaluatedDocument
@@ -218,6 +218,21 @@ public struct CADGeometryExchange: Sendable {
             return nil
         }
         return uniqueBodyIDs.first
+    }
+
+    /// The complete original body set of an output, in deterministic order.
+    package static func resolvedBodyIDs(outputID: String, in evaluated: EvaluatedDocument) -> [BodyID] {
+        guard let uuid = UUID(uuidString: outputID) else { return [] }
+        let direct = BodyID(uuid)
+        if evaluated.brep.bodies[direct] != nil { return [direct] }
+        let feature = FeatureID(uuid)
+        var bodies: Set<BodyID> = []
+        for (identity, reference) in evaluated.subshapes.entries {
+            guard identity.featureID == feature, case let .body(body) = reference,
+                  evaluated.brep.bodies[body] != nil else { continue }
+            bodies.insert(body)
+        }
+        return bodies.sorted()
     }
 
     private func validate(

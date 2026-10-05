@@ -68,7 +68,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                     message: "Geometry evaluation produced no result for a referenced source."
                 )
             }
-            let worldBounds = try result.localBounds.transformed(by: worldTransform)
+            let worldBounds = try aggregateWorldBounds(result.parts, transform: worldTransform)
             evaluated[occurrenceID] = EvaluatedOccurrenceSnapshot(
                 occurrenceID: occurrenceID,
                 definitionID: occurrence.definitionID,
@@ -77,7 +77,8 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                 mesh: result.mesh,
                 copyTelemetry: result.copyTelemetry,
                 worldTransform: worldTransform,
-                worldBounds: worldBounds
+                worldBounds: worldBounds,
+                parts: result.parts
             )
         }
 
@@ -90,7 +91,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         var copyTelemetry = GeometryCopyTelemetry()
         for result in resultsByReference.values {
             try Task.checkCancellation()
-            try copyTelemetry.record(contentsOf: result.copyTelemetry)
+            for part in result.parts { try copyTelemetry.record(contentsOf: part.copyTelemetry) }
         }
         try Task.checkCancellation()
         return EvaluatedProjectSnapshot(
@@ -179,9 +180,14 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         from providerID: String,
         against budget: inout EvaluationBudget
     ) throws {
+        for part in result.parts {
+        try Task.checkCancellation()
+        var metadata = MeshResourceUsage.zero
+        metadata.byteCount = try part.metadataByteCount()
+        try budget.charge(metadata)
         let usage: MeshResourceUsage
         do {
-            usage = try result.mesh.resourceUsage()
+            usage = try part.mesh.resourceUsage()
         } catch {
             throw EvaluationError(
                 code: .invalidResult,
@@ -189,6 +195,23 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
             )
         }
         try budget.charge(usage)
+        }
+    }
+
+    private func aggregateWorldBounds(_ parts: [GeometryEvaluationPart], transform: GeometryTransform3D) throws -> GeometryBounds3D {
+        guard let first = parts.first else {
+            throw EvaluationError(code: .invalidResult, message: "Geometry outputs must contain an original part.")
+        }
+        let initial = try first.localBounds.transformed(by: transform)
+        var minimum = initial.minimum
+        var maximum = initial.maximum
+        for part in parts.dropFirst() {
+            try Task.checkCancellation()
+            let bounds = try part.localBounds.transformed(by: transform)
+            minimum.x = min(minimum.x, bounds.minimum.x); minimum.y = min(minimum.y, bounds.minimum.y); minimum.z = min(minimum.z, bounds.minimum.z)
+            maximum.x = max(maximum.x, bounds.maximum.x); maximum.y = max(maximum.y, bounds.maximum.y); maximum.z = max(maximum.z, bounds.maximum.z)
+        }
+        return try GeometryBounds3D(minimum: minimum, maximum: maximum)
     }
 
     private func selectedRepresentation(
@@ -228,9 +251,23 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
         }
         for result in results.values {
             try Task.checkCancellation()
+            guard result.parts.isEmpty == false else {
+                throw EvaluationError(code: .invalidResult, message: "Geometry output has no original parts.")
+            }
+            var bodyIDs: Set<String> = []
+            for part in result.parts {
+            try Task.checkCancellation()
+            if let bodyID = part.sourceBodyID {
+                guard bodyID.isEmpty == false, part.sourceFeatureID?.isEmpty == false,
+                      part.outputRole?.isEmpty == false, bodyIDs.insert(bodyID).inserted else {
+                    throw EvaluationError(code: .invalidResult, message: "Geometry output body provenance is missing or duplicated.")
+                }
+            } else if result.parts.count != 1 || part.sourceFeatureID != nil || part.outputRole != nil {
+                throw EvaluationError(code: .invalidResult, message: "Multiple geometry outputs require original body witnesses.")
+            }
             do {
-                try result.mesh.validate()
-                guard try result.mesh.bounds() == result.localBounds else {
+                try part.mesh.validate()
+                guard try part.mesh.bounds() == part.localBounds else {
                     throw EvaluationError(
                         code: .invalidResult,
                         message: "Geometry evaluation provider \(providerID) returned bounds that do not match its mesh."
@@ -243,6 +280,7 @@ public struct ProjectEvaluationEngine: ProjectEvaluating {
                     code: .invalidResult,
                     message: "Geometry evaluation provider \(providerID) returned invalid mesh data: \(error)"
                 )
+            }
             }
         }
     }

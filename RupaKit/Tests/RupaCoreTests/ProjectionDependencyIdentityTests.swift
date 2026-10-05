@@ -4,6 +4,55 @@ import Testing
 @testable import RupaCore
 
 @Test(.timeLimit(.minutes(1)))
+func projectionDependencyIdentityKeepsNativeCanonicalSceneKeysAndInsertionIndependence() throws {
+    let lower = SceneNodeID(UUID(uuid: (
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x46, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xF0
+    )))
+    let upper = SceneNodeID(UUID(uuid: (
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x46, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
+    )))
+    #expect(lower.description == "00112233-4455-4677-8899-AABBCCDDEEF0")
+    #expect(upper.description == "00112233-4455-4677-8899-AABBCCDDEEFF")
+    #expect(try JSONDecoder().decode(String.self, from: JSONEncoder().encode(lower))
+        == "00112233-4455-4677-8899-AABBCCDDEEF0")
+    var document = DesignDocument.empty(named: "Canonical Scene Keys")
+    document.productMetadata.sceneNodes = [
+        upper: SceneNode(id: upper, name: "Upper"),
+        lower: SceneNode(id: lower, name: "Lower"),
+    ]
+    document.productMetadata.rootSceneNodeIDs = [upper, lower]
+    var envelope = SemanticExtensionEnvelope(
+        namespace: "fixture.canonical-scene",
+        schemaVersion: SemanticSchemaVersion(major: 0, minor: 1, patch: 0),
+        payload: .object(["root": .bool(true)]),
+        projection: ProjectionManifest(
+            semanticEntities: [.init(id: "root", ownership: .classified,
+                sourcePaths: [SemanticPayloadPath([.key("root")])])],
+            sceneReferences: [.init(semanticEntityID: "root", sceneNodeID: upper),
+                .init(semanticEntityID: "root", sceneNodeID: lower)],
+            boundaryTags: [.init(semanticEntityID: "root", kind: "includes", target: .sceneNode(upper)),
+                .init(semanticEntityID: "root", kind: "includes", target: .sceneNode(lower))]
+        )
+    )
+    let builder = ProjectionDependencyIdentityBuilder()
+    let generation = DocumentGeneration(3)
+    let baseline = try builder.identity(for: "root", in: envelope, document: document, generation: generation)
+    document.productMetadata.sceneNodes = [
+        lower: SceneNode(id: lower, name: "Lower"),
+        upper: SceneNode(id: upper, name: "Upper"),
+    ]
+    envelope.projection.sceneReferences.reverse()
+    envelope.projection.boundaryTags.reverse()
+    let reordered = try builder.identity(for: "root", in: envelope, document: document, generation: generation)
+    #expect(baseline.matchesDependencies(of: reordered))
+    document.productMetadata.sceneNodes[lower]?.name = "Changed Lower"
+    let changed = try builder.identity(for: "root", in: envelope, document: document, generation: generation)
+    #expect(!baseline.matchesDependencies(of: changed))
+}
+
+@Test(.timeLimit(.minutes(1)))
 func projectionDependencyIdentityScopesSemanticAndFeatureChangesPerEntity() throws {
     var document = DesignDocument.empty(named: "Projection Dependencies")
     let firstFeatureID = try projectionDependencyBox(named: "First", in: &document)

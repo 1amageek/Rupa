@@ -138,6 +138,694 @@ public struct DrawingProjectionService: Sendable {
         self.exactEvaluatorOverride = exactEvaluator
     }
 
+    public func generateGeometricSilhouettes(
+        document: DesignDocument, frame: OrthographicProjectionFrame,
+        maximumSourceFaces: Int, maximumProjectedSpans: Int,
+        maximumControlPointCount: Int, maximumBoundaryCurveCount: Int,
+        usage: inout SurfaceSilhouetteUsage,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> BRepDrawingSilhouettes {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+                              generation: currentGeneration)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Original silhouette drawing requires the current exact B-rep")
+        return try DocumentDrawingSilhouetteProducer().silhouettes(document: document.cadDocument,
+            currentEvaluation: evaluated, onto: frame, maximumSourceFaces: maximumSourceFaces,
+            maximumProjectedSpans: maximumProjectedSpans, maximumControlPointCount: maximumControlPointCount,
+            maximumBoundaryCurveCount: maximumBoundaryCurveCount, usage: &usage)
+    }
+
+    /// Publishes assembled original material region contours and holes.
+    public func generateGeometricRegions(
+        document: DesignDocument, section: BRepDrawingSection,
+        maximumBoundaryEdges: Int, maximumRegions: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [BRepDrawingMaterialRegion] {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+                              generation: currentGeneration)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Original material regions require the current exact B-rep")
+        return try DocumentDrawingRegionProducer().regions(section, document: document.cadDocument,
+            currentEvaluation: evaluated, maximumBoundaryEdges: maximumBoundaryEdges,
+            maximumRegions: maximumRegions)
+    }
+
+    /// Publishes hatch spans classified against the current original solid section.
+    public func generateGeometricHatch(
+        document: DesignDocument, section: BRepDrawingSection, spacing: Double,
+        maximumRows: Int, maximumBoundaryCurves: Int, maximumEventsPerRow: Int,
+        maximumSegments: Int, objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [BRepDrawingHatchSegment] {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+                              generation: currentGeneration)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Original section hatch requires the current exact B-rep")
+        return try DocumentDrawingHatcher().hatch(section, document: document.cadDocument,
+            currentEvaluation: evaluated, spacing: spacing, maximumRows: maximumRows,
+            maximumBoundaryCurves: maximumBoundaryCurves, maximumEventsPerRow: maximumEventsPerRow,
+            maximumSegments: maximumSegments)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Original cutting UV rows are source-connected
+    // through this public command, but complete lower intersection/classifier
+    // storage/work forwarding remains necessary for aggregate invocation closure.
+    public func generateOriginalGeometricHatch(
+        document: DesignDocument, section: BRepDrawingSection, spacing: Double,
+        maximumRows: Int, maximumBoundaryCurves: Int, maximumEventsPerRow: Int,
+        maximumSegments: Int, maximumPreparationWork: Int, maximumPreparationBytes: Int,
+        maximumSourceDepth: Int, maximumSubdivisionDepth: Int, maximumAlgebraicDepth: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> BRepDrawingHatchResult {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+            generation: currentGeneration)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration, failurePrefix: "Original cutting hatch requires the current exact B-rep")
+        return try DocumentDrawingHatcher().hatch(section, document: document.cadDocument,
+            currentEvaluation: evaluated, spacing: spacing, maximumRows: maximumRows,
+            maximumBoundaryCurves: maximumBoundaryCurves, maximumEventsPerRow: maximumEventsPerRow,
+            maximumSegments: maximumSegments, maximumPreparationWork: maximumPreparationWork,
+            maximumPreparationBytes: maximumPreparationBytes, maximumSourceDepth: maximumSourceDepth,
+            maximumSubdivisionDepth: maximumSubdivisionDepth, maximumAlgebraicDepth: maximumAlgebraicDepth)
+    }
+
+    /// Publishes original trimmed surface-plane contacts, preserving all component dimensions.
+    public func generateGeometricSection(
+        document: DesignDocument,
+        frame: OrthographicProjectionFrame,
+        maximumSourceFaces: Int,
+        maximumComponents: Int,
+        bodyIDs: [BodyID]? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> BRepDrawingSection {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+                              generation: currentGeneration)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Original geometric section requires the current exact B-rep")
+        if let bodyIDs {
+            return try DocumentDrawingSectioner().section(document: document.cadDocument,
+                currentEvaluation: evaluated, bodyIDs: bodyIDs, on: frame,
+                maximumSourceFaces: maximumSourceFaces, maximumComponents: maximumComponents)
+        }
+        return try DocumentDrawingSectioner().section(document: document.cadDocument,
+            currentEvaluation: evaluated, on: frame, maximumSourceFaces: maximumSourceFaces,
+            maximumComponents: maximumComponents)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This public source route composes every current
+    // visible original body occurrence. Complete bounded originalImage/world-plane SSI
+    // remains required before full placed section and material drawing completion.
+    public func generatePlacedGeometricSections(
+        document: DesignDocument, query: DrawingProjectionQuery, frame: OrthographicProjectionFrame,
+        maximumOccurrences: Int, maximumSections: Int, maximumSourceFaces: Int,
+        maximumComponents: Int, maximumSourceEntities: Int, maximumPreparationWork: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingOccurrenceSections {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+            generation: currentGeneration)
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride,
+            exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(document: document,
+                objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration,
+                failurePrefix: "Placed section requires the current exact B-rep")
+        return try DrawingOccurrenceSectioner().sections(document: document, evaluated: evaluated,
+            savedView: savedView, on: frame, maximumOccurrences: maximumOccurrences,
+            maximumSections: maximumSections, maximumSourceFaces: maximumSourceFaces,
+            maximumComponents: maximumComponents, maximumSourceEntities: maximumSourceEntities,
+            maximumPreparationWork: maximumPreparationWork)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This actual selected-plane public path
+    // retains original hierarchy/body/cutting laws. Complete original SSI, UV hatch
+    // discovery and lower aggregate hierarchy/body bytes remain required for full D3.
+    public func generateSelectedGeometricSections(
+        document: DesignDocument, query: DrawingProjectionQuery, projectionFrame: OrthographicProjectionFrame,
+        maximumOccurrences: Int, maximumCuttingSupports: Int, maximumSections: Int,
+        maximumSourceFaces: Int, maximumComponents: Int, maximumSourceEntities: Int,
+        resourceLimits: ExchangeResourceLimits, format: ExchangeFileFormat, objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil, currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingOccurrenceSections {
+        try Task.checkCancellation()
+        try resourceLimits.validate()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride)
+            .exactEvaluatedDocument(document: document, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration, failurePrefix: "Original selected sections require the current exact B-rep")
+        var usage = try DrawingExchangeUsage(limits: resourceLimits, format: format)
+        let supports = try DefaultDrawingCuttingSupportResolver().supports(document: document, savedView: savedView,
+            maximumOccurrences: maximumOccurrences, maximumSupports: maximumCuttingSupports, usage: &usage)
+        guard usage.consumedWork < resourceLimits.maximumIterations, usage.consumedBytes < resourceLimits.maximumBytes else {
+            throw EditorError(code: .commandInvalid, message: "Original cutting support preparation exhausted its caller allowance.")
+        }
+        let result = try DrawingOccurrenceSectioner().sections(document: document, evaluated: evaluated, savedView: savedView,
+            on: supports, projectionFrame: projectionFrame, maximumOccurrences: maximumOccurrences, maximumSections: maximumSections,
+            maximumSourceFaces: maximumSourceFaces, maximumComponents: maximumComponents, maximumSourceEntities: maximumSourceEntities,
+            maximumPreparationWork: resourceLimits.maximumIterations - usage.consumedWork,
+            maximumPreparationBytes: resourceLimits.maximumBytes - usage.consumedBytes,
+            maximumSourceDepth: min(16, resourceLimits.maximumNesting),
+            maximumSubdivisionDepth: resourceLimits.maximumCurveSubdivisionDepth, maximumAlgebraicDepth: resourceLimits.maximumAlgebraicDepth)
+        guard result.consumedPreparationWork >= 0,
+              result.consumedPreparationWork <= resourceLimits.maximumIterations - usage.consumedWork,
+              result.retainedPreparationBytes >= 0,
+              result.retainedPreparationBytes <= resourceLimits.maximumBytes - usage.consumedBytes else {
+            throw EditorError(code: .evaluationFailed, message: "Original selected section preparation exceeded its remaining caller receipt.")
+        }
+        return DrawingOccurrenceSections(document: document, evaluated: evaluated, savedView: savedView, values: result.values,
+            consumedPreparationWork: usage.consumedWork + result.consumedPreparationWork,
+            retainedPreparationEntities: result.retainedPreparationEntities,
+            retainedPreparationBytes: usage.consumedBytes + result.retainedPreparationBytes)
+    }
+
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): The same caller owner supplies each residual
+    // selected-section allowance and receives its actual receipt before publication.
+    // Lower SSI/classifier and hierarchy allocation callbacks must be fully live
+    // before concurrent aggregate preparation is claimed complete.
+    public func generateSelectedGeometricSections(
+        document: DesignDocument, query: DrawingProjectionQuery, projectionFrame: OrthographicProjectionFrame,
+        maximumOccurrences: Int, maximumCuttingSupports: Int, maximumSections: Int,
+        maximumSourceFaces: Int, maximumComponents: Int, maximumSourceEntities: Int,
+        usage: inout DrawingExchangeUsage, objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil, currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingOccurrenceSections {
+        try Task.checkCancellation()
+        try usage.check()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation, generation: currentGeneration)
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride)
+            .exactEvaluatedDocument(document: document, objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration, failurePrefix: "Original selected sections require the current exact B-rep")
+        let supports = try DefaultDrawingCuttingSupportResolver().supports(document: document, savedView: savedView,
+            maximumOccurrences: maximumOccurrences, maximumSupports: maximumCuttingSupports, usage: &usage)
+        guard usage.consumedWork < usage.maximumWork, usage.consumedBytes < usage.maximumBytes else {
+            throw EditorError(code: .commandInvalid, message: "Original cutting support preparation exhausted its caller allowance.")
+        }
+        let result = try DrawingOccurrenceSectioner().sections(document: document, evaluated: evaluated, savedView: savedView,
+            on: supports, projectionFrame: projectionFrame, maximumOccurrences: maximumOccurrences, maximumSections: maximumSections,
+            maximumSourceFaces: maximumSourceFaces, maximumComponents: maximumComponents, maximumSourceEntities: maximumSourceEntities,
+            maximumPreparationWork: usage.maximumWork - usage.consumedWork,
+            maximumPreparationBytes: usage.maximumBytes - usage.consumedBytes,
+            maximumSourceDepth: min(16, usage.maximumNesting),
+            maximumSubdivisionDepth: usage.maximumCurveSubdivisionDepth, maximumAlgebraicDepth: usage.maximumAlgebraicDepth)
+        guard result.consumedPreparationWork >= 0,
+              result.consumedPreparationWork <= usage.maximumWork - usage.consumedWork,
+              result.retainedPreparationBytes >= 0,
+              result.retainedPreparationBytes <= usage.maximumBytes - usage.consumedBytes else {
+            throw EditorError(code: .evaluationFailed, message: "Original selected section preparation exceeded its remaining caller receipt.")
+        }
+        try usage.charge(entities: result.retainedPreparationEntities, work: result.consumedPreparationWork,
+            bytes: result.retainedPreparationBytes)
+        return DrawingOccurrenceSections(document: document, evaluated: evaluated, savedView: savedView, values: result.values,
+            consumedPreparationWork: result.consumedPreparationWork,
+            retainedPreparationEntities: result.retainedPreparationEntities,
+            retainedPreparationBytes: result.retainedPreparationBytes)
+    }
+
+    /// Publishes only dimensions resolved from the current original geometric source.
+    public func generateGeometricAnnotations(
+        document: DesignDocument, query: DrawingProjectionQuery, maximumAnnotations: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> [DrawingProjectionResult.Annotation] {
+        try generateGeometricAnnotationReceipt(document: document, query: query,
+            maximumAnnotations: maximumAnnotations, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration).values
+    }
+
+    /// Publishes only dimensions resolved from the current original geometric source.
+    public func generateGeometricAnnotationReceipt(
+        document: DesignDocument, query: DrawingProjectionQuery, maximumAnnotations: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingGeometricAnnotations {
+        try Task.checkCancellation()
+        guard maximumAnnotations > 0,
+              document.productMetadata.measurements.count <= maximumAnnotations else {
+            throw EditorError(code: .commandInvalid, message: "Geometric annotation capacity is invalid or exhausted.")
+        }
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+            generation: currentGeneration)
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        try savedView.validate(sceneNodes: document.productMetadata.sceneNodes,
+            constructionPlanes: document.productMetadata.constructionPlanes)
+        guard savedView.projection.mode == .orthographic else {
+            throw EditorError(code: .commandInvalid, message: "Geometric annotations require an orthographic saved view.")
+        }
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Geometric dimensions require the current exact B-rep")
+        return try resolvedGeometricAnnotations(document: document, savedView: savedView,
+            evaluated: evaluated, maximumAnnotations: maximumAnnotations,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+    }
+
+    private func resolvedGeometricAnnotations(document: DesignDocument, savedView: SavedView,
+        evaluated: EvaluatedDocument, maximumAnnotations: Int,
+        radialProjection: DrawingOccurrenceProjection? = nil, radialOptions: DrawingGeometricPageOptions? = nil,
+        radialUsage: DrawingExchangeUsage? = nil,
+        currentEvaluation: DocumentEvaluationContext?, currentGeneration: DocumentGeneration?
+    ) throws -> DrawingGeometricAnnotations {
+        guard maximumAnnotations > 0, document.productMetadata.measurements.count <= maximumAnnotations else {
+            throw EditorError(code: .commandInvalid, message: "Geometric annotation capacity is invalid or exhausted.")
+        }
+        guard savedView.projection.mode == .orthographic,
+              let visibleHeight = savedView.projection.orthographicHeightMeters else {
+            throw EditorError(code: .commandInvalid, message: "Geometric dimensions require the original orthographic view height.")
+        }
+        let basis = try geometricProjectionBasis(for: savedView, tolerance: evaluated.configuration.tolerance)
+        var needsLegacyDimensions = radialUsage == nil
+        if var usage = radialUsage {
+            for measurement in document.productMetadata.measurements.values {
+                try usage.charge(work: 1)
+                if !((measurement.kind == .radius || measurement.kind == .diameter)
+                    && measurement.anchors.count == 1) { needsLegacyDimensions = true }
+            }
+        }
+        var result: (annotations: [DrawingProjectionResult.Annotation], unresolved: [EditorDiagnostic]) = ([], [])
+        if needsLegacyDimensions {
+            // FIXME(INCOMPLETE_IMPLEMENTATION): Nonradial dimension measurement
+            // preparation still uses legacy topology/metric providers here. The
+            // public page route needs actual same-ledger original preparation for
+            // these domains before whole bounded page admission may be claimed.
+            let topology = try TopologySnapshotService(exactEvaluator: exactEvaluatorOverride)
+                .snapshot(document: document, evaluatedDocument: evaluated)
+            result = drawingAnnotations(document: document, savedView: savedView, basis: basis,
+                topology: topology, displayUnit: savedView.displayScale.displayUnit,
+                currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+                excludingSingleCircular: radialUsage != nil)
+        }
+        var radialMeasurements: [DrawingRadialDimensionMeasurement] = []
+        if let projection = radialProjection, let options = radialOptions, var usage = radialUsage {
+            let count = document.productMetadata.measurements.count
+            let bytes = count.multipliedReportingOverflow(by: MemoryLayout<DrawingRadialDimensionMeasurement>.stride
+                + MemoryLayout<DrawingProjectionResult.Annotation>.stride + MemoryLayout<MeasurementAnnotation>.stride)
+            guard !bytes.overflow else { throw EditorError(code: .evaluationFailed, message: "Radial source receipt storage overflowed.") }
+            try usage.charge(bytes: bytes.partialValue); radialMeasurements.reserveCapacity(count)
+            result.annotations.reserveCapacity(count)
+            let measurements = document.productMetadata.measurements.values.sorted {
+                $0.name == $1.name ? $0.id.description < $1.id.description : $0.name < $1.name
+            }
+            for measurement in measurements {
+                try usage.charge(work: 1)
+                guard (measurement.kind == .radius || measurement.kind == .diameter), measurement.anchors.count == 1 else { continue }
+                let receipt = try DefaultDrawingRadialDimensionResolver().resolve(measurement,
+                    document: document, evaluated: evaluated, projection: projection,
+                    options: options, usage: &usage)
+                result.annotations.append(receipt.annotation); radialMeasurements.append(receipt)
+            }
+        }
+        guard result.unresolved.isEmpty else {
+            throw EditorError(code: .referenceUnresolved,
+                message: "A required geometric dimension is unresolved: " + result.unresolved.map(\.message).joined(separator: "; "))
+        }
+        for annotation in result.annotations {
+            let value: Double?
+            switch annotation.kind {
+            case .area: value = annotation.measurementSquareMeters
+            case .angle: value = annotation.measurementDegrees
+            case .distance, .perimeter, .edgeLength, .radius, .diameter: value = annotation.measurementMeters
+            case .curvature:
+                throw EditorError(code: .commandInvalid, message: "Curvature has no drawing dimension.")
+            }
+            guard let value, value.isFinite else {
+                throw EditorError(code: .evaluationFailed,
+                    message: "A required geometric dimension has no original measured value.")
+            }
+        }
+        let frame = DrawingProjectionResult.ViewFrame(target: savedView.camera.target,
+            right: basis.right, up: basis.up, viewNormal: basis.viewNormal,
+            visibleHeightMeters: visibleHeight,
+            scaleBarLengthMeters: savedView.displayScale.scaleBarLengthMeters)
+        let values = DrawingAnnotationLayoutService().layout(annotations: result.annotations, viewFrame: frame)
+        return DrawingGeometricAnnotations(values: values, savedViewID: savedView.id,
+            document: document, evaluated: evaluated, radialMeasurements: radialMeasurements)
+    }
+
+    /// Publishes every original CAD body use in its actual visible scene occurrences.
+    public func generatePlacedGeometricEdges(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingOccurrenceProjection {
+        try placedGeometricEdges(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration).projection
+    }
+
+    /// Writes retained original CAD curves through actual visible occurrences.
+    public func writePlacedGeometricEdges(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int,
+        format: ExchangeFileFormat, options: DrawingExchangeOptions,
+        resourceLimits: ExchangeResourceLimits, to sink: any ByteSink,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let publication = try placedGeometricEdges(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        try publication.projection.validateCurrent(document: document, evaluated: publication.evaluated)
+        try BRepDrawingExchange(resourceLimits: resourceLimits).write(publication.projection.exchangeProjection,
+            in: publication.evaluated, as: format, options: options, to: sink)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This public original page route composes
+    // current geometric edges and required dimensions. Complete certified hidden-line
+    // partitions and complete original SSI must be supplied before full D1-D4 closure.
+    /// Returns the same original saved-view frame used by page and selected-section composition.
+    public func originalPageProjectionFrame(document: DesignDocument,
+        query: DrawingProjectionQuery) throws -> OrthographicProjectionFrame {
+        try Task.checkCancellation()
+        let view = try resolvedSavedView(id: query.savedViewID, document: document)
+        try view.validate(sceneNodes: document.productMetadata.sceneNodes,
+            constructionPlanes: document.productMetadata.constructionPlanes)
+        guard view.projection.mode == .orthographic else {
+            throw EditorError(code: .commandInvalid, message: "Original pages require an orthographic saved view.")
+        }
+        let basis = try projectionBasis(for: view)
+        return try OrthographicProjectionFrame(origin: view.camera.target, normal: basis.viewNormal,
+            horizontalHint: basis.right, tolerance: document.modelingSettings.tolerance)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This actual current-source route publishes
+    // original placed silhouettes and exact trimmed source intervals. Complete D1
+    // still requires foreground-depth occlusion partitions and lower all-domain
+    // trim/source proof coverage; contours never assert visible/hidden status.
+    public func generateGeometricSilhouettes(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int,
+        preparation: inout DrawingSilhouettePreparation, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingOccurrenceSilhouettes {
+        let publication = try placedGeometricEdges(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        return try preparation.silhouettes(publication.projection, document: document,
+            evaluated: publication.evaluated, usage: &usage)
+    }
+
+    /// Composes exact original contours and glyphs under the same complete page invocation.
+    public func generateGeometricPage(document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, silhouettePreparation: inout DrawingSilhouettePreparation,
+        glyphPreparation: inout DrawingGlyphPreparation, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry = .builtIn, currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil) throws -> DrawingGeometricPage {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections, sectionContributions: sectionContributions,
+            options: options, usage: &usage, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        let contours = try publication.page.addingSilhouettes(document: document, evaluated: publication.evaluated,
+            options: options, preparation: &silhouettePreparation, usage: &usage)
+        return try contours.resolvingGlyphBoundaries(document: document, evaluated: publication.evaluated,
+            preparation: &glyphPreparation, usage: &usage)
+    }
+
+    public func generateGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingGeometricPage {
+        try geometricPage(document: document, query: query, maximumSourceUses: maximumSourceUses,
+            maximumOccurrences: maximumOccurrences, maximumAnnotations: maximumAnnotations, sections: sections, sectionContributions: sectionContributions,
+            options: options, usage: &usage, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration).page
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Geometric pages use the actual original
+    // curve/dimension/glyph writer, with unclassified geometry. Full drawing output
+    // additionally requires complete certified visibility, original SSI and DXF nonzero glyph union.
+    public func writeGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, format: ExchangeFileFormat,
+        outputUnit: LengthUnit, usage: inout DrawingExchangeUsage, to sink: any ByteSink,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections, sectionContributions: sectionContributions, options: options, usage: &usage,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        try publication.page.validateCurrent(document: document, evaluated: publication.evaluated)
+        try BRepDrawingExchange().write(publication.page.page, as: format,
+            outputUnit: outputUnit, usage: &usage, to: sink)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): Atomic original page publication retains
+    // current source and one caller ledger. Complete drawing additionally requires
+    // certified visibility, original SSI and DXF nonzero glyph contour union.
+    public func exportGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, format: ExchangeFileFormat,
+        outputUnit: LengthUnit, usage: inout DrawingExchangeUsage, to url: URL,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections,
+            sectionContributions: sectionContributions, options: options, usage: &usage,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        try publication.page.validateCurrent(document: document, evaluated: publication.evaluated)
+        try OfficialFormatExchange().export(publication.page.page, as: format,
+            outputUnit: outputUnit, usage: &usage, to: url)
+    }
+
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This original page command now retains genuine nonzero
+    // glyph boundaries. Complete drawing still requires original certified visibility/SSI and the
+    // lower exact source families; subdivision and algebra retain their independent caller ceilings.
+    public func generateGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, glyphPreparation: inout DrawingGlyphPreparation, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingGeometricPage {
+        try geometricPage(document: document, query: query, maximumSourceUses: maximumSourceUses,
+            maximumOccurrences: maximumOccurrences, maximumAnnotations: maximumAnnotations,
+            sections: sections, sectionContributions: sectionContributions, options: options,
+            glyphPreparation: &glyphPreparation, usage: &usage,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration).page
+    }
+
+    public func writeGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, glyphPreparation: inout DrawingGlyphPreparation, format: ExchangeFileFormat,
+        outputUnit: LengthUnit, usage: inout DrawingExchangeUsage, to sink: any ByteSink,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections,
+            sectionContributions: sectionContributions, options: options, glyphPreparation: &glyphPreparation, usage: &usage, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        try publication.page.validateCurrent(document: document, evaluated: publication.evaluated)
+        try BRepDrawingExchange().write(publication.page.page, as: format,
+            outputUnit: outputUnit, usage: &usage, to: sink)
+    }
+
+    public func exportGeometricPage(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, glyphPreparation: inout DrawingGlyphPreparation, format: ExchangeFileFormat,
+        outputUnit: LengthUnit, usage: inout DrawingExchangeUsage, to url: URL,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections,
+            sectionContributions: sectionContributions, options: options, glyphPreparation: &glyphPreparation, usage: &usage, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        try publication.page.validateCurrent(document: document, evaluated: publication.evaluated)
+        try OfficialFormatExchange().export(publication.page.page, as: format,
+            outputUnit: outputUnit, usage: &usage, to: url)
+    }
+
+    private func geometricPage(document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections?, sectionContributions: [DrawingSectionPageContribution],
+        options: DrawingGeometricPageOptions, glyphPreparation: inout DrawingGlyphPreparation, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry, currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> (page: DrawingGeometricPage, evaluated: EvaluatedDocument) {
+        let publication = try geometricPage(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            maximumAnnotations: maximumAnnotations, sections: sections,
+            sectionContributions: sectionContributions, options: options, usage: &usage,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        let page = try publication.page.resolvingGlyphBoundaries(document: document,
+            evaluated: publication.evaluated, preparation: &glyphPreparation, usage: &usage)
+        return (page, publication.evaluated)
+    }
+
+    private func geometricPage(document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, maximumAnnotations: Int,
+        sections: DrawingOccurrenceSections? = nil, sectionContributions: [DrawingSectionPageContribution] = [],
+        options: DrawingGeometricPageOptions, usage: inout DrawingExchangeUsage,
+        objectRegistry: ObjectTypeRegistry, currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> (page: DrawingGeometricPage, evaluated: EvaluatedDocument) {
+        try usage.check()
+        guard maximumAnnotations > 0, document.productMetadata.measurements.count <= maximumAnnotations else {
+            throw EditorError(code: .commandInvalid, message: "Geometric page annotation capacity is invalid or exhausted.")
+        }
+        let publication = try placedGeometricEdges(document: document, query: query,
+            maximumSourceUses: maximumSourceUses, maximumOccurrences: maximumOccurrences,
+            objectRegistry: objectRegistry, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        let annotations = try resolvedGeometricAnnotations(document: document,
+            savedView: publication.projection.savedView, evaluated: publication.evaluated,
+            maximumAnnotations: maximumAnnotations, radialProjection: publication.projection,
+            radialOptions: options, radialUsage: usage, currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration)
+        let composer = DefaultDrawingGeometricPageComposer()
+        let page: DrawingGeometricPage
+        if let sections {
+            page = try composer.compose(publication.projection, annotations: annotations,
+                sections: sections, contributions: sectionContributions, document: document,
+                evaluated: publication.evaluated, options: options, usage: &usage)
+        } else {
+            guard sectionContributions.isEmpty else {
+                throw EditorError(code: .referenceUnresolved, message: "Section page contributions have no original scene section receipt.")
+            }
+            page = try composer.compose(publication.projection, annotations: annotations,
+                document: document, evaluated: publication.evaluated, options: options, usage: &usage)
+        }
+        return (page, publication.evaluated)
+    }
+
+    private func placedGeometricEdges(
+        document: DesignDocument, query: DrawingProjectionQuery,
+        maximumSourceUses: Int, maximumOccurrences: Int, savedViewOverride: SavedView? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> (projection: DrawingOccurrenceProjection, evaluated: EvaluatedDocument) {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+            generation: currentGeneration)
+        let savedView: SavedView
+        if let savedViewOverride {
+            guard savedViewOverride.id == query.savedViewID else {
+                throw EditorError(code: .referenceUnresolved, message: "Explicit drawing view identity differs from its query.")
+            }
+            savedView = savedViewOverride
+        } else { savedView = try resolvedSavedView(id: query.savedViewID, document: document) }
+        try savedView.validate(sceneNodes: document.productMetadata.sceneNodes,
+            constructionPlanes: document.productMetadata.constructionPlanes)
+        guard savedView.projection.mode == .orthographic else {
+            throw EditorError(code: .commandInvalid,
+                message: "Placed geometric drawing requires an orthographic saved view.")
+        }
+        let basis = try projectionBasis(for: savedView)
+        let frame = try OrthographicProjectionFrame(origin: savedView.camera.target,
+            normal: basis.viewNormal, horizontalHint: basis.right,
+            tolerance: document.modelingSettings.tolerance)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Placed geometric drawing requires the current exact B-rep")
+        let original = try DocumentDrawingProjector().projectEdges(document: document.cadDocument,
+            currentEvaluation: evaluated, onto: frame, maximumProjectedUses: maximumSourceUses)
+        let projection = try DrawingOccurrenceProjector().project(original, document: document,
+            evaluated: evaluated, savedView: savedView,
+            maximumOccurrences: maximumOccurrences, maximumProjectedUses: query.maximumStrokeCount)
+        return (projection, evaluated)
+    }
+
+    public func generateGeometricEdges(
+        document: DesignDocument,
+        query: DrawingProjectionQuery,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> BRepDrawingProjection {
+        try Task.checkCancellation()
+        try document.validate(objectRegistry: objectRegistry, unlessEvaluatedBy: currentEvaluation,
+                              generation: currentGeneration)
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        try savedView.validate(sceneNodes: document.productMetadata.sceneNodes,
+                              constructionPlanes: document.productMetadata.constructionPlanes)
+        guard savedView.projection.mode == .orthographic else {
+            throw EditorError(code: .commandInvalid,
+                              message: "Original geometric edge projection requires an orthographic saved view.")
+        }
+        let basis = try projectionBasis(for: savedView)
+        let frame = try OrthographicProjectionFrame(origin: savedView.camera.target,
+            normal: basis.viewNormal, horizontalHint: basis.right,
+            tolerance: document.modelingSettings.tolerance)
+        let evaluated = try DocumentEvaluationContextResolver(pipeline: pipelineOverride, exactEvaluator: exactEvaluatorOverride).exactEvaluatedDocument(
+            document: document, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration,
+            failurePrefix: "Original geometric drawing requires the current exact B-rep")
+        return try DocumentDrawingProjector().projectEdges(document: document.cadDocument,
+            currentEvaluation: evaluated, onto: frame, maximumProjectedUses: query.maximumStrokeCount)
+    }
+
     public func generate(
         document: DesignDocument,
         query: DrawingProjectionQuery,
@@ -157,7 +845,113 @@ public struct DrawingProjectionService: Sendable {
         )
     }
 
+    // FIXME(INCOMPLETE_IMPLEMENTATION): This existing command now publishes original
+    // placed curve geometry. Complete original hidden-line events and selected section
+    // command composition are required before its full drawing contract can close.
     public func generate(
+        document: DesignDocument, savedView: SavedView, toleranceMeters: Double? = nil,
+        maximumStrokeCount: Int = 10_000, objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingProjectionResult {
+        guard maximumStrokeCount > 0 else {
+            throw EditorError(code: .commandInvalid, message: "Drawing stroke capacity must be positive.")
+        }
+        // FIXME(INCOMPLETE_IMPLEMENTATION): Selected source sections must be composed
+        // from original placed SSI/region receipts into the existing command carrier.
+        // Mesh section contours or omitted section output cannot satisfy this branch.
+        guard savedView.sectionState.sectionSceneNodeIDs.isEmpty else {
+            throw EditorError(code: .evaluationFailed, message: "Original selected-section drawing command composition is incomplete.")
+        }
+        let deviation = try resolvedTolerance(toleranceMeters, document: document)
+        let publication = try placedGeometricEdges(document: document,
+            query: DrawingProjectionQuery(savedViewID: savedView.id,
+                toleranceMeters: toleranceMeters, maximumStrokeCount: maximumStrokeCount),
+            maximumSourceUses: maximumStrokeCount, maximumOccurrences: maximumStrokeCount,
+            savedViewOverride: savedView, objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        let dimensions = try resolvedGeometricAnnotations(document: document, savedView: savedView,
+            evaluated: publication.evaluated, maximumAnnotations: maximumStrokeCount,
+            currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+        try publication.projection.validateCurrent(document: document, evaluated: publication.evaluated)
+        try dimensions.validateCurrent(document: document, evaluated: publication.evaluated)
+        let limits = ExchangeResourceLimits.standard
+        var usage = try DrawingExchangeUsage(limits: limits, format: .svg)
+        let curves = DefaultBRepDrawingCurveLinearizer()
+        var originals: [DrawingProjectionOriginalCurve] = []
+        var strokes: [DrawingProjectionResult.Stroke] = []
+        var bodies = Set<BodyID>()
+        var bounds = BoundsAccumulator()
+        for (sourceIndex, use) in publication.projection.uses.enumerated() {
+            try usage.check(); try usage.charge(work: 1)
+            let remainingBytes = limits.maximumBytes - usage.consumedBytes
+            let remainingWork = limits.maximumIterations - usage.consumedWork
+            guard remainingBytes > 0, remainingWork > 0 else {
+                throw EditorError(code: .evaluationFailed, message: "Original drawing source allowance is exhausted.")
+            }
+            let measurement = try PortableSourceEncoder.measure(use.curve.source,
+                limits: PortableSourceEncodingLimits(maximumBytes: remainingBytes,
+                    maximumWork: remainingWork, maximumDepth: limits.maximumNesting))
+            try usage.charge(entities: 1, work: measurement.consumedWork,
+                bytes: measurement.consumedBytes)
+            try usage.charge(bytes: MemoryLayout<DrawingProjectionOriginalCurve>.stride)
+            try usage.charge(work: use.occurrenceID.rawValue.utf8.count,
+                bytes: use.occurrenceID.rawValue.utf8.count)
+            originals.append(DrawingProjectionOriginalCurve(use: use, maximumDeviation: deviation))
+            bodies.insert(use.original.bodyID)
+            let path = try curves.linearize(use.curve, from: use.startParameter, to: use.endParameter,
+                maximumDeviation: deviation, usage: &usage)
+            guard path.samples.count >= 2 else {
+                throw EditorError(code: .evaluationFailed, message: "An original curve path has no directed endpoint samples.")
+            }
+            for index in 1..<path.samples.count {
+                try usage.check(); try usage.charge(work: 1)
+                guard strokes.count < maximumStrokeCount else {
+                    throw EditorError(code: .evaluationFailed, message: "Original drawing stroke capacity is exhausted.")
+                }
+                try usage.charge(entities: 1, bytes: MemoryLayout<DrawingProjectionResult.Stroke>.stride)
+                let first = path.samples[index - 1], second = path.samples[index]
+                let start = try use.curve.originalPoint(at: first.parameter)
+                let end = try use.curve.originalPoint(at: second.parameter)
+                let original = try use.curve.enclosure(over: ScalarInterval(
+                    lower: min(first.parameter, second.parameter), upper: max(first.parameter, second.parameter))).original
+                let origin = use.curve.frame.origin, normal = use.curve.frame.normal
+                let x = OutwardScalarInterval(lower: original.position.x.lower, upper: original.position.x.upper) - .exact(origin.x)
+                let y = OutwardScalarInterval(lower: original.position.y.lower, upper: original.position.y.upper) - .exact(origin.y)
+                let z = OutwardScalarInterval(lower: original.position.z.lower, upper: original.position.z.upper) - .exact(origin.z)
+                let depth = x * .exact(normal.x) + y * .exact(normal.y) + z * .exact(normal.z)
+                let length = (end - start).length
+                guard depth.isFinite, length.isFinite else {
+                    throw EditorError(code: .evaluationFailed, message: "Original drawing depth or chord length is nonfinite.")
+                }
+                let identityBytes = savedView.id.description.utf8.count.addingReportingOverflow(60 + 36)
+                guard !identityBytes.overflow else { throw EditorError(code: .evaluationFailed, message: "Drawing identity size overflowed.") }
+                try usage.charge(bytes: identityBytes.partialValue)
+                strokes.append(DrawingProjectionResult.Stroke(id: savedView.id.description + ":original:" + String(sourceIndex) + ":" + String(index),
+                    bodyID: use.original.bodyID.description, kind: .geometry, visibility: .unclassified,
+                    start: start, end: end, start2D: first.point, end2D: second.point,
+                    minimumDepthMeters: depth.lower, maximumDepthMeters: depth.upper,
+                    lengthMeters: length, visibilitySegments: [], originalCurveIndex: sourceIndex,
+                    originalStartParameter: first.parameter, originalEndParameter: second.parameter))
+                bounds.include(first.point); bounds.include(second.point)
+            }
+        }
+        let frame = publication.projection.original.frame
+        includeAnnotations(dimensions.values, in: &bounds)
+        return DrawingProjectionResult(displayUnit: savedView.displayScale.displayUnit,
+            savedViewID: savedView.id, savedViewName: savedView.name, projectionMode: .orthographic,
+            viewFrame: .init(target: frame.origin, right: frame.horizontal, up: frame.vertical,
+                viewNormal: frame.normal, visibleHeightMeters: savedView.projection.orthographicHeightMeters ?? savedView.camera.distanceMeters,
+                scaleBarLengthMeters: savedView.displayScale.scaleBarLengthMeters),
+            bodyCount: bodies.count, triangleCount: 0, candidateEdgeCount: originals.count,
+            truncatedStrokes: false, bounds: bounds.bounds, strokes: strokes, originalCurves: originals,
+            annotations: dimensions.values,
+            diagnostics: [.init(severity: .warning,
+                message: "Original geometric curves are retained; complete visibility classification is pending.")])
+    }
+
+    @available(*, deprecated, message: "Use original current BRep drawing publication.")
+    private func generateLegacyMeshProjection(
         document: DesignDocument,
         savedView: SavedView,
         toleranceMeters: Double? = nil,
@@ -259,6 +1053,11 @@ public struct DrawingProjectionService: Sendable {
             failurePrefix: "Document must evaluate successfully before drawing projection"
         )
 
+        // FIXME(INCOMPLETE_IMPLEMENTATION): This legacy drawing publication derives
+        // strokes and occlusion from display triangles. Production path: generate(document:
+        // savedView:) and its saved-view query overload. D1/D2 completion requires retained
+        // original projected curves, whole B-rep visibility partitions and silhouette/seam
+        // classification; mesh-only success does not satisfy that completion contract.
         let sortedMeshes = evaluatedDocument.meshes.sorted {
             $0.key.description < $1.key.description
         }
@@ -430,11 +1229,22 @@ public struct DrawingProjectionService: Sendable {
         topology: TopologySnapshot?,
         displayUnit: LengthDisplayUnit,
         currentEvaluation: DocumentEvaluationContext?,
-        currentGeneration: DocumentGeneration?
+        currentGeneration: DocumentGeneration?, excludingSingleCircular: Bool = false
     ) -> (annotations: [DrawingProjectionResult.Annotation], unresolved: [EditorDiagnostic]) {
-        let resolutions = MeasurementAnnotationResolver().resolveAll(
-            in: document, currentEvaluation: currentEvaluation, currentGeneration: currentGeneration, topology: { topology }
-        )
+        let resolver = MeasurementAnnotationResolver()
+        let resolutions: [MeasurementAnnotationResolver.Resolution]
+        if excludingSingleCircular {
+            resolutions = document.productMetadata.measurements.values.sorted {
+                $0.name == $1.name ? $0.id.description < $1.id.description : $0.name < $1.name
+            }.compactMap { measurement in
+                if (measurement.kind == .radius || measurement.kind == .diameter), measurement.anchors.count == 1 { return nil }
+                return resolver.resolve(measurement, in: document, topology: topology,
+                    currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
+            }
+        } else {
+            resolutions = resolver.resolveAll(in: document, currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration, topology: { topology })
+        }
         var annotations: [DrawingProjectionResult.Annotation] = []
         var unresolved: [EditorDiagnostic] = []
         annotations.reserveCapacity(resolutions.count)
@@ -842,6 +1652,17 @@ public struct DrawingProjectionService: Sendable {
                 message: "Drawing projection adjusted \(adjustedCount) drawing annotation label(s) to reduce label overlap."
             ),
         ]
+    }
+
+    private func geometricProjectionBasis(for savedView: SavedView,
+                                          tolerance: ModelingTolerance) throws -> ProjectionBasis {
+        let camera = try projectionBasis(for: savedView)
+        let frame = try OrthographicProjectionFrame(origin: savedView.camera.target,
+            normal: camera.viewNormal, horizontalHint: camera.right, tolerance: tolerance)
+        return ProjectionBasis(xDirection: Point2D(x: frame.horizontal.x, y: frame.vertical.x),
+            yDirection: Point2D(x: frame.horizontal.y, y: frame.vertical.y),
+            zDirection: Point2D(x: frame.horizontal.z, y: frame.vertical.z),
+            right: frame.horizontal, up: frame.vertical, viewNormal: frame.normal)
     }
 
     private func projectionBasis(

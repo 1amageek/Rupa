@@ -87,7 +87,11 @@ enum ProjectAgentGeometryProjection {
                 )
             )
             try budget.consumeString(item.occurrenceID.rawValue)
-            try budget.consumeString(sceneNodeID.rawValue.uuidString)
+            try budget.consumeString(item.presentationID.rawValue)
+            if let body = item.sourceBodyID { try budget.consumeString(body) }
+            if let feature = item.sourceFeatureID { try budget.consumeString(feature) }
+            if let role = item.outputRole { try budget.consumeString(role) }
+            try budget.consumeString(sceneNodeID.description)
             try budget.consumeString(item.definitionID.rawValue)
             try budget.consumeString(item.displayName)
             try budget.consumeString(item.representationID.rawValue)
@@ -95,7 +99,7 @@ enum ProjectAgentGeometryProjection {
         }
         try operationGuard()
         let orderedItems = view.viewport.items.sorted {
-            $0.occurrenceID.rawValue < $1.occurrenceID.rawValue
+            $0.presentationID.rawValue < $1.presentationID.rawValue
         }
         var items: [AgentProjectViewportItem] = []
         items.reserveCapacity(orderedItems.count)
@@ -149,7 +153,9 @@ enum ProjectAgentGeometryProjection {
                     item.mesh.cornerIDs.count,
                     label: "corner"
                 ),
-                triangleCount: triangleCount
+                triangleCount: triangleCount,
+                presentationID: item.presentationID, sourceBodyID: item.sourceBodyID,
+                sourceFeatureID: item.sourceFeatureID, outputRole: item.outputRole
             ))
         }
         try operationGuard()

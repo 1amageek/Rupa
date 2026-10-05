@@ -11,6 +11,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public enum StrokeKind: String, Codable, Equatable, Sendable {
         case boundary
         case crease
+        case geometry
     }
 
     public enum Visibility: String, Codable, Equatable, Sendable {
@@ -116,6 +117,9 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         public var maximumDepthMeters: Double
         public var lengthMeters: Double
         public var visibilitySegments: [VisibilitySegment]
+        public var originalCurveIndex: Int?
+        public var originalStartParameter: Double?
+        public var originalEndParameter: Double?
 
         public init(
             id: String,
@@ -129,7 +133,10 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             minimumDepthMeters: Double,
             maximumDepthMeters: Double,
             lengthMeters: Double,
-            visibilitySegments: [VisibilitySegment]
+            visibilitySegments: [VisibilitySegment],
+            originalCurveIndex: Int? = nil,
+            originalStartParameter: Double? = nil,
+            originalEndParameter: Double? = nil
         ) {
             self.id = id
             self.bodyID = bodyID
@@ -143,6 +150,9 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             self.maximumDepthMeters = maximumDepthMeters
             self.lengthMeters = lengthMeters
             self.visibilitySegments = visibilitySegments
+            self.originalCurveIndex = originalCurveIndex
+            self.originalStartParameter = originalStartParameter
+            self.originalEndParameter = originalEndParameter
         }
     }
 
@@ -343,6 +353,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public var truncatedStrokes: Bool
     public var bounds: Bounds2D?
     public var strokes: [Stroke]
+    public var originalCurves: [DrawingProjectionOriginalCurve]
     public var sectionContourCount: Int
     public var sectionHatchSegmentCount: Int
     public var truncatedSectionHatches: Bool
@@ -364,6 +375,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         truncatedStrokes: Bool,
         bounds: Bounds2D?,
         strokes: [Stroke],
+        originalCurves: [DrawingProjectionOriginalCurve] = [],
         sectionContours: [SectionContour] = [],
         sectionHatches: [SectionHatchSegment] = [],
         truncatedSectionHatches: Bool = false,
@@ -393,6 +405,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         self.truncatedStrokes = truncatedStrokes
         self.bounds = bounds
         self.strokes = strokes
+        self.originalCurves = originalCurves
         self.sectionContourCount = sectionContours.count
         self.sectionHatchSegmentCount = sectionHatches.count
         self.truncatedSectionHatches = truncatedSectionHatches
@@ -425,6 +438,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         case truncatedStrokes
         case bounds
         case strokes
+        case originalCurves
         case sectionContourCount
         case sectionHatchSegmentCount
         case truncatedSectionHatches
@@ -449,6 +463,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             truncatedStrokes: try container.decode(Bool.self, forKey: .truncatedStrokes),
             bounds: try container.decodeIfPresent(Bounds2D.self, forKey: .bounds),
             strokes: try container.decode([Stroke].self, forKey: .strokes),
+            originalCurves: try container.decodeIfPresent([DrawingProjectionOriginalCurve].self, forKey: .originalCurves) ?? [],
             sectionContours: try container.decodeIfPresent(
                 [SectionContour].self,
                 forKey: .sectionContours
@@ -492,6 +507,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         try container.encode(truncatedStrokes, forKey: .truncatedStrokes)
         try container.encodeIfPresent(bounds, forKey: .bounds)
         try container.encode(strokes, forKey: .strokes)
+        try container.encode(originalCurves, forKey: .originalCurves)
         try container.encode(sectionContourCount, forKey: .sectionContourCount)
         try container.encode(sectionHatchSegmentCount, forKey: .sectionHatchSegmentCount)
         try container.encode(truncatedSectionHatches, forKey: .truncatedSectionHatches)

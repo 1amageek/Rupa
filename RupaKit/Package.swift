@@ -347,6 +347,7 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaCoreTypes",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ],
             exclude: ["DESIGN.md"]
         ),

@@ -27,7 +27,7 @@ public struct DocumentEvaluationContextResolver: Sendable {
         currentGeneration: DocumentGeneration? = nil,
         failurePrefix: String
     ) throws -> EvaluatedDocument {
-        if let current = matchingCurrentEvaluation(
+        if pipelineOverride == nil, let current = matchingCurrentEvaluation(
             document: document,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
@@ -62,7 +62,8 @@ public struct DocumentEvaluationContextResolver: Sendable {
         currentGeneration: DocumentGeneration? = nil,
         failurePrefix: String
     ) throws -> EvaluatedDocument {
-        if let current = matchingCurrentEvaluation(
+        if exactEvaluatorOverride == nil, pipelineOverride == nil,
+           let current = matchingCurrentEvaluation(
             document: document,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
@@ -71,7 +72,15 @@ public struct DocumentEvaluationContextResolver: Sendable {
         }
 
         do {
-            if exactEvaluatorOverride == nil, let base = currentEvaluation?.evaluatedDocument {
+            if let exactEvaluatorOverride {
+                DocumentWorkProbe.current?.recordEvaluationFromScratch()
+                return try exactEvaluatorOverride.evaluateExact(document.cadDocument)
+            }
+            if let pipelineOverride {
+                DocumentWorkProbe.current?.recordEvaluationFromScratch()
+                return try pipelineOverride.evaluateExact(document.cadDocument)
+            }
+            if let base = currentEvaluation?.evaluatedDocument {
                 DocumentWorkProbe.current?.recordIncrementalEvaluation()
                 return try DocumentEvaluator.modelingDefault(for: document, objectRegistry: objectRegistry)
                     .evaluate(document.cadDocument, reusing: base)

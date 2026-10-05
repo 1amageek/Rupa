@@ -858,13 +858,13 @@ enum ViewportSpatialOverlayProducer {
             return isObjectItem(
                 item,
                 selectedFeatures: selectedFeatures,
-                selectedNodes: selectedNodes
+                selectedNodes: selectedNodes, selectedTargets: snapshot.interaction.selectedTargets
             )
         }.count > 1
         let suppressedSketchFeatures = Set(
             snapshot.scene.items.compactMap { item -> FeatureID? in
                 guard case .body = item.kind,
-                      isObjectItem(item, selectedFeatures: selectedFeatures, selectedNodes: selectedNodes)
+                      isObjectItem(item, selectedFeatures: selectedFeatures, selectedNodes: selectedNodes, selectedTargets: snapshot.interaction.selectedTargets)
                         || snapshot.editedBodies[item.featureID] != nil else {
                     return nil
                 }
@@ -884,10 +884,13 @@ enum ViewportSpatialOverlayProducer {
                 let isSelected = isObjectItem(
                     item,
                     selectedFeatures: selectedFeatures,
-                    selectedNodes: selectedNodes
+                    selectedNodes: selectedNodes, selectedTargets: snapshot.interaction.selectedTargets
                 ) && !selectedBodyGroup
-                let isHovered = hoveredFeatures.contains(item.featureID)
-                    || item.sceneNodeID.map(hoveredNodes.contains) == true
+                let isHovered = (snapshot.interaction.hoveredTarget?.occurrenceID == nil && hoveredFeatures.contains(item.featureID))
+                    || (snapshot.interaction.hoveredTarget?.occurrenceID.map {
+                        $0 == item.occurrenceID && (snapshot.interaction.hoveredTarget?.sourceBodyID == nil || snapshot.interaction.hoveredTarget?.sourceBodyID == item.sourceBodyID)
+                    }
+                        ?? (item.sceneNodeID.map(hoveredNodes.contains) == true))
                 let shouldDrawBody = snapshot.drawsLegacyBodies
                     || snapshot.drawsDragPreviewBodies
                     || snapshot.bodyPreviewTransforms[item.id] != nil
@@ -1004,9 +1007,12 @@ enum ViewportSpatialOverlayProducer {
                 let color = isObjectItem(
                     item,
                     selectedFeatures: selectedFeatures,
-                    selectedNodes: selectedNodes
-                ) ? selectionColor : (hoveredFeatures.contains(item.featureID)
-                    || item.sceneNodeID.map(hoveredNodes.contains) == true
+                    selectedNodes: selectedNodes, selectedTargets: snapshot.interaction.selectedTargets
+                ) ? selectionColor : ((snapshot.interaction.hoveredTarget?.occurrenceID == nil && hoveredFeatures.contains(item.featureID))
+                    || (snapshot.interaction.hoveredTarget?.occurrenceID.map {
+                        $0 == item.occurrenceID && (snapshot.interaction.hoveredTarget?.sourceBodyID == nil || snapshot.interaction.hoveredTarget?.sourceBodyID == item.sourceBodyID)
+                    }
+                        ?? (item.sceneNodeID.map(hoveredNodes.contains) == true))
                     ? hoverColor : (item.sceneNodeID.flatMap { snapshot.curveColors[$0] } ?? curveColor))
                 for segment in component.segments {
                     guard segment.points.count >= 2 else {
@@ -1036,10 +1042,13 @@ enum ViewportSpatialOverlayProducer {
                 let itemSelected = isObjectItem(
                     item,
                     selectedFeatures: selectedFeatures,
-                    selectedNodes: selectedNodes
+                    selectedNodes: selectedNodes, selectedTargets: snapshot.interaction.selectedTargets
                 )
-                let color = itemSelected ? selectionColor : (hoveredFeatures.contains(item.featureID)
-                    || item.sceneNodeID.map(hoveredNodes.contains) == true
+                let color = itemSelected ? selectionColor : ((snapshot.interaction.hoveredTarget?.occurrenceID == nil && hoveredFeatures.contains(item.featureID))
+                    || (snapshot.interaction.hoveredTarget?.occurrenceID.map {
+                        $0 == item.occurrenceID && (snapshot.interaction.hoveredTarget?.sourceBodyID == nil || snapshot.interaction.hoveredTarget?.sourceBodyID == item.sourceBodyID)
+                    }
+                        ?? (item.sceneNodeID.map(hoveredNodes.contains) == true))
                     ? hoverColor : (item.sceneNodeID.flatMap { snapshot.curveColors[$0] } ?? sketchColor))
                 let selectedEntityIDs = Set(selectedSketchEntities.compactMap {
                     $0.featureID == item.featureID ? $0.entityID : nil
@@ -2489,7 +2498,7 @@ enum ViewportSpatialOverlayProducer {
         for target: SelectionTarget,
         in scene: ViewportScene
     ) -> ViewportSceneItem? {
-        scene.firstItem(sceneNodeID: target.sceneNodeID)
+        scene.item(for: target)
     }
 
     static func midpoint(_ first: Point3D, _ second: Point3D) -> Point3D {
@@ -2577,9 +2586,14 @@ enum ViewportSpatialOverlayProducer {
     private static func isObjectItem(
         _ item: ViewportSceneItem,
         selectedFeatures: Set<FeatureID>,
-        selectedNodes: Set<SceneNodeID>
+        selectedNodes: Set<SceneNodeID>,
+        selectedTargets: [SelectionTarget] = []
     ) -> Bool {
         if let sceneNodeID = item.sceneNodeID {
+            if selectedTargets.contains(where: { $0.sceneNodeID == sceneNodeID && $0.occurrenceID != nil }) {
+                return selectedTargets.contains { $0.sceneNodeID == sceneNodeID && ($0.occurrenceID == nil || $0.occurrenceID == item.occurrenceID)
+                    && ($0.sourceBodyID == nil || $0.sourceBodyID == item.sourceBodyID) }
+            }
             return selectedNodes.contains(sceneNodeID)
         }
         return selectedFeatures.contains(item.featureID)

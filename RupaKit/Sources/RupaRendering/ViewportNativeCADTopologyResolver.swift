@@ -131,7 +131,7 @@ enum ViewportNativeCADTopologyResolver {
                 message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
             )
         }
-        guard let componentID = topology.componentID(forTriangle: triangleIndex) else {
+        guard let componentID = try topology.validatedComponentID(forTriangle: triangleIndex) else {
             return nil
         }
         return (
@@ -165,7 +165,7 @@ enum ViewportNativeCADTopologyResolver {
                 message: "A drawn CAD triangle reports an unrepresentable mesh face identity."
             )
         }
-        return topology.componentID(forTriangle: triangleIndex)
+        return try topology.validatedComponentID(forTriangle: triangleIndex)
     }
 
     /// Resolves the prepared CAD vertices and edges of one body that the

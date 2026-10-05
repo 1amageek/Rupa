@@ -295,7 +295,7 @@ public struct DocumentExportService: Sendable {
             guard let preset = metadata.exportPresets[presetID] else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Export preset ID \(presetID.rawValue.uuidString) was not found."
+                    message: "Export preset ID \(presetID.description) was not found."
                 )
             }
             return preset

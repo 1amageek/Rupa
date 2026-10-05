@@ -17,6 +17,8 @@ public struct SceneNodeHierarchy: Sendable {
         public let componentInstanceID: ComponentInstanceID?
         public let localTransform: Transform3D
         public let worldTransform: Transform3D
+        /// Original factors from resolvedOriginalOccurrences; legacy display resolution retains none.
+        public let originalTransformFactors: [Transform3D]
         public let isVisible: Bool
     }
 
@@ -124,12 +126,21 @@ public struct SceneNodeHierarchy: Sendable {
     }
 
     public func resolvedOccurrences() throws -> [Occurrence] {
+        try resolvedOccurrences(retainingOriginalFactors: false)
+    }
+
+    /// Resolves drawing source occurrences without promoting composed matrices.
+    public func resolvedOriginalOccurrences() throws -> [Occurrence] {
+        try resolvedOccurrences(retainingOriginalFactors: true)
+    }
+
+    private func resolvedOccurrences(retainingOriginalFactors: Bool) throws -> [Occurrence] {
         var result: [Occurrence] = []
         for rootID in rootIDs {
             try appendOccurrences(
                 rootID, prefix: nil, parentID: nil, parentTransform: .identity,
                 localPrefix: .identity, ownerID: nil, instanceID: nil,
-                isVisible: true, definitionPath: [], result: &result
+                isVisible: true, definitionPath: [], retainingOriginalFactors: retainingOriginalFactors, result: &result
             )
         }
         return result
@@ -141,11 +152,14 @@ public struct SceneNodeHierarchy: Sendable {
         parentID: SceneOccurrenceID?,
         parentTransform: Transform3D,
         localPrefix: Transform3D,
+        originalLocalPrefix: Transform3D? = nil,
+        parentOriginalTransformFactors: [Transform3D] = [],
         rootPlacement: ComponentDefinition.RootPlacement? = nil,
         ownerID: SceneNodeID?,
         instanceID: ComponentInstanceID?,
         isVisible: Bool,
         definitionPath: Set<ComponentDefinitionID>,
+        retainingOriginalFactors: Bool,
         result: inout [Occurrence]
     ) throws {
         try Task.checkCancellation()
@@ -154,13 +168,19 @@ public struct SceneNodeHierarchy: Sendable {
         }
         let id = SceneOccurrenceID(rawValue: prefix.map { "\($0)/\(nodeID.description)" }
             ?? "scene.\(nodeID.description)")
+        var originalFactors: [Transform3D] = []
+        if retainingOriginalFactors {
+            originalFactors.append(rootPlacement?.transform ?? node.localTransform)
+            if let originalLocalPrefix { originalFactors.append(originalLocalPrefix) }
+            originalFactors.append(contentsOf: parentOriginalTransformFactors)
+        }
         let local = try localPrefix.composed(with: rootPlacement?.transform ?? node.localTransform)
         let world = try parentTransform.composed(with: local)
         let visible = isVisible && (rootPlacement?.isVisible ?? node.isVisible)
         result.append(Occurrence(
             id: id, parentID: parentID, sourceSceneNodeID: nodeID,
             sceneNodeID: ownerID ?? nodeID, componentInstanceID: instanceID,
-            localTransform: local, worldTransform: world, isVisible: visible
+            localTransform: local, worldTransform: world, originalTransformFactors: originalFactors, isVisible: visible
         ))
         if node.reference?.kind == .componentInstance {
             guard let childInstanceID = node.reference?.componentInstanceID,
@@ -177,10 +197,12 @@ public struct SceneNodeHierarchy: Sendable {
             for rootID in definition.rootSceneNodeIDs {
                 try appendOccurrences(
                     rootID, prefix: id.rawValue, parentID: id, parentTransform: world,
-                    localPrefix: instance.localTransform, rootPlacement: try definition.rootPlacement(for: rootID),
+                    localPrefix: instance.localTransform, originalLocalPrefix: instance.localTransform,
+                    parentOriginalTransformFactors: originalFactors, rootPlacement: try definition.rootPlacement(for: rootID),
                     ownerID: ownerID ?? nodeID,
                     instanceID: instanceID ?? childInstanceID,
-                    isVisible: visible && instance.isVisible, definitionPath: path, result: &result
+                    isVisible: visible && instance.isVisible, definitionPath: path,
+                    retainingOriginalFactors: retainingOriginalFactors, result: &result
                 )
             }
         }
@@ -188,8 +210,9 @@ public struct SceneNodeHierarchy: Sendable {
             try appendOccurrences(
                 childID, prefix: prefix == nil ? nil : id.rawValue,
                 parentID: id, parentTransform: world, localPrefix: .identity,
+                parentOriginalTransformFactors: originalFactors,
                 ownerID: ownerID, instanceID: instanceID, isVisible: visible,
-                definitionPath: definitionPath, result: &result
+                definitionPath: definitionPath, retainingOriginalFactors: retainingOriginalFactors, result: &result
             )
         }
     }

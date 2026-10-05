@@ -11,7 +11,9 @@ retired surface encoder by RK-5.2; RK-IV verifies the complete cutover.
 `RealityRenderer` remains offscreen GPU evidence and does not by itself prove
 the complete production cutover.
 
-Parent: [RupaRendering](../DESIGN.md). It has no child components.
+Parent: [RupaRendering](../DESIGN.md). Direct children are
+[Spatial Storage Admission](SpatialStorageAdmission/DESIGN.md) and
+[Spatial Camera State](SpatialCameraState/DESIGN.md).
 
 ## Responsibilities and Boundaries
 
@@ -60,6 +62,8 @@ owners.
 | Design | Relationship | Contract Used | Summary | Cautions |
 |---|---|---|---|---|
 | [RupaRendering](../DESIGN.md) | parent | Frame identity, lifecycle, camera session, resource bounds | Supplies immutable frame values and owns cancellation. | This component cannot publish project state. |
+| [Spatial Storage Admission](SpatialStorageAdmission/DESIGN.md) | child | same-pool async preparation and atomic lease transfer | Owns native glyph reservation and publication handoff. | Original request identity must survive suspension. |
+| [Spatial Camera State](SpatialCameraState/DESIGN.md) | child | original mounted camera-decoration checkpoints and restore | Owns bounded spatial buffers, entities and raster publication rollback. | The requested camera stays active while source readiness is withheld. |
 | [RupaViewportScene](../../RupaViewportScene/DESIGN.md) | depends on | `UniversalViewportScene` and stable source provenance | Supplies engine-neutral world geometry and IDs. | Native IDs are only derived lookup keys. |
 | [ViewportMeasurement](../ViewportMeasurement/DESIGN.md) | coordinates with | World endpoints, ruler descriptors, and status | Supplies spatial measurement values. | Measurement state does not own entity lifetime. |
 | [RupaUI](../../RupaUI/DESIGN.md) | used by | `RealityView` composition and non-spatial chrome | Mounts the host and forwards actions. | SwiftUI does not draw world geometry. |
@@ -633,7 +637,7 @@ resources plus the bounded X/Y/Z label resources when the batch's independent
 materials that neither read nor write depth, receive no collision component,
 and use the existing camera projection to place clipped endpoints at its finite
 in-frustum `sampleDepth`. This depth is solely the numerically stable inverse-
-projection plane and does not change line visibility. Native `TextComponent`
+projection plane and does not change line visibility. Native glyph `ModelEntity`
 labels remain at the existing near annotation depth and therefore keep their
 separate placement/occlusion behavior. Reference-axis and grid labels share the
 mount-owned stable annotation parent. Ownership transfers only at mount handoff,
@@ -728,25 +732,25 @@ buffer bytes, and per-frame work consume the existing aggregate ceilings even
 though one native mesh groups them. No procedural `CustomMaterial` exception is
 introduced because native line topology already expresses the bounded grid.
 
-Scale labels use a camera-owned native annotation subroot and RealityKit
-`TextComponent`, whose supported contract dynamically manages its plane,
-material, mesh component, and backing resolution for changed attributed text.
-The component owner keeps a bounded high-water pool of label Entities, reuses
-slots, clears and disables unused text, and grows the pool only after checked
-item/application-byte admission. A frame either updates every visible label or
-fails as a whole; pool exhaustion is never hidden by truncation. The existing
-formatter and Core Text sizing produce the complete attributed string and canvas
-size, while `TextComponent` alone renders it; there is no glyph atlas, custom
-text renderer, `MeshResource` text extrusion, or asynchronous preparation lane.
-The labels remain in the same RealityKit frame and are placed on its finite
-camera-relative annotation plane, preserving constant point size and
-annotation-over-content semantics without depending on material depth controls
-that `TextComponent` does not expose. SDK-managed text backing bytes remain
-opaque: Rupa charges its retained strings, slot records, and Entity references,
-bounds native item count, and measures the target runtime instead of claiming an
-exact engine allocation. Text reassignment and bounded pool growth are the only
-grid-specific exception to camera-update resource immutability; no other label,
-path, surface, or source resource may use it.
+Scale labels use a camera-owned native annotation subroot and exact styled
+`MeshResource(extruding:)` glyph resources mounted in `ModelEntity` slots.
+The component owner retains the original text request and bounded resource pool,
+reuses admitted resources and disables unused slots. A frame updates every visible
+label or remains pending/fails as a whole; pool exhaustion never truncates labels.
+The formatter and Core Text sizing retain the complete original text and placement.
+Missing grid glyph resources start the keyed asynchronous preparation defined by
+[Spatial Storage Admission](SpatialStorageAdmission/DESIGN.md). Preparation reserves
+the same viewport pool before extrusion, inspects actual retained glyph buffers,
+and publishes only for the unchanged request key. The previous complete frame
+remains authoritative while glyphs prepare. The labels remain in the same
+RealityKit frame on its finite camera-relative annotation plane, preserving
+constant point size and annotation-over-content semantics through their native
+material depth policy. Application strings, slot metadata, inspected glyph
+geometry and temporary candidates consume the existing cumulative allowance;
+opaque SDK-internal driver allocation remains outside inspected application
+buffer accounting. This keyed grid glyph lifecycle is the explicit exception
+to camera-update resource immutability; other cached label, path, surface and
+source resources retain their prepared lifetimes.
 The batch may additionally hold one optional selected-bounds ruler group: one
 immutable occurrence `GeometryBounds3D` plus up to three preformatted axis
 labels. Preparation creates at most three cached text resources and three
@@ -762,8 +766,8 @@ Line and triangle `LowLevelMesh` resources group material-indexed parts during
 preparation; native path/text extrusion and the shared marker primitive are
 also created only there. A camera update may synchronously change finite
 fixed-capacity buffers or transforms owned by the prepared result. Apart from
-the explicit bounded grid `TextComponent` update above, it never creates a
-resource or starts asynchronous preparation.
+the explicit keyed grid glyph preparation above, it never creates a resource
+or starts asynchronous preparation.
 The matching `RealityViewportView` update supplies the current safe rectangle
 and `ViewportCanvasChromeLayout` exclusion rectangles. Their count consumes the
 same per-frame item-work ceiling before layout; overflow disables the ruler
@@ -916,7 +920,7 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
    fixed-capacity camera-relative buffer or primitive transforms and, when a
    sectioned camera-relative descriptor exists, recompute the native sectioned
    visual-bounds union and its five containment faces. It may also apply the
-   bounded dynamic-grid contract above. Outside that explicit `TextComponent`
+   bounded dynamic-grid contract above. Outside that explicit keyed grid glyph
    exception, it must not rebuild world scene geometry or the provenance map,
    generate resources, or mutate cached label/path `MeshResource` values.
    Cached non-grid text/path resources are immutable and reused. A newer overlay
@@ -962,9 +966,33 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
    query failure, never a legacy identity-renderer fallback. Any future owner
    that mutates native descendants must first add owner-mediated invalidation
    and revalidation rather than weakening loss to a miss.
-5. Native built-in materials are selected first. `CustomMaterial` is used only
-   for a documented MatCap or signed-normal requirement that native built-ins
-   cannot express. Section-plane clipping is owned by native
+5. Native built-in materials are selected first. Studio surfaces whose authored
+   appearance fits RealityKit's native PBR parameters use
+   `PhysicallyBasedMaterial`. When an authored studio surface contains a
+   non-default IOR, iridescence, sheen roughness, specular
+   color, or transmission payload that the native material cannot represent,
+   the material owner selects the precompiled `rupaAdvancedStudioSurface`
+   `CustomMaterial` program. Its immutable 4x1 RGBA32Float custom texture
+   carries the supported authored advanced payload; the Metal surface shader
+   reads every texel and maps supported values to RealityKit's available lit
+   surface outputs. IOR determines dielectric Fresnel response; authored
+   specular and sheen RGB remain chromatic in the view-dependent base-color
+   response, while sheen roughness controls the roughness blend. Iridescence
+   uses a bounded angular RGB response controlled by its amount and IOR,
+   without interpreting volume thickness as thin-film thickness. This is a
+   deterministic viewport approximation, not exact optical transport.
+   `CADIR.Material` owns volume thickness in meters. Positive transmitting
+   thickness uses the sibling [Optical Volume Transport](../OpticalVolumeTransport/DESIGN.md)
+   through native RealityView postprocessing, rather than surface half payloads.
+   The mounted owner supplies the same original display triangles, occurrence
+   material, preview image, camera and clipping half-space. A volume material is
+   admitted only after its optical candidate is fully constructed; native alpha
+   uses authored opacity while the optical producer owns transmission throughput.
+   Invalid input, unrepresentable Float values, GPU/resource failures and incomplete
+   ray traversal are explicit frame failures. Source implementation is not GPU
+   evidence: full A5 still needs deferred native optical and app behavior checks.
+   MatCap and signed-normal presentation continue to use their own custom
+   programs. Section-plane clipping is owned by native
    `ClippingComponent` on a dedicated geometry-hierarchy root; custom material
    discard and pre-clipped replacement Mesh are prohibited. The clipper uses
    only one admitted native rotation and its child uses the exact inverse of
@@ -1000,20 +1028,22 @@ surfaces. Scene-depth handles remain unavailable until commit or cancellation.
    Each entry is then combined with the shading policy and that occurrence's
    interaction state into one `ViewportSurface`, which is what the native
    material builder consumes: the base color the policy and any highlight
-   decide, plus the opacity, metallic, and roughness the document authored. An
-   opacity below one selects native transparent blending. The built-in lit
-   material takes all four. The built-in unlit material and the two custom
-   programs expose no metallic or roughness parameter and own their own shading
-   response, so they take base color and opacity alone. A custom material is
-   blended by the blend mode its program was compiled with, not by what is
-   assigned to the material value, so each custom surface shader is compiled
-   twice, once opaque and once alpha-blended, and the resolved opacity selects
-   which of the two the material is built from. Compiling both is what lets a
-   body the document left opaque keep the native opaque pass while a body the
-   document made translucent still blends. A custom material does not read back
-   the opacity it was assigned, so the evidence that a translucent body blends
-   is the program the material was built from together with a rendered pixel,
-   never a material value read back.
+   decide, plus the authored physical appearance. An opacity below one selects
+   native transparent blending. The built-in lit material takes the base color,
+   opacity, metallic, roughness, clearcoat, sheen amount, and specular
+   intensity it exposes. The built-in unlit and MatCap/normal programs expose
+   no metallic or roughness parameter and own their own shading response, so
+   they take base color and opacity alone. The advanced studio program receives
+   the native lit parameters plus the complete custom payload. A custom
+   material is blended by the blend mode its program was compiled with, not by
+   what is assigned to the material value, so each custom surface shader is
+   compiled twice, once opaque and once alpha-blended, and the resolved opacity
+   selects which of the two the material is built from. Compiling both is what
+   lets a body the document left opaque keep the native opaque pass while a
+   body the document made translucent still blends. A custom material does not
+   read back the opacity it was assigned, so the evidence that a translucent
+   body blends is the program the material was built from together with a
+   rendered pixel, never a material value read back.
    A missing entry is valid and is not a failure; what such an occurrence is
    drawn with is the parent Rendering design's judgment, not a second policy
    restated here.
@@ -1471,7 +1501,9 @@ matching camera update with sectioned camera-relative descriptors
 changed native grid frame
   -> validate complete line, label, item, position, and retained-byte admission
   -> update one fixed-capacity world-line buffer and three stable material parts
-  -> reuse or grow the bounded TextComponent label pool as one atomic frame
+  -> reuse exact keyed glyph resources or start admitted async preparation
+  -> retain previous complete frame while glyphs prepare
+  -> publish every admitted glyph slot as one complete frame
   -> keep preparation identity, native root, surface, and non-grid resources unchanged
 
 replacement or unmount
@@ -1624,7 +1656,7 @@ latency for every allocator arrangement.
 | Empty and optional surface | Nil-surface and real empty-snapshot fixtures mount one native root and camera in Ortho and Persp, display grid/axis/measurement spatial entities, return an explicit surface miss, and contain no fabricated project/evaluation identity. |
 | Spatial attachment | Apple-GPU section fixtures prove `.sectionedGeometry` follows the surface clip while `.world` grid/section-plane/reference entities remain uncut; both retain their declared depth policy and update through the same mounted camera. Ortho/Persp zoom fixtures move a sectioned camera-relative label/marker beyond the prepared surface bounds, prove the native visual-bounds union expands only the five containment faces, preserves the cut half-space, and reuses every geometry/text/path resource identity. |
 | Camera-relative placement | Mounted Ortho and symmetric-Persp fixtures compare fixed, direction-relative, and world-directed `CameraPoint`, label, camera-path, and marker placement after orbit/zoom with direct native projection of their anchor/toward pairs; parallel/perpendicular point distances remain constant, a world-directed offset keeps its projected extent bounded by its point length under zoom and under a changed source scale while a direction along the view axis still projects shorter than one perpendicular to it, a marker's scaled collider stays centered on its resolved placement, a degenerate direction or negative point length is a typed admission failure, degenerate or behind-camera single-point/direction pairs and behind-camera resolved world-directed points become explicitly disabled without stale positions, and a fixed-offset `CameraLine` crossing the camera plane retains its native-clipped visible segments and collision provenance instead of disabling the polyline. Camera-only updates preserve every resource identity, and the maximum 640-item update remains within the existing 8.333 ms bound without relaxing admission. |
-| Native dynamic grid | Fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare the complete native line classes, signed formatted labels, separation, and chrome exclusion with `ViewportProjectedGrid`. The same line `LowLevelMesh`, three material parts, surface resources, and non-grid spatial resources retain identity while world coverage and `TextComponent` values change. Invalid and combined line/label/item/position/byte boundaries preserve the previous grid and report typed failure without label truncation. Apple-GPU evidence confirms TextComponent visibility, constant point size, and annotation ordering; a maximum admitted grid plus camera-relative update remains within 8.333 ms and performs no scene/CAD traversal or application-owned asynchronous resource generation. |
+| Native dynamic grid | Deferred verification of the actual glyph/ribbon source: fixed/adaptive Ortho and Persp fixtures pan, orbit, zoom, and resize across step/label boundaries and compare complete native line classes, signed labels, separation and chrome exclusion with `ViewportProjectedGrid`. The prepared native resources retain identity while original world coverage and keyed glyph requests change. Combined line/label/item/position/byte exhaustion, cancellation and superseded async requests preserve the previous complete frame with explicit pending/failure. Actual Apple-GPU execution must check glyph visibility, constant point size and annotation ordering; the maximum admitted camera update must satisfy the existing 8.333 ms budget, accounting for keyed preparation separately. Prior TextComponent evidence does not establish the new glyph route. |
 | Provenance | Face/edge/vertex/occurrence mappings survive entity/resource reuse; missing mapping is an explicit miss. |
 | Region visibility raster | [`RealityViewportRegionDifferentialTests`](../../../Tests/RupaRenderingTests/RealityViewportRegionDifferentialTests.swift) compares, for every device pixel of a rectangle, the triangle the region raster reports with the one `surfaceHit` reports through the same mounted frame, on a fixture with no coplanar overlap, in Ortho and Persp, with and without a section, with and without back-face culling, and across two tessellations of the same body. A five-pixel-wide visible window, a back face, a fully occluded body and a non-convex silhouette are covered; a body straddling the perspective near plane has its own case; the reconstructed screen point and depth are compared against `projectedPointWithDepth(_:revision:)` at depths away from `sampleDepth`; and a refused frame throws `.resourceExhausted` from every region query while it stays mounted. A disagreeing pixel is excused only when both answers are triangles of one occurrence that share a side whose projection the pixel centre lies on, and each run prints the side every excused pixel sat on. [`ViewportNativeCADRectangleSelectionTests`](../../../Tests/RupaRenderingTests/ViewportNativeCADRectangleSelectionTests.swift) adds the module-level proof on the production drag path: a `Viewport` mounted in an `NSHostingController` inside an `NSWindow` issues each rectangle through `ViewportInputSurface.InputView.onCanvasDrag`, so `handleSelectionDrag` and `selectionDragTarget(from:to:size:)` run before the region query. Against one CAD box and one authored mesh box placed in front of its right half, it proves face harvest and run resolution, that the subshape query skips `.authoredMesh` while the occurrence query reports it, that a vertex is admitted at its own pixel and refused when occluded or sectioned away, and that an edge is admitted at its first drawn pixel and at a rectangle it only straddles but refused when occluded along its whole walk. Every hit is checked to carry the native picking backend, so a legacy residual answer fails rather than passes. The four rules a mounted frame cannot reach — an emission index no run names, two runs naming one component, one feature at two placements, and an interval with no near plane — stay with the offscreen kernel tests. The wall cost of these same drags is recorded in contract 10. The sampling path was removed before either was recorded, on the evidence that no production caller reached it. |
 | Failure and bounds | Owned-buffer count/byte admission, native resource-count bounds, opaque native resource/collision failure, measured peak memory, cancellation, and root-preservation tests pass without empty success. A lowered caller byte limit that admits the CPU plan but not checked grouping metadata fails with `.resourceExhausted` before grouping allocation. A finite `1e-100` world scale must pass the Double CPU plan, fail only when native Float preparation collapses its surface with `.invalidTransform`, publish no surface, and allow the next valid snapshot to recover to ready. The maximum single-upload fixture and its boundary refusal are recomputed after grouping admission is added rather than preserving old hard-coded counts. Current-process footprint evidence reports baseline/peak/retained/signed delta and sample count without being promoted to signed-App or exact opaque-allocation proof. |
@@ -1641,3 +1673,112 @@ default before this command is removed.
 Changes to the frame descriptor, stable ID map, camera component, material
 policy, collision generation, or native API availability require rechecking
 the parent `RupaRendering` and package/system designs.
+
+### Mounted optical primitive port
+
+SpatialResources owns a MainActor-only optical snapshot of actual enabled native
+geometry after camera placement. Dynamic LowLevelMesh buffers and active parts
+are borrowed synchronously from their SDK owners; static path/glyph MeshResource
+instances retain their exact original triangles. Instance and entity transforms
+compose into native world coordinates. Material colors and depth behavior are
+retained when creating each native model, avoiding reconstruction from names or
+collision shapes. Lines retain their original endpoints and line topology; the
+optical consumer must reproduce native raster coverage, never turn bounds into
+geometry. Primitive and byte limits are admitted before output allocation.
+An unresolved native TextComponent or material is an explicit failure: it cannot
+be omitted from a successful optical frame. Reference annotation handoff moves
+its appearance authority with its native entities. The returned immutable value
+contains no pointer or native entity and can cross to GPU preparation safely.
+
+Native axis text uses the same authored AppKit font and styled attributed string
+through native zero-depth mesh extrusion. The extrusion maps 72 font points per
+mesh unit, so placement multiplies point scale by 72. It is drawn and optically
+consumed from the same glyph resource; no invisible collision quad owns text.
+
+Dynamic grid text preparation keeps `updateCamera` synchronous. A missing styled
+text key starts one MainActor-isolated asynchronous native glyph task and throws
+`glyphsPreparing`. The mount retains its previous complete frame and retries.
+A changed request cancels the pending task; post-await exact-key comparison admits
+only the current candidate. Native failure is retained and rethrown. Loaded glyph
+resources, geometry counts and byte charges remain cumulative for this resource
+owner and share the existing item/position/triangle/byte bounds. Shutdown cancels
+the owned task. Glyph generation performs no frame publication; synchronous grid
+placement commits its complete set after every glyph and transform is admitted.
+
+### Original line raster producer
+
+Original line source buffers remain immutable geometry authority. After camera
+placement, SpatialResources clips source endpoints in native camera depth and
+creates a half-pixel offset on each projected side using the actual supplied
+backing scale. The same inverse projection at each original endpoint depth forms
+a camera-facing ribbon. Both native draw and optical transport read those exact
+triangles. Zero projected extent uses the same one-pixel square native draw.
+Per-part color, depth and section ownership remain unchanged, while original
+endpoint/hit provenance remains in the source buffers. A missing actual pixel
+scale refuses readiness. Native ribbon resources are allocated once at admitted
+source capacities and updated in place after camera/source placement changes.
+Source and draw buffers have distinct owners; scoped synchronous native borrows
+check strides, initialized ranges, index bounds, affine inverse and arithmetic.
+All ribbon vertex/index/triangle/part capacity charges precede allocation and
+continue the existing resource owner's cumulative limits.
+
+## Original Preview Wire Source
+
+ObjectPreview retains a dedicated position-only native wire mesh in addition to the interleaved shaded mesh. It copies the exact Float positions already committed by the same original preview update and uses the same original boundary-corner indices. Both buffers are admitted before allocation; root body-wire NativeLineRasterizer owns the sole wire draw. The shaded preview may suppress its original line part without hiding the retained wire source. Failed or cancelled updates do not authorize frame publication.
+
+ObjectPreview prepares inactive shaded and wire buffers, retaining two complete native slots under its caller byte allowance. Root captures staged geometry and validates all preview/raster stages before non-suspending commit-all. A failed source conversion or cancellation never mutates the active shaded/wire slot. The caller keeps a wire rasterizer for each retained native wire source identity and charges their simultaneous capacities.
+
+## Shared Native and Optical Storage Publication
+
+The mounted owner uses one OpticalVolumeFrameStore preparation guard for
+appearance, preview slots, body line raster candidates and optical snapshots.
+Its remaining-byte receipt includes previous optical scenes retained by native
+effects, actual in-flight GPU scratch and retained/fallback image leases. Original
+triangle and occurrence staging is reserved before allocation; immutable GPU
+scene leases outlive all commands that use the scene. New preview/raster external
+storage is published into that same ledger before GPU scratch admission reopens.
+Failure retains the prior complete image and typed status; source preparation
+cannot reuse a stale private frame-byte allowance. Async spatial glyph/delta
+preparation must consume this same source owner's admission contract before
+allocating caller-owned storage; until its handoff is complete, the full A5 source
+gate remains open.
+
+[Spatial Storage Admission](SpatialStorageAdmission/DESIGN.md) owns the child
+adapter used by asynchronous glyph and added-spatial preparation. Mounted
+resources bind to the original viewport's shared images ledger through MainActor
+begin/finish/abort closures. Retained native counts include glyph storage as well
+as prepared arrays; successful publication transfers reservation bytes into
+external native storage atomically. Owner release keeps abort available through
+the captured shared ledger while weak MainActor source references prevent an
+ownership cycle.
+
+### Asynchronous Spatial Publication Admission
+
+Static overlays and hover deltas receive the same viewport storage admission
+before asynchronous population. A candidate retains its original preparation and
+refined lease until mounting. Abandonment aborts that preparation; mounting
+transfers the lease into external retained storage without an intervening await.
+During replacement the prior overlay remains charged until its last local owner
+is released. The root serializes publication and restores the old overlay if the
+transfer fails. This does not constitute GPU or behavioral evidence.
+
+Spatial optical capture reserves its retained triangle array and each temporary
+primitive packet before allocation. A nested original preparation atomically
+transfers the completed array reservation into external storage; prior arrays
+remain charged through scene replacement. Failed capture restores the prior
+array and aborts only its own preparation. A retained failure image must match
+the entire destination dimensions; resizing never publishes a mixture of prior
+pixels and the current source image.
+
+### Complete Synchronous Camera Publication
+
+[Camera Publication](CameraPublication/DESIGN.md) owns original body wire bytes,
+models and raster lanes. The viewport retains this token and both
+[spatial checkpoints](SpatialCameraState/DESIGN.md) across decoration, calibration,
+section and body-wire updates plus shared storage publication. Failed or pending
+updates restore all affected source siblings and previous publication metadata;
+requested camera inputs remain active and readiness stays withheld for retry.
+The host handles a returned grid/source failure before optical readiness or publish;
+a ready old optical image cannot authorize the failed new spatial publication.
+A token never crosses suspension or source replacement. This changes the source
+failure boundary; existing frame evidence does not verify the new path.

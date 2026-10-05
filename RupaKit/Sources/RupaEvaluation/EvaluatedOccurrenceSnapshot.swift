@@ -3,6 +3,7 @@ import RupaGeometry
 import RupaProjectModel
 
 public struct EvaluatedOccurrenceSnapshot: Sendable {
+    public let parts: [GeometryEvaluationPart]
     public let occurrenceID: SceneOccurrenceID
     public let definitionID: ObjectDefinitionID
     public let representationID: GeometryRepresentationID
@@ -20,8 +21,10 @@ public struct EvaluatedOccurrenceSnapshot: Sendable {
         mesh: MeshSource,
         copyTelemetry: GeometryCopyTelemetry = GeometryCopyTelemetry(),
         worldTransform: GeometryTransform3D,
-        worldBounds: GeometryBounds3D
+        worldBounds: GeometryBounds3D,
+        parts: [GeometryEvaluationPart]? = nil
     ) {
+        self.parts = parts ?? []
         self.occurrenceID = occurrenceID
         self.definitionID = definitionID
         self.representationID = representationID

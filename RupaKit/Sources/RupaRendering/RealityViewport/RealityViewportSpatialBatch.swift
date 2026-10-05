@@ -342,14 +342,15 @@ struct RealityViewportSpatialBatch: Sendable {
         }
         if includesAxes {
             // Three fixed two-vertex native line resources and three native
-            // TextComponent label entities are admitted before allocation.
+            // ModelEntity glyph labels are admitted before allocation.
             for _ in 0..<6 { try item() }
             try positions(6)
             try charge(3, stride: MemoryLayout<LowLevelMesh.Part>.stride
                        + MemoryLayout<UnlitMaterial>.stride
                        + MemoryLayout<(ModelEntity, LowLevelMesh)>.stride)
             try charge(6, stride: MemoryLayout<SIMD3<Float>>.stride + MemoryLayout<UInt32>.stride)
-            try charge(3, stride: MemoryLayout<Entity>.stride + MemoryLayout<TextComponent>.stride)
+            try charge(3, stride: MemoryLayout<ModelEntity>.stride + MemoryLayout<MeshResource>.stride
+                       + MemoryLayout<BillboardComponent>.stride)
             try charge(3, stride: MemoryLayout<String>.stride)
         }
         if let placement = gridPlacement {

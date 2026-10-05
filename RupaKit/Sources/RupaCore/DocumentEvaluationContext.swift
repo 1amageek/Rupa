@@ -49,5 +49,7 @@ public struct DocumentEvaluationContext: Sendable {
             return false
         }
         return sourceIdentity.matches(document.cadDocument)
+            && evaluatedDocument.document == document.cadDocument
+            && validatedDocument.document.cadDocument == document.cadDocument
     }
 }

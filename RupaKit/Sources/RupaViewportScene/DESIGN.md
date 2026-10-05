@@ -15,12 +15,12 @@ It does not own CAD or Mesh source authority, project publication, package I/O,
 RealityKit entities/resources/materials, presentation fidelity, or render-task
 lifecycle.
 
-RUPA-RK status: the downstream viewport is currently a migration hybrid.
-`RealityViewportView` owns the RealityKit surface and native camera, while
-SwiftUI `Canvas` still presents spatial overlays and legacy identity rendering
-still supplies part of picking. This module remains engine-neutral and does not
-claim ownership of that native integration; the complete downstream scene is
-target behavior until RK-2 through RK-5 and RK-IV complete.
+RUPA-RK status: the downstream viewport uses `RealityViewportView` as the
+RealityKit surface and native camera owner. SwiftUI `Canvas` remains limited to
+screen-space selection and axis chrome, while mounted RealityKit resources own
+spatial overlays and picking. This module remains engine-neutral and does not
+claim ownership of that native integration; foreground signed-app and
+unsaved-document restart evidence remains an application verification item.
 
 ## Responsibilities and Boundaries
 
@@ -432,3 +432,31 @@ Changes to source/evaluation identity or overlay reference contracts require
 rechecking the Core, Evaluation, Rendering, and package designs. Changes to
 scene-build work budgets require rechecking the Agent integration acceptance
 evidence.
+
+Native triangle selection uses a fallible provenance lookup. Negative/empty runs
+or overlapping owners of the drawn triangle are malformed source metadata and
+fail explicitly; an unnamed face remains a truthful miss. Pointer and rectangle
+selection consume this same lookup. The legacy optional helper never picks the
+first of several owners. Full source equality belongs to the Core evaluation
+context, while mounted camera/frame admission belongs to rendering.
+
+Generated body topology carries the mesh storage's immutable original-selection
+binding into the mounted scene. Triangle run identity must agree with the bound
+original B-rep name; a generated run without authority fails. Mounted consumers
+use validateCurrentEvaluation before publishing queries; this compares original
+source, B-rep, configuration, mesh and subshape table, not revision alone.
+
+## Original Occurrence Selection Carrier
+
+Scene items and native hits retain occurrenceID and original sourceSceneNodeID. SelectionTarget retains both plus sourceFeatureID. Selection lookup resolves exact occurrence before legacy node lookup, and multi-body component members remain distinct through point, rectangle and overlay publication. Current original hierarchy and current evaluated topology are independent required admissions.
+
+### Original occurrence and presentation part identity
+
+Scene projection expands every evaluated part while retaining the original
+occurrenceID, definition, selected representation, source reference and exact
+placement. The item `id`/`presentationID` uniquely identifies a render part;
+CAD parts derive this rendering identity from the original occurrence and
+BodyID. It is not an authored scene occurrence and must never be used for
+navigation or source resolution. `sourceBodyID`, `sourceFeatureID` and
+`outputRole` travel unchanged from the original provider. Every output mesh
+is drawn; body-bound face selection resolves against that original BodyID.

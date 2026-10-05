@@ -1407,6 +1407,11 @@ extension ViewportSpatialOverlayProducer {
     private static func targetBelongsToItem(
         _ target: SelectionTarget, item: ViewportSceneItem, document: DesignDocument
     ) -> Bool {
+        if let occurrence = target.occurrenceID {
+            return item.occurrenceID == occurrence && item.sourceSceneNodeID == target.sourceSceneNodeID
+                && item.sceneNodeID == target.sceneNodeID
+                && (target.sourceBodyID == nil || target.sourceBodyID == item.sourceBodyID)
+        }
         if let sceneNodeID = item.sceneNodeID { return sceneNodeID == target.sceneNodeID }
         if let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference {
             return reference.featureID == item.featureID

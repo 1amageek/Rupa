@@ -26,6 +26,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var savedViews: [SavedView]?
     public var savedViewID: SavedViewID?
     public var drawingProjection: DrawingProjectionResult?
+    public var drawingPage: DrawingPageAutomationResult?
     public var sectionAnalysis: SectionAnalysisResult?
     public var sectionClippingPlan: SectionAnalysisClippingPlan?
     public var executionMetrics: AutomationBatchMetrics?
@@ -55,6 +56,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         savedViews: [SavedView]? = nil,
         savedViewID: SavedViewID? = nil,
         drawingProjection: DrawingProjectionResult? = nil,
+        drawingPage: DrawingPageAutomationResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         executionMetrics: AutomationBatchMetrics? = nil
@@ -83,6 +85,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.savedViews = savedViews
         self.savedViewID = savedViewID
         self.drawingProjection = drawingProjection
+        self.drawingPage = drawingPage
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
         self.executionMetrics = executionMetrics
@@ -115,6 +118,7 @@ extension AutomationResult {
         case savedViews
         case savedViewID
         case drawingProjection
+        case drawingPage
         case sectionAnalysis
         case sectionClippingPlan
         case executionMetrics
@@ -204,6 +208,7 @@ extension AutomationResult {
                 DrawingProjectionResult.self,
                 forKey: .drawingProjection
             ),
+            drawingPage: try container.decodeIfPresent(DrawingPageAutomationResult.self, forKey: .drawingPage),
             sectionAnalysis: try container.decodeIfPresent(
                 SectionAnalysisResult.self,
                 forKey: .sectionAnalysis
@@ -260,6 +265,7 @@ extension AutomationResult {
         try container.encodeIfPresent(savedViews, forKey: .savedViews)
         try container.encodeIfPresent(savedViewID, forKey: .savedViewID)
         try container.encodeIfPresent(drawingProjection, forKey: .drawingProjection)
+        try container.encodeIfPresent(drawingPage, forKey: .drawingPage)
         try container.encodeIfPresent(sectionAnalysis, forKey: .sectionAnalysis)
         try container.encodeIfPresent(sectionClippingPlan, forKey: .sectionClippingPlan)
         try container.encodeIfPresent(executionMetrics, forKey: .executionMetrics)

@@ -48,6 +48,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
     /// vertex identity picking reports.
     struct Occurrence: Sendable {
         let occurrenceID: SceneOccurrenceID
+        let presentationID: SceneOccurrenceID
+        let sourceBodyID: String?
+        let sourceFeatureID: String?
+        let outputRole: String?
         let definitionID: ObjectDefinitionID
         let representationID: GeometryRepresentationID
         let sourceReference: GeometrySourceReference
@@ -82,7 +86,9 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
                 thirdPosition: positions[third],
                 firstEdgeID: edgeID(at: base),
                 secondEdgeID: edgeID(at: base + 1),
-                thirdEdgeID: edgeID(at: base + 2)
+                thirdEdgeID: edgeID(at: base + 2),
+                presentationID: presentationID, sourceBodyID: sourceBodyID,
+                sourceFeatureID: sourceFeatureID, outputRole: outputRole
             )
         }
 
@@ -478,6 +484,10 @@ public struct MeshSourcePresentationRenderPlan: Sendable {
 
         let occurrence = Occurrence(
             occurrenceID: item.occurrenceID,
+            presentationID: item.presentationID,
+            sourceBodyID: item.sourceBodyID,
+            sourceFeatureID: item.sourceFeatureID,
+            outputRole: item.outputRole,
             definitionID: item.definitionID,
             representationID: item.representationID,
             sourceReference: item.sourceReference,

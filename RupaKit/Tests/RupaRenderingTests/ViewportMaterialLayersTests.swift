@@ -11,15 +11,27 @@ import Testing
         var material = Material.neutral(named: "Glass")
         material.clearcoat = 0.6
         material.clearcoatRoughness = 0.2
+        material.ior = 1.7
         material.sheen = 0.5
         material.sheenColor = ColorRGBA(r: 1, g: 0.5, b: 0, a: 1)
+        material.sheenRoughness = 0.35
+        material.specularColor = ColorRGBA(r: 0.8, g: 0.7, b: 0.6, a: 1)
         material.specularIntensity = 0.4
+        material.iridescence = 0.25
+        material.iridescenceIOR = 1.4
+        material.thickness = 0.002
         material.transmission = 1
         let surface = ViewportSurface(color: material.baseColor, authoring: material)
         #expect(surface.clearcoat == 0.6)
         #expect(surface.clearcoatRoughness == 0.2)
+        #expect(surface.ior == 1.7)
         #expect(surface.sheen == ColorRGBA(r: 0.5, g: 0.25, b: 0, a: 1))
+        #expect(surface.sheenRoughness == 0.35)
+        #expect(surface.specularColor == ColorRGBA(r: 0.8, g: 0.7, b: 0.6, a: 1))
         #expect(surface.specularIntensity == 0.4)
+        #expect(surface.iridescence == 0.25)
+        #expect(surface.iridescenceIOR == 1.4)
+        #expect(surface.thickness == 0.002)
         #expect(surface.displayedOpacity == 0.5)
         #expect(surface.isTransparent)
         #expect(!ViewportSurface(color: material.baseColor, authoring: nil).isTransparent)

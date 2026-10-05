@@ -305,12 +305,12 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
         }
 
         let sceneNodes = try sceneNodeIDs.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.map { id in
             SceneNodeRecord(tableID: id, node: try requireSceneNode(id, in: metadata))
         }
         let componentDefinitions = try componentDefinitionIDs.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.map { id in
             guard let definition = metadata.componentDefinitions[id] else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -320,7 +320,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
             return ComponentDefinitionRecord(tableID: id, definition: definition)
         }
         let componentInstances = try componentInstanceIDs.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.map { id in
             guard let instance = metadata.componentInstances[id] else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -330,7 +330,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
             return ComponentInstanceRecord(tableID: id, instance: instance)
         }
         let constructionPlanes = try constructionPlaneIDs.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.map { id in
             guard let plane = metadata.constructionPlanes[id] else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -340,7 +340,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
             return ConstructionPlaneRecord(tableID: id, plane: plane)
         }
         let materials = try materialIDs.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.map { id in
             guard let material = metadata.materialLibrary.materials[id] else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -374,7 +374,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
             recordsByID[id] = MaterialRecord(tableID: id, material: material)
         }
         return recordsByID.keys.sorted {
-            $0.rawValue.uuidString < $1.rawValue.uuidString
+            $0.description < $1.description
         }.compactMap { recordsByID[$0] }
     }
 
@@ -427,7 +427,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
     }
 
     private func sceneReferenceKey(_ reference: ProjectionManifest.SceneReference) -> String {
-        "\(reference.semanticEntityID.rawValue):\(reference.sceneNodeID.rawValue.uuidString):\(reference.objectTypeID?.rawValue ?? "")"
+        "\(reference.semanticEntityID.rawValue):\(reference.sceneNodeID.description):\(reference.objectTypeID?.rawValue ?? "")"
     }
 
     private func topologyReferenceKey(_ reference: ProjectionManifest.TopologyReference) -> String {
@@ -445,7 +445,7 @@ public struct ProjectionDependencyIdentityBuilder: Sendable {
         case .sourceFeature(let id):
             return "feature:\(id.description)"
         case .sceneNode(let id):
-            return "scene:\(id.rawValue.uuidString)"
+            return "scene:\(id.description)"
         case .topology(let persistentName, let owningFeatureID):
             return "topology:\(owningFeatureID.description):\(persistentName)"
         }

@@ -26,41 +26,38 @@ public struct BodyDisplaySnapshotService: Sendable {
             currentGeneration: currentGeneration,
             failurePrefix: "Document must evaluate successfully before body display snapshots"
         )
-        return snapshots(evaluatedDocument: evaluatedDocument)
+        return try snapshots(evaluatedDocument: evaluatedDocument)
     }
 
     public func snapshots(
         evaluatedDocument: EvaluatedDocument
-    ) -> [FeatureID: BodyDisplaySnapshot] {
-        // The subshape table is sorted once and split by feature, keeping that order: every body
-        // had sorted the whole table again, twice, to find its own entries and its first body.
+    ) throws -> [FeatureID: BodyDisplaySnapshot] {
+        try bodySnapshots(evaluatedDocument: evaluatedDocument).compactMapValues { $0.first }
+    }
+
+    public func bodySnapshots(evaluatedDocument: EvaluatedDocument) throws -> [FeatureID: [BodyDisplaySnapshot]] {
         var entriesByFeatureID: [FeatureID: [SubshapeEntry]] = [:]
-        var firstBodyByFeatureID: [FeatureID: GeneratedBodyIdentityResolver.Identity] = [:]
-        var bodyFeatureIDs: [FeatureID] = []
-        for entry in evaluatedDocument.subshapes.entries.sorted(by: {
-            GeneratedSubshapeIdentity.areInIncreasingOrder($0.key, $1.key)
-        }) {
+        var identities: [FeatureID: [BodyID: GeneratedBodyIdentityResolver.Identity]] = [:]
+        for entry in evaluatedDocument.subshapes.entries.sorted(by: { $0.key < $1.key }) {
+            try Task.checkCancellation()
             let featureID = entry.key.featureID
             entriesByFeatureID[featureID, default: []].append(entry)
-            if case .body(let bodyID) = entry.value, firstBodyByFeatureID[featureID] == nil {
-                firstBodyByFeatureID[featureID] = .init(bodyID: bodyID, sourceFeatureID: featureID, subshapeID: entry.key)
-                bodyFeatureIDs.append(featureID)
+            if case let .body(bodyID) = entry.value, identities[featureID]?[bodyID] == nil {
+                identities[featureID, default: [:]][bodyID] = .init(bodyID: bodyID, sourceFeatureID: featureID, subshapeID: entry.key)
             }
         }
-        var snapshots: [FeatureID: BodyDisplaySnapshot] = [:]
-        for featureID in bodyFeatureIDs {
-            guard let identity = firstBodyByFeatureID[featureID],
-                  let snapshot = snapshot(
-                    for: featureID,
-                    identity: identity,
-                    entries: entriesByFeatureID[featureID] ?? [],
-                    in: evaluatedDocument
-                  ) else {
-                continue
+        var result: [FeatureID: [BodyDisplaySnapshot]] = [:]
+        for featureID in identities.keys.sorted() {
+            for bodyID in (identities[featureID] ?? [:]).keys.sorted() {
+                try Task.checkCancellation()
+                guard let identity = identities[featureID]?[bodyID] else {
+                    throw EditorError(code: .evaluationFailed, message: "Original body output witness is missing.")
+                }
+                result[featureID, default: []].append(try snapshot(for: featureID, identity: identity,
+                    entries: entriesByFeatureID[featureID] ?? [], in: evaluatedDocument))
             }
-            snapshots[featureID] = snapshot
         }
-        return snapshots
+        return result
     }
 
     /// One subshape table entry.
@@ -71,10 +68,11 @@ public struct BodyDisplaySnapshotService: Sendable {
         identity: GeneratedBodyIdentityResolver.Identity,
         entries: [SubshapeEntry],
         in evaluatedDocument: EvaluatedDocument
-    ) -> BodyDisplaySnapshot? {
+    ) throws -> BodyDisplaySnapshot {
         guard let mesh = evaluatedDocument.meshes[identity.bodyID],
               let bounds = bodyBounds(mesh.positions) else {
-            return nil
+            throw EditorError(code: .evaluationFailed,
+                message: "Evaluated body display requires its actual mesh and finite bounds.")
         }
 
         return BodyDisplaySnapshot(
@@ -84,9 +82,10 @@ public struct BodyDisplaySnapshotService: Sendable {
             bounds: bounds,
             mesh: BodyDisplaySnapshot.Mesh(
                 positions: mesh.positions,
-                indices: mesh.indices
+                indices: mesh.indices,
+                selectionBinding: try OriginalMeshSelectionBinding(bodyID: identity.bodyID, evaluated: evaluatedDocument)
             ),
-            topology: topology(
+            topology: try topology(
                 for: featureID,
                 bodyID: identity.bodyID,
                 mesh: mesh,
@@ -102,8 +101,10 @@ public struct BodyDisplaySnapshotService: Sendable {
         mesh: SwiftCAD.Mesh,
         entries generatedEntries: [SubshapeEntry],
         in evaluatedDocument: EvaluatedDocument
-    ) -> BodyDisplaySnapshot.Topology {
+    ) throws -> BodyDisplaySnapshot.Topology {
         let model = evaluatedDocument.brep
+        let membership = try OriginalBodyTopologyMembership(bodyID: bodyID, in: model)
+        let generatedEntries = generatedEntries.filter { membership.contains($0.value) }
         var faces: [BodyDisplaySnapshot.Topology.Face] = []
         var edges: [BodyDisplaySnapshot.Topology.Edge] = []
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []

@@ -39,6 +39,8 @@ public struct AutomationRunner: Sendable {
              .updateSavedView,
              .removeSavedView,
              .generateDrawingProjection,
+             .generateDrawingPage,
+             .exportDrawingPage,
              .generateDrawingProjectionFromView,
              .rebaseWorkspaceOrigin,
              .appendFeatureGraph,
@@ -188,6 +190,8 @@ public struct AutomationRunner: Sendable {
              .updateSavedView,
              .removeSavedView,
              .generateDrawingProjection,
+             .generateDrawingPage,
+             .exportDrawingPage,
              .generateDrawingProjectionFromView:
             func run() throws -> AutomationResult {
                 try executeWorkspaceCommand(command, in: session)
@@ -375,6 +379,14 @@ public struct AutomationRunner: Sendable {
                 )
             }
             return try run()
+        case .generateDrawingPage(let request):
+            let page = try DefaultDrawingPageAutomationProducer().generate(request, in: session)
+            return AutomationResult(message: "Original drawing page generated.", commandName: "generateDrawingPage",
+                generation: session.generation, didMutate: false, savedViewID: page.savedViewID, drawingPage: page)
+        case .exportDrawingPage(let request, let url):
+            let page = try DefaultDrawingPageAutomationProducer().export(request, to: url, in: session)
+            return AutomationResult(message: "Original drawing page exported.", commandName: "exportDrawingPage",
+                generation: session.generation, didMutate: false, savedViewID: page.savedViewID, drawingPage: page)
         case .generateDrawingProjection:
             func run() throws -> AutomationResult {
                 guard case .generateDrawingProjection(let query) = command else {

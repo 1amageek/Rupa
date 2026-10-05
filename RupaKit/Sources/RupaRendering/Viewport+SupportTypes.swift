@@ -4,7 +4,9 @@ import SwiftUI
 import RupaViewportScene
 
 enum ViewportTheme {
-    static let background = Color(red: 0.105, green: 0.112, blue: 0.118)
+    static let backgroundColor = ColorRGBA(r: 0.105, g: 0.112, b: 0.118, a: 1)
+    static let background = Color(red: backgroundColor.r, green: backgroundColor.g,
+                                  blue: backgroundColor.b, opacity: backgroundColor.a)
     static let gridMinor = Color.white.opacity(0.055)
     static let gridMajor = Color.white.opacity(0.135)
     static let gridOrigin = Color.white.opacity(0.22)

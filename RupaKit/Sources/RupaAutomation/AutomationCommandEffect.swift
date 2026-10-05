@@ -10,6 +10,8 @@ extension AutomationCommand {
         case .describeDocument,
              .describeSavedViews,
              .generateDrawingProjection,
+             .generateDrawingPage,
+             .exportDrawingPage,
              .generateDrawingProjectionFromView,
              .analyzeSection,
              .describeConstructionPlanes,

@@ -29,9 +29,11 @@ provenance, and immutable import results. It does not select fidelity, edit CAD
 source, publish a project, render a viewport, handle Agent requests, or own
 application file-panel lifetime.
 
-The package-visible output-ID helper is the single owner of the existing
-direct-`BodyID` and feature-to-unique-body interpretation; consumers use that
-contract instead of reconstructing Swift-CAD ID semantics.
+The package-visible complete output-ID helper owns direct-`BodyID` and
+feature-to-all-original-bodies interpretation. Consumers use that contract
+instead of reconstructing Swift-CAD ID semantics. The retained unique-body
+helper serves only explicit legacy single-body queries and is not used by
+production provider or presentation composition.
 
 ## Related Designs
 
@@ -218,3 +220,13 @@ additionally proves the converted source names the *n*-th Swift-CAD triangle
 `MeshFaceID(n)`, which is the ordering the viewport's CAD face resolution reads.
 Changes require rechecking RupaEvaluation, RupaKit
 composition, RupaProject staging, and Swift-CAD tessellation contracts.
+
+### Complete original body outputs
+
+A direct BodyID output resolves that original live body. A FeatureID output
+resolves all distinct live body references in its original generated-subshape
+table, in BodyID order. Each result part transports the original BodyID, its
+generating FeatureID and stable generated-body role. Admission, conversion,
+original triangle ordinals and cache reuse run separately for every body,
+under the same invocation allowance. No unique-body rejection or first-body
+selection is authority for a multi-output feature.

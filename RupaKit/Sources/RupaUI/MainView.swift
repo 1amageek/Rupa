@@ -295,6 +295,7 @@ private struct ProjectMainViewContent: View {
     private let commandCatalog: WorkspaceCommandCatalog
     private let domainCommandDispatcher: ProjectDomainCommandDispatcher
     private let exactPresentationCADSceneNodeIDs: Set<SceneNodeID>
+    private let exactPresentationCADOccurrenceIDs: Set<SceneOccurrenceID>
     private let selectedPresentationHasExactCADAffordanceContext: Bool
     private let newProject: @MainActor () -> Void
 
@@ -405,13 +406,19 @@ private struct ProjectMainViewContent: View {
         )
         self.commandCatalog = WorkspaceCommandCatalog(domainRegistry: domainRegistry)
         self.domainCommandDispatcher = ProjectDomainCommandDispatcher(registry: domainRegistry)
-        let exactPresentationCADSceneNodeIDs = Self.makeExactPresentationCADSceneNodeIDs(
-            snapshot: snapshot
-        )
+        let exactPresentationCADOccurrenceIDs = Self.makeExactPresentationCADOccurrenceIDs(snapshot: snapshot)
+        self.exactPresentationCADOccurrenceIDs = exactPresentationCADOccurrenceIDs
+        var allMembersAdmitted: [SceneNodeID: Bool] = [:]
+        for item in snapshot.viewport.items {
+            guard let owner = snapshot.sceneNodeID(for: item.occurrenceID) else { continue }
+            allMembersAdmitted[owner] = (allMembersAdmitted[owner] ?? true) && exactPresentationCADOccurrenceIDs.contains(item.occurrenceID)
+        }
+        let exactPresentationCADSceneNodeIDs = Set(allMembersAdmitted.compactMap { $0.value ? $0.key : nil })
         self.exactPresentationCADSceneNodeIDs = exactPresentationCADSceneNodeIDs
         self.selectedPresentationHasExactCADAffordanceContext =
             MeshSourcePresentationExactCADSelectionResolver(
-                availableSceneNodeIDs: exactPresentationCADSceneNodeIDs
+                availableSceneNodeIDs: exactPresentationCADSceneNodeIDs,
+                availableOccurrenceIDs: exactPresentationCADOccurrenceIDs
             )
             .hasExactContext(for: snapshot.selection)
     }
@@ -2414,6 +2421,7 @@ private struct ProjectMainViewContent: View {
             selectionDragPreviewTargets: selectionDragPreviewTargets,
             removalPreviewTargets: removalPreviewTargets,
             presentationPreviewSceneNodeIDs: selectionDragPreviewSceneNodeIDs,
+            presentationPreviewOccurrenceIDs: Set(selectionDragPreviewTargets.compactMap(\.occurrenceID)),
             patternArrayCurvePathReplacementPreviewRequest: patternArrayCurvePathReplacementPreviewRequest,
             surfaceAnalysis: selectedSurfaceAnalysisSummary,
             surfaceAnalysisOptions: surfaceAnalysisOptions,
@@ -2471,6 +2479,7 @@ private struct ProjectMainViewContent: View {
                     .operationStepMeters
             ),
             presentationCADInteractionSceneNodeIDs: exactPresentationCADSceneNodeIDs,
+            presentationCADInteractionOccurrenceIDs: exactPresentationCADOccurrenceIDs,
             selectedPresentationHasExactCADContext: selectedPresentationHasExactCADAffordanceContext,
             onPresentationOccurrencePick: presentationOccurrencePickHandler,
             onPresentationOccurrenceHover: presentationOccurrenceHoverHandler,
@@ -3427,16 +3436,25 @@ private struct ProjectMainViewContent: View {
             || viewAlignedConstructionPlaneRequest != nil
     }
 
-    private static func makeExactPresentationCADSceneNodeIDs(
+    private static func makeExactPresentationCADOccurrenceIDs(
         snapshot: ProjectViewSnapshot
-    ) -> Set<SceneNodeID> {
+    ) -> Set<SceneOccurrenceID> {
         let resolver = MeshSourcePresentationCADAffordanceResolver()
         // One index of the evaluation's bodies serves every presented item.
-        let evaluatedBodies = snapshot.cadInteraction.map { MeshSourcePresentationEvaluatedBodies($0.evaluatedDocument) }
-        var availableCounts: [SceneNodeID: Int] = [:]
-        var unavailableSceneNodeIDs: Set<SceneNodeID> = []
+        let evaluatedBodies: MeshSourcePresentationEvaluatedBodies?
+        do {
+            evaluatedBodies = try snapshot.cadInteraction.map {
+                try MeshSourcePresentationEvaluatedBodies($0.evaluatedDocument, document: snapshot.document.document)
+            }
+        } catch {
+            // Failed original occurrence preparation grants no exact CAD interaction.
+            return []
+        }
+        var available: Set<SceneOccurrenceID> = []
+        var refused: Set<SceneOccurrenceID> = []
         for item in snapshot.viewport.items {
             guard let sceneNodeID = snapshot.sceneNodeID(for: item.occurrenceID) else {
+                refused.insert(item.occurrenceID)
                 continue
             }
             guard case .available = resolver.resolve(
@@ -3447,16 +3465,12 @@ private struct ProjectMainViewContent: View {
                       cadInteraction: snapshot.cadInteraction,
                       evaluatedBodies: evaluatedBodies
                   ) else {
-                unavailableSceneNodeIDs.insert(sceneNodeID)
+                refused.insert(item.occurrenceID)
                 continue
             }
-            availableCounts[sceneNodeID, default: 0] += 1
+            available.insert(item.occurrenceID)
         }
-        return Set(availableCounts.compactMap { sceneNodeID, count in
-            count == 1 && unavailableSceneNodeIDs.contains(sceneNodeID) == false
-                ? sceneNodeID
-                : nil
-        })
+        return available.subtracting(refused)
     }
 
     private var presentationOccurrencePickHandler: (
@@ -3482,6 +3496,11 @@ private struct ProjectMainViewContent: View {
         return handlePresentationOccurrenceHover
     }
 
+    private func originalOccurrenceTarget(_ occurrenceID: SceneOccurrenceID) -> SelectionTarget? {
+        do { return try OriginalOccurrenceSelectionResolver(document: snapshot.document.document).target(for: occurrenceID) }
+        catch { reportToolStatus("Original occurrence selection could not resolve: \(error)", severity: .warning); return nil }
+    }
+
     private func handlePresentationOccurrencePick(
         _ occurrenceID: SceneOccurrenceID,
         intent: ViewportSelectionIntent
@@ -3493,10 +3512,8 @@ private struct ProjectMainViewContent: View {
             )
             return
         }
-        applyViewportSelection(
-            targets: [SelectionTarget(sceneNodeID: sceneNodeID)],
-            intent: intent
-        )
+        guard let target = originalOccurrenceTarget(occurrenceID) else { return }
+        applyViewportSelection(targets: [target], intent: intent)
     }
 
     private func handlePresentationOccurrenceHover(_ occurrenceID: SceneOccurrenceID?) {
@@ -3505,7 +3522,7 @@ private struct ProjectMainViewContent: View {
             setHoveredTarget(nil)
             return
         }
-        setHoveredTarget(SelectionTarget(sceneNodeID: sceneNodeID))
+        setHoveredTarget(originalOccurrenceTarget(occurrenceID))
     }
 
     private var canvasDragPreviewKind: ViewportCanvasDragPreviewKind? {
@@ -4189,6 +4206,7 @@ private struct ProjectMainViewContent: View {
             identifier: "WorkspaceViewport.displayMode",
             hint: $headerHoverHint
         )
+        .disabled(!viewportControlSession.isReady)
     }
 
     @ViewBuilder
@@ -8411,7 +8429,7 @@ private struct ProjectMainViewContent: View {
         }
         selectionDragPreviewTargets = targets
         selectionDragPreviewSceneNodeIDs = Set(targets.compactMap { target in
-            guard case .object = target.component else {
+            guard case .object = target.component, target.occurrenceID == nil else {
                 return nil
             }
             return target.sceneNodeID
@@ -8431,7 +8449,7 @@ private struct ProjectMainViewContent: View {
             guard let sceneNodeID = snapshot.sceneNodeID(for: occurrenceID) else {
                 continue
             }
-            let selectionTarget = SelectionTarget(sceneNodeID: sceneNodeID)
+            guard let selectionTarget = originalOccurrenceTarget(occurrenceID) else { continue }
             if targets.contains(selectionTarget) == false {
                 targets.append(selectionTarget)
             }

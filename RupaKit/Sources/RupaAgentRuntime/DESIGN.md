@@ -93,6 +93,24 @@ flowchart LR
 
 ## Contracts and Invariants
 
+### Native CAD identity canonical text
+
+The scene navigation identity in `ProjectAgentGeometryProjection` is RupaCore's
+CAD `TaggedID` alias. Its public `description` supplies the same uppercase
+36-byte hyphenated UUID text previously obtained from a UUID-backed rawValue.
+The viewport snapshot's string budget charges that unchanged spelling once;
+the wire item retains its typed sceneNodeID and existing Native Codable witness.
+There is no UUID parsing, surrogate ID, fallback navigation or new state owner.
+The dependency, scope, projection-signature and export text boundary is owned by
+[Core](../RupaCore/DESIGN.md#native-cad-identity-canonical-text).
+
+`AgentProjectViewportSnapshotTests` owns literal scene-ID wire verification
+through the actual published workspace projection. Existing stale-generation,
+navigation, budget and cancellation tests remain required. The same operation
+guard, snapshot authority, record limits and failure mapping apply after the
+backing changes to portable 128-bit identity. Rebuilt signed-App save/restart
+and visible verification remain separate from package behavioral evidence.
+
 1. Each request acquires one registry operation lease, captures one current
    view, validates required generation and handle coordinates, and supplies
    that exact view plus lease guard to the RupaKit use case.
@@ -347,3 +365,9 @@ construction moved into a detached task, a preparing plan charges `MainActor`
 only its publication slice, so continuous occupation is the harsher condition
 and bounds the one the product actually produces. Dependency tests must prove Runtime no longer imports
 or calls CAD, Mesh/Geometry, rendering, package-writing, or persistence APIs.
+
+### Viewport output-part publication
+
+ProjectAgentGeometryProjection publishes all original body parts, orders
+records by presentationID, and charges every original witness string before
+output allocation. Navigation is always through original occurrenceID.

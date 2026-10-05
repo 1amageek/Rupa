@@ -177,3 +177,21 @@ Changes to the evaluator preparation seam or aggregate budget require
 rechecking `RupaProject`, `RupaKit`, `RupaCADIntegration`, Swift-CAD, and the
 system design. Viewport responsiveness is proven by the rendering/application
 owners, not by this module's value tests alone.
+
+### Original multi-output geometry
+
+`GeometryEvaluationResult.parts` is the complete ordered output of one source
+reference. Each part retains its own immutable mesh, exact bounds, telemetry,
+and optional original provider body/feature/output-role witness. The CAD
+provider emits one part per original live BodyID; the evaluator charges and
+validates every part before publication. The source occurrence remains one
+original occurrence and stores all parts. Legacy `mesh`/bounds fields identify
+the primary part only and are not aggregate multi-output authority. Consumers
+producing presentation must traverse `parts`. Distinct part body witnesses
+are required, and no body is inferred from a mesh name.
+
+Output part record storage and original provenance UTF-8 bytes are charged
+against the same remaining invocation byte allowance as all returned meshes.
+CAD admission performs that charge before mesh materialization; the generic
+engine independently charges the actual immutable records before publication.
+No per-part ledger resets or new ceiling are introduced.

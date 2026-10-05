@@ -4,6 +4,10 @@ import RupaProjectModel
 
 public struct MeshSourcePresentationTriangle: Equatable, Sendable {
     public let occurrenceID: SceneOccurrenceID
+    public let presentationID: SceneOccurrenceID
+    public let sourceBodyID: String?
+    public let sourceFeatureID: String?
+    public let outputRole: String?
     public let definitionID: ObjectDefinitionID
     public let representationID: GeometryRepresentationID
     public let sourceReference: GeometrySourceReference
@@ -33,9 +37,15 @@ public struct MeshSourcePresentationTriangle: Equatable, Sendable {
         thirdPosition: GeometryPoint3D,
         firstEdgeID: MeshEdgeID? = nil,
         secondEdgeID: MeshEdgeID? = nil,
-        thirdEdgeID: MeshEdgeID? = nil
+        thirdEdgeID: MeshEdgeID? = nil,
+        presentationID: SceneOccurrenceID? = nil,
+        sourceBodyID: String? = nil, sourceFeatureID: String? = nil, outputRole: String? = nil
     ) {
         self.occurrenceID = occurrenceID
+        self.presentationID = presentationID ?? occurrenceID
+        self.sourceBodyID = sourceBodyID
+        self.sourceFeatureID = sourceFeatureID
+        self.outputRole = outputRole
         self.definitionID = definitionID
         self.representationID = representationID
         self.sourceReference = sourceReference

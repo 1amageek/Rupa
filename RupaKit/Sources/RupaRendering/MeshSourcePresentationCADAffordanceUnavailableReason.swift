@@ -11,4 +11,7 @@ public enum MeshSourcePresentationCADAffordanceUnavailableReason: Equatable, Sen
     case staleCADInteractionContext
     case missingEvaluatedBody
     case ambiguousEvaluatedBody
+    case occurrencePlacementMismatch
+    case displayedMeshMismatch
+    case cancelled
 }

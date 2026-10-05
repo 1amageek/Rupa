@@ -199,3 +199,7 @@ The later implementation must prove:
 Changes to prepared-step shape, binding lifetime, execution ordering, result
 projection, or internal graph use require rechecking `RupaDomainFoundation`,
 `RupaKit`, `RupaProject`, Agent Runtime, and actual CLI integration.
+
+## Original Drawing Page Composition
+
+The legacy drawing lane also composes the [DrawingPagePublication](DrawingPagePublication/DESIGN.md) child. It uses explicit caller paper/font/dimension/resource authorities and returns complete original format bytes or one atomic output file without mutating staged source. The prepared semantic execution lane is unchanged.

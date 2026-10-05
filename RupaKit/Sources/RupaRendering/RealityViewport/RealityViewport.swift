@@ -38,6 +38,13 @@ final class RealityViewport {
     private var spatialCameraState: SpatialCameraState?
     private(set) var spatialCameraUpdateCount = 0
 
+    private struct BodyLineCameraState: Equatable {
+        let layout: ViewportLayout?
+        let displayScale: CGFloat?
+        let previews: [String: Transform3D]
+        let mode: ViewportDisplayMode?
+    }
+
     private struct SpatialCameraState: Equatable {
         let layout: ViewportLayout
         let displayScale: CGFloat?
@@ -76,6 +83,14 @@ final class RealityViewport {
     private var regionRasterKey: RealityViewportRegionFrameKey?
     private var regionRasterState: RegionRasterState?
     private var appearance: Appearance?
+    private var bodyLineRasterizers: [Int: NativeLineRasterizer] = [:]
+    private var bodyLineCameraState: BodyLineCameraState?
+    private var opticalWireColors: [ColorRGBA] = []
+    private var opticalSpatialTriangles: [OpticalVolumeTriangle] = []
+    private var opticalTransport: OpticalVolumeTransport?
+    private let opticalImages = OpticalVolumeFrameStore()
+    private var opticalSurfaces: [ViewportSurface] = []
+    private var opticalPreviewInputs: [String: Transform3D] = [:]
     private var section: RealityViewportSectionHalfSpace?
     private var requestedSection: (plane: SectionAnalysisResult.Plane, side: SectionAnalysisRetainedSide, tolerance: Double)?
 
@@ -87,6 +102,10 @@ final class RealityViewport {
         let selected: Set<SceneNodeID>
         let preview: Set<SceneNodeID>
         let hovered: SceneNodeID?
+        let selectedOccurrences: Set<SceneOccurrenceID>
+        let previewOccurrences: Set<SceneOccurrenceID>
+        let hoveredOccurrence: SceneOccurrenceID?
+        let hoveredBodyID: String?
         let plane: SectionAnalysisResult.Plane?
         let side: SectionAnalysisRetainedSide
         let tolerance: Double
@@ -161,10 +180,15 @@ final class RealityViewport {
 
     /// Native resource references are retained once per unique geometry group.
     /// The corresponding entities remain distinct per occurrence.
+    private struct NativeLineResource {
+        let resource: MeshResource
+        let source: LowLevelMesh
+    }
+
     private struct NativeResourceReference {
         let visual: MeshResource
         let collision: ShapeResource
-        let lines: MeshResource?
+        let lines: NativeLineResource?
     }
 
     /// Immutable assets may outlive a frame; applied entity state never does.
@@ -175,6 +199,7 @@ final class RealityViewport {
         let resources: [NativeResourceReference]
         let groupByGeometry: [Geometry: Int]
         let instances: [GeometryInstanceRecord]
+        let geometry: [GeometryGroupRecord]
         let bounds: BoundingBox
     }
 
@@ -187,6 +212,7 @@ final class RealityViewport {
             let shading: ViewportShading
             let surface: ViewportSurface
             let wire: ColorRGBA
+            var volumeTransportAvailable: Bool = false
         }
         private var entries: [(MeshSourcePresentationVisualState, Key, (any RealityKit.Material, UnlitMaterial))] = []
 
@@ -194,7 +220,7 @@ final class RealityViewport {
                      using materials: RealityViewportMaterial) throws -> (any RealityKit.Material, UnlitMaterial) {
             let index = entries.firstIndex { $0.0 == state }
             if let index, entries[index].1 == key { return entries[index].2 }
-            let pair = (try materials.surface(displayMode: key.mode, shading: key.shading, surface: key.surface),
+            let pair = (try materials.surface(displayMode: key.mode, shading: key.shading, surface: key.surface, volumeTransportAvailable: key.volumeTransportAvailable),
                         materials.line(color: key.wire))
             if let index { entries[index] = (state, key, pair) }
             else { entries.append((state, key, pair)) }
@@ -245,7 +271,8 @@ final class RealityViewport {
         }
         var added: RealityViewportSpatialResources?
         if let batch = delta.added {
-            added = try await RealityViewportSpatialResources.prepareDelta(batch: batch, over: base)
+            added = try await RealityViewportSpatialResources.prepareDelta(batch: batch, over: base,
+                storageAdmission: surfaceResources == nil ? nil : makeOpticalStorageAdmission())
         }
         try Task.checkCancellation()
         return RealityViewportSpatialDeltaLayer(base: base, suppressed: delta.suppressed, added: added,
@@ -279,6 +306,11 @@ final class RealityViewport {
         }
         let suppression = layer?.suppressed ?? .init()
         try base.validate(suppression)
+        var previousLayer = spatialDelta
+        let previousOwnedBytes = try previousLayer?.added?.retainedNativeByteCount() ?? 0
+        let lease = layer?.added?.takePreparationLease()
+        var transferred = lease == nil
+        defer { if !transferred { opticalImages.abortPreparation() } }
         spatialDelta?.added?.root.removeFromParent()
         spatialDelta?.added?.sectionedRoot.removeFromParent()
         try base.suppress(suppression)
@@ -288,6 +320,29 @@ final class RealityViewport {
             base.sectionedRoot.addChild(added.sectionedRoot)
         }
         spatialDelta = layer
+        if surfaceResources != nil {
+            do {
+                if let lease {
+                    let external = try opticalExternalStorageBytes().addingReportingOverflow(previousOwnedBytes)
+                    guard !external.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                    try opticalImages.finishPreparation(externalBytes: external.partialValue, releasing: lease)
+                    transferred = true
+                }
+            } catch {
+                layer?.added?.root.removeFromParent()
+                layer?.added?.sectionedRoot.removeFromParent()
+                spatialDelta = previousLayer
+                try base.suppress(previousLayer?.suppressed ?? .init())
+                if let previous = previousLayer?.added {
+                    base.root.addChild(previous.root)
+                    base.sectionedRoot.addChild(previous.sectionedRoot)
+                }
+                throw error
+            }
+            previousLayer = nil
+            try withOpticalStoragePreparation { }
+        }
+        if let added = layer?.added, surfaceResources != nil { bindOpticalStorageAdmission(to: added) }
         fixedBounds = preparedFixedBounds
         if let added = layer?.added, !added.sectionedRoot.children.isEmpty {
             fixedBounds.formUnion(added.sectionedRoot.visualBounds(relativeTo: root, excludeInactive: false))
@@ -310,9 +365,10 @@ final class RealityViewport {
     private func completesSpatialPlacement(over base: RealityViewportSpatialResources) -> Bool {
         guard spatialCameraState != nil, let content else { return false }
         do {
-            try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
-            _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
+            try base.updatePlacement(camera: camera, content: content, objectPreviews: appliedObjectPreviews, nativePixelsPerPoint: appliedDisplayScale)
+            _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews, nativePixelsPerPoint: appliedDisplayScale)
             try updateSectionContainment(reapplyingSection: true)
+            try updateBodyLineRasterizers()
             return true
         } catch {
             return false
@@ -380,9 +436,19 @@ final class RealityViewport {
         }
         if let spatialBatch {
             let spatial = try await RealityViewportSpatialResources.prepare(batch: spatialBatch, surfacePlan: plan,
-                                                                            reusing: previous?.spatialResources)
+                                                                            reusing: previous?.spatialResources,
+                storageAdmission: prepared.surfaceResources == nil ? nil : prepared.makeOpticalStorageAdmission())
             try Task.checkCancellation()
             prepared.spatialResources = spatial
+            if prepared.surfaceResources != nil {
+                prepared.bindOpticalStorageAdmission(to: spatial)
+                if let lease = spatial.takePreparationLease() {
+                    var transferred = false
+                    defer { if !transferred { prepared.opticalImages.abortPreparation() } }
+                    try prepared.opticalImages.finishPreparation(externalBytes: prepared.opticalExternalStorageBytes(), releasing: lease)
+                    transferred = true
+                }
+            }
             prepared.root.addChild(spatial.root)
             prepared.geometryRoot.addChild(spatial.sectionedRoot)
             if !spatial.sectionedRoot.children.isEmpty {
@@ -446,7 +512,7 @@ final class RealityViewport {
                                 materialVariants: plan.occurrences.map { _ in SurfaceMaterialVariants() },
                                 resources: nativeResources,
                                 groupByGeometry: grouping.groupByGeometry,
-                                instances: grouping.instances, bounds: bounds)
+                                instances: grouping.instances, geometry: grouping.groups, bounds: bounds)
     }
 
     private func attachSurfaces() throws {
@@ -465,7 +531,7 @@ final class RealityViewport {
             occurrenceByEntity[ObjectIdentifier(surface)] = index
             let lines: ModelEntity?
             if let lineResource = resources.lines {
-                let entity = ModelEntity(mesh: lineResource, materials: [UnlitMaterial(color: .gray)])
+                let entity = ModelEntity(mesh: lineResource.resource, materials: [UnlitMaterial(color: .gray)])
                 entity.position = instance.translation
                 geometryRoot.addChild(entity)
                 lines = entity
@@ -653,7 +719,7 @@ final class RealityViewport {
         )
     }
 
-    private func makeLineResource(_ geometry: Geometry) async throws -> MeshResource? {
+    private func makeLineResource(_ geometry: Geometry) async throws -> NativeLineResource? {
         guard !geometry.lineIndices.isEmpty else { return nil }
         let mesh: LowLevelMesh
         do {
@@ -682,7 +748,7 @@ final class RealityViewport {
             }
             mesh.parts.replaceAll([.init(indexCount: geometry.lineIndices.count, topology: .line,
                                         bounds: .init(min: geometry.minimum, max: geometry.maximum))])
-            return try Self.nativeResource(from: mesh)
+            return NativeLineResource(resource: try Self.nativeResource(from: mesh), source: mesh)
         }
     }
 
@@ -838,7 +904,21 @@ final class RealityViewport {
             && project(renderOrigin) != nil
     }
 
-    func applyAppearance(
+    func applyAppearance(displayMode: ViewportDisplayMode, shading: ViewportShading,
+        occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material],
+        componentInstanceOccurrenceIDs: Set<SceneOccurrenceID> = [],
+        interaction: MeshSourcePresentationInteractionStateResolver,
+        sectionPlane: SectionAnalysisResult.Plane?, retainedSide: SectionAnalysisRetainedSide,
+        sectionTolerance: Double) throws {
+        try withOpticalStoragePreparation {
+            try applyPreparedAppearance(displayMode: displayMode, shading: shading,
+                occurrenceMaterials: occurrenceMaterials, componentInstanceOccurrenceIDs: componentInstanceOccurrenceIDs,
+                interaction: interaction, sectionPlane: sectionPlane, retainedSide: retainedSide,
+                sectionTolerance: sectionTolerance)
+        }
+    }
+
+    private func applyPreparedAppearance(
         displayMode: ViewportDisplayMode, shading: ViewportShading,
         occurrenceMaterials: [SceneOccurrenceID: SwiftCAD.Material],
         componentInstanceOccurrenceIDs: Set<SceneOccurrenceID> = [],
@@ -848,6 +928,9 @@ final class RealityViewport {
         let key = Appearance(mode: displayMode, shading: shading, occurrenceMaterials: occurrenceMaterials,
                              componentInstanceOccurrenceIDs: componentInstanceOccurrenceIDs, selected: interaction.selectedSceneNodeIDs,
                              preview: interaction.previewSceneNodeIDs, hovered: interaction.hoveredSceneNodeID,
+                             selectedOccurrences: interaction.selectedOccurrenceIDs,
+                             previewOccurrences: interaction.previewOccurrenceIDs,
+                             hoveredOccurrence: interaction.hoveredOccurrenceID, hoveredBodyID: interaction.hoveredBodyID,
                              plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)
         guard appearance != key else { return }
         try shading.validate()
@@ -855,28 +938,34 @@ final class RealityViewport {
             try RealityViewportMaterial.validate(material, field: "occurrence material")
         }
         var prepared: [(any RealityKit.Material, UnlitMaterial)] = []
+        var surfaces: [ViewportSurface] = []
+        var wires: [ColorRGBA] = []
+        var states: [MeshSourcePresentationVisualState] = []
         if let surfaceResources {
-          for (index, occurrence) in surfaceResources.plan.occurrences.enumerated() {
+          for occurrence in surfaceResources.plan.occurrences {
             let material = occurrenceMaterials[occurrence.occurrenceID]
             var color = shading.resolvedColor(for: occurrence.occurrenceID, materialColor: material?.baseColor)
-            let state = interaction.state(for: occurrence.occurrenceID)
+            let state = interaction.state(for: occurrence.occurrenceID, sourceBodyID: occurrence.sourceBodyID)
             switch state {
             case .normal: break
             case .selected: color = SIMD4<Float>(0.14, 0.66, 0.95, 1)
             case .hovered: color = SIMD4<Float>(0.36, 0.77, 0.98, 1)
             }
-            // The highlight replaces the color and leaves what the document
-            // authored, so a selection says which body it is, not what it is
-            // made of.
-            let surface = ViewportSurface(color: Self.color(color), authoring: material)
-            let wire = shading.resolvedWireColor(
-                for: occurrence.occurrenceID, objectColor: color,
-                isComponentInstance: componentInstanceOccurrenceIDs.contains(occurrence.occurrenceID)
-            )
-            prepared.append(try surfaceResources.materialVariants[index].resolve(
-                .init(mode: displayMode, shading: shading, surface: surface, wire: Self.color(wire)),
-                state: state, using: surfaceResources.materials))
+            surfaces.append(ViewportSurface(color: Self.color(color), authoring: material))
+            states.append(state)
+            wires.append(Self.color(shading.resolvedWireColor(for: occurrence.occurrenceID, objectColor: color,
+                isComponentInstance: componentInstanceOccurrenceIDs.contains(occurrence.occurrenceID))))
           }
+        }
+        let opticalCandidate = try prepareOpticalTransport(surfaces: surfaces, mode: displayMode,
+            shading: shading, previews: appliedObjectPreviews)
+        if let surfaceResources {
+            for index in surfaces.indices {
+                prepared.append(try surfaceResources.materialVariants[index].resolve(
+                    .init(mode: displayMode, shading: shading, surface: surfaces[index], wire: wires[index],
+                          volumeTransportAvailable: opticalCandidate != nil),
+                    state: states[index], using: surfaceResources.materials))
+            }
         }
         try applySection(plane: sectionPlane, side: retainedSide, tolerance: sectionTolerance)
         for (index, entry) in entries.enumerated() {
@@ -885,11 +974,22 @@ final class RealityViewport {
             entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
         }
         lighting.orientation = simd_quatf(angle: Float(shading.studioRotationDegrees * .pi / 180), axis: [0, 0, 1])
+        opticalTransport = opticalCandidate
+        opticalSurfaces = surfaces
+        opticalWireColors = wires
+        opticalPreviewInputs = appliedObjectPreviews
         appearance = key
         previewDisplayMode = nil
     }
 
     func applyObjectPreviews(_ requested: [String: Transform3D], displayMode: ViewportDisplayMode,
+        snapshotID: EvaluationSnapshotID? = nil) throws {
+        try withOpticalStoragePreparation {
+            try applyPreparedObjectPreviews(requested, displayMode: displayMode, snapshotID: snapshotID)
+        }
+    }
+
+    private func applyPreparedObjectPreviews(_ requested: [String: Transform3D], displayMode: ViewportDisplayMode,
                              snapshotID: EvaluationSnapshotID? = nil) throws {
         let mutations = snapshotID != nil && snapshotID != self.snapshotID ? appliedObjectPreviews : requested
         guard mutations != appliedObjectPreviews || displayMode != previewDisplayMode else { return }
@@ -900,62 +1000,474 @@ final class RealityViewport {
             previewDisplayMode = displayMode
             return
         }
-        let available = surfaceResources.plan.nativePreparationByteLimit
-            - ((spatialDelta?.added ?? spatialResources)?.preparedByteCount ?? surfaceResources.plan.retainedByteCount)
-        for index in Array(objectPreviews.keys) where
-            mutations[surfaceResources.plan.occurrences[index].occurrenceID.rawValue] == nil {
-            objectPreviews.removeValue(forKey: index)
+        let opticalCandidate: OpticalVolumeTransport?
+        if mutations != opticalPreviewInputs, let appearance {
+            opticalCandidate = try prepareOpticalTransport(surfaces: opticalSurfaces, mode: appearance.mode,
+                shading: appearance.shading, previews: mutations)
+        } else { opticalCandidate = opticalTransport }
+        // Old and new optical scenes coexist until the complete native preview publishes.
+        let candidateOpticalBytes = opticalCandidate === opticalTransport ? 0 : (opticalCandidate?.scene.byteCount ?? 0)
+        let spatialTriangleBytes = try OpticalVolumeStorageBudget.bytes(
+            count: opticalSpatialTriangles.count, stride: MemoryLayout<OpticalVolumeTriangle>.stride)
+        var retainedRasterBytes = 0
+        for raster in bodyLineRasterizers.values {
+            let total = retainedRasterBytes.addingReportingOverflow(raster.retainedByteCount)
+            guard !total.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            retainedRasterBytes = total.partialValue
         }
-        var used = objectPreviews.values.reduce(0) { $0 + $1.byteCount }
+        let available = try OpticalVolumeStorageBudget.remaining(
+            limit: surfaceResources.plan.nativePreparationByteLimit,
+            used: surfaceResources.plan.retainedByteCount,
+                (try spatialResources?.retainedNativeByteCount()) ?? 0, (try spatialDelta?.added?.retainedNativeByteCount()) ?? 0,
+                opticalTransport?.scene.byteCount ?? 0, candidateOpticalBytes,
+                spatialTriangleBytes, retainedRasterBytes)
+        struct Publication {
+            let index: Int
+            let mesh: MeshResource
+            let position: SIMD3<Float>
+            let preview: RealityViewportObjectPreview?
+        }
+        var publications: [Publication] = []
+        var nextPreviews: [Int: RealityViewportObjectPreview] = [:]
+        var lineSources: [BodyLineSource] = []
+        var stagedPreviews: [RealityViewportObjectPreview] = []
+        var newPreviewBytes = 0
+        let originalPreviewBytes = try objectPreviews.values.reduce(0) { result, preview in
+            let sum = result.addingReportingOverflow(preview.byteCount)
+            guard !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            return sum.partialValue
+        }
+        guard originalPreviewBytes <= available else { throw RealityViewportSpatialBatch.exhausted() }
+        let showsLines = displayMode == .wireframe || displayMode == .solidWithEdges
+        defer { for preview in stagedPreviews { preview.discardStagedFrame() } }
         for (index, occurrence) in surfaceResources.plan.occurrences.enumerated() {
-            let entry = entries[index]
             let instance = surfaceResources.instances[index]
-            guard let mutation = mutations[occurrence.occurrenceID.rawValue] else {
-                if appliedObjectPreviews[occurrence.occurrenceID.rawValue] != nil {
-                    entry.surface.model?.mesh = surfaceResources.resources[instance.groupIndex].visual
-                    entry.surface.position = instance.translation
-                    entry.lines?.position = instance.translation
-                    entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
-                }
-                continue
-            }
-            // Translation preserves the admitted mesh, normals and winding.
-            // Do not allocate expanded triangle buffers just to move an object.
-            let m = mutation.matrix.values
-            if m[0] == 1, m[5] == 1, m[10] == 1, m[15] == 1,
-               m[1] == 0, m[2] == 0, m[4] == 0, m[6] == 0,
-               m[8] == 0, m[9] == 0, m[12] == 0, m[13] == 0, m[14] == 0 {
-                let position = instance.translation + SIMD3<Float>(Float(m[3]), Float(m[7]), Float(m[11]))
-                guard position.x.isFinite, position.y.isFinite, position.z.isFinite else {
+            let original = surfaceResources.resources[instance.groupIndex]
+            let mutation = mutations[occurrence.occurrenceID.rawValue]
+            let translationOnly: Bool
+            if let mutation {
+                let m = mutation.matrix.values
+                translationOnly = m[0] == 1 && m[5] == 1 && m[10] == 1 && m[15] == 1
+                    && m[1] == 0 && m[2] == 0 && m[4] == 0 && m[6] == 0
+                    && m[8] == 0 && m[9] == 0 && m[12] == 0 && m[13] == 0 && m[14] == 0
+            } else { translationOnly = true }
+            let position: SIMD3<Float>
+            let mesh: MeshResource
+            let wire: LowLevelMesh?
+            let preview: RealityViewportObjectPreview?
+            if translationOnly {
+                let offset = mutation.map { SIMD3<Float>(Float($0.matrix.values[3]), Float($0.matrix.values[7]), Float($0.matrix.values[11])) } ?? .zero
+                position = instance.translation + offset
+                guard (0..<3).allSatisfy({ position[$0].isFinite }) else {
                     throw RealityViewportSpatialBatch.invalid("Object preview translation is not finite.")
                 }
-                if let previous = objectPreviews.removeValue(forKey: index) { used -= previous.byteCount }
-                entry.surface.model?.mesh = surfaceResources.resources[instance.groupIndex].visual
-                entry.surface.position = position
-                entry.lines?.position = position
-                entry.lines?.isEnabled = displayMode == .wireframe || displayMode == .solidWithEdges
-                continue
+                mesh = original.visual; wire = original.lines?.source; preview = nil
+            } else {
+                guard let mutation else { throw Self.failure("Object preview lost its original transform.") }
+                let prepared: RealityViewportObjectPreview
+                if let existing = objectPreviews[index] { prepared = existing }
+                else {
+                    let remaining = min(try opticalImages.remainingPreparationBytes(),
+                        try OpticalVolumeStorageBudget.remaining(limit: available,
+                            used: originalPreviewBytes, newPreviewBytes))
+                    prepared = try .init(occurrence: occurrence, availableBytes: remaining)
+                    let sum = newPreviewBytes.addingReportingOverflow(prepared.byteCount)
+                    guard !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                    newPreviewBytes = sum.partialValue
+                }
+                stagedPreviews.append(prepared)
+                try prepared.stage(occurrence: occurrence, mutation: mutation, origin: renderOrigin, showsEdges: false)
+                guard let stagedMesh = prepared.stagedResource, let stagedWire = prepared.stagedWireSource else {
+                    throw Self.failure("Object preview did not prepare its complete shaded and wire frame.")
+                }
+                position = .zero; mesh = stagedMesh; wire = stagedWire; preview = prepared
+                nextPreviews[index] = prepared
             }
-            let preview: RealityViewportObjectPreview
-            if let existing = objectPreviews[index] { preview = existing }
-            else {
-                preview = try .init(occurrence: occurrence, availableBytes: available - used)
-                objectPreviews[index] = preview
-                used += preview.byteCount
+            guard entries[index].surface.model != nil else { throw Self.failure("Object preview surface is absent.") }
+            publications.append(.init(index: index, mesh: mesh, position: position, preview: preview))
+            if showsLines, let entity = entries[index].lines {
+                guard let wire else { throw Self.failure("Object preview wire lost its original source.") }
+                var transform = entity.transform
+                transform.translation = position
+                lineSources.append(.init(index: index, source: wire, transform: transform))
             }
-            try preview.update(occurrence: occurrence, mutation: mutation, origin: renderOrigin,
-                               showsEdges: displayMode == .wireframe || displayMode == .solidWithEdges)
-            entry.surface.model?.mesh = preview.resource
-            if let surfaceMaterial = entry.surface.model?.materials.first,
-               let lineMaterial = entry.lines?.model?.materials.first {
-                entry.surface.model?.materials = [surfaceMaterial, lineMaterial]
-            }
-            entry.surface.position = .zero
-            entry.lines?.position = instance.translation
-            entry.lines?.isEnabled = false
         }
+        let stagedLines = try stageBodyLineSources(lineSources,
+            additionalRetainedBytes: [candidateOpticalBytes, newPreviewBytes])
+        defer { for item in stagedLines { item.raster.discardStagedFrame() } }
+        for preview in stagedPreviews { try preview.validateStagedFrame() }
+        for item in stagedLines { try item.raster.validateStagedFrame(entity: item.entity) }
+        // All potentially failing preparation precedes this non-suspending actor publication.
+        for preview in stagedPreviews { try preview.commit() }
+        for publication in publications {
+            entries[publication.index].surface.model?.mesh = publication.mesh
+            entries[publication.index].surface.position = publication.position
+            entries[publication.index].lines?.isEnabled = showsLines
+            if !showsLines { entries[publication.index].lines?.position = publication.position }
+        }
+        for item in stagedLines {
+            try item.raster.commit(entity: item.entity)
+            bodyLineRasterizers[item.index] = item.raster
+        }
+        objectPreviews = nextPreviews
+        bodyLineCameraState = nil
         appliedObjectPreviews = mutations
+        opticalPreviewInputs = mutations
+        opticalTransport = opticalCandidate
         previewDisplayMode = displayMode
+    }
+
+    private func bindOpticalStorageAdmission(to resources: RealityViewportSpatialResources) {
+        let admission = makeOpticalStorageAdmission()
+        resources.bindOpticalStorageAdmission(images: admission.images,
+            begin: admission.begin, finish: admission.finish, abort: admission.abort)
+    }
+
+    private func makeOpticalStorageAdmission() -> RealityViewportSpatialStorageAdmission {
+        let images = opticalImages
+        return .init(images: images,
+            begin: { [weak self] in
+                guard let self, let surfaceResources = self.surfaceResources else {
+                    throw Self.notReadyFailure("Spatial storage admission requires its original viewport owner.")
+                }
+                _ = try images.beginPreparation(byteLimit: surfaceResources.plan.nativePreparationByteLimit,
+                    externalBytes: self.opticalExternalStorageBytes())
+            },
+            finish: { [weak self] lease in
+                guard let self else { throw Self.notReadyFailure("Spatial source owner ended before storage publication.") }
+                try images.finishPreparation(externalBytes: self.opticalExternalStorageBytes(), releasing: lease)
+            },
+            abort: { images.abortPreparation() })
+    }
+
+    private func opticalExternalStorageBytes() throws -> Int {
+        guard let resources = surfaceResources else { return 0 }
+        let counts = [resources.plan.retainedByteCount, (try spatialResources?.retainedNativeByteCount()) ?? 0,
+            (try spatialDelta?.added?.retainedNativeByteCount()) ?? 0, try retainedNativeCandidateBytes(),
+            try OpticalVolumeStorageBudget.bytes(count: opticalSpatialTriangles.count,
+                stride: MemoryLayout<OpticalVolumeTriangle>.stride)]
+        return try counts.reduce(0) { total, count in
+            let sum = total.addingReportingOverflow(count)
+            guard count >= 0, !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            return sum.partialValue
+        }
+    }
+
+    private func withOpticalStoragePreparation<Result>(_ operation: () throws -> Result) throws -> Result {
+        guard let resources = surfaceResources else { return try operation() }
+        _ = try opticalImages.beginPreparation(byteLimit: resources.plan.nativePreparationByteLimit,
+            externalBytes: opticalExternalStorageBytes())
+        var finished = false
+        defer { if !finished { opticalImages.abortPreparation() } }
+        do {
+            let result = try operation()
+            try opticalImages.finishPreparation(externalBytes: opticalExternalStorageBytes())
+            finished = true
+            return result
+        } catch {
+            let originalFailure = error
+            do {
+                try opticalImages.finishPreparation(externalBytes: opticalExternalStorageBytes())
+                finished = true
+            } catch {
+                opticalImages.failStoragePublication()
+            }
+            throw originalFailure
+        }
+    }
+
+    private func prepareOpticalTransport(surfaces: [ViewportSurface], mode: ViewportDisplayMode,
+        shading: ViewportShading, previews: [String: Transform3D],
+        spatialTriangles: [OpticalVolumeTriangle]? = nil) throws -> OpticalVolumeTransport? {
+        try withOpticalStoragePreparation {
+            try prepareOpticalTransportStorage(surfaces: surfaces, mode: mode, shading: shading,
+                previews: previews, spatialTriangles: spatialTriangles)
+        }
+    }
+
+    private func prepareOpticalTransportStorage(surfaces: [ViewportSurface], mode: ViewportDisplayMode,
+                                         shading: ViewportShading, previews: [String: Transform3D],
+                                         spatialTriangles: [OpticalVolumeTriangle]?) throws -> OpticalVolumeTransport? {
+        guard (mode == .solid || mode == .solidWithEdges), shading.style == .studio,
+              surfaces.contains(where: { $0.transmission > 0 && $0.thickness > 0 }) else { return nil }
+        guard let resources = surfaceResources, surfaces.count == resources.plan.occurrences.count else {
+            throw Self.failure("Optical material does not belong to the complete mounted source plan.")
+        }
+        let spatialTriangles = spatialTriangles ?? opticalSpatialTriangles
+        let retainedBase = (try spatialResources?.retainedNativeByteCount()) ?? 0
+        let retainedDelta = (try spatialDelta?.added?.retainedNativeByteCount()) ?? 0
+        let oldOpticalBytes = opticalTransport?.scene.byteCount ?? 0
+        let spatialBytes = spatialTriangles.count.multipliedReportingOverflow(by: MemoryLayout<OpticalVolumeTriangle>.stride)
+        let count = resources.plan.triangleCount.addingReportingOverflow(spatialTriangles.count)
+        guard !spatialBytes.overflow, !count.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+        let available = try OpticalVolumeStorageBudget.remaining(limit: resources.plan.nativePreparationByteLimit,
+            used: resources.plan.retainedByteCount, retainedBase, retainedDelta, oldOpticalBytes,
+                spatialBytes.partialValue, retainedNativeCandidateBytes())
+        let admittedAvailable = min(available, try opticalImages.remainingPreparationBytes())
+        let limits = try OpticalVolumeLimits.admitted(triangleCount: count.partialValue, remainingBytes: admittedAvailable)
+        let (triangleBytes, overflow) = count.partialValue.multipliedReportingOverflow(by: MemoryLayout<OpticalVolumeTriangle>.stride)
+        guard !overflow, triangleBytes <= admittedAvailable, resources.plan.occurrences.count <= Int(UInt32.max) else {
+            throw RealityViewportSpatialBatch.exhausted()
+        }
+        let occurrenceBytes = try OpticalVolumeStorageBudget.bytes(count: surfaces.count,
+            stride: MemoryLayout<UInt32>.stride)
+        let sourceBytes = triangleBytes.addingReportingOverflow(occurrenceBytes)
+        guard !sourceBytes.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+        let sourceStorage = try opticalImages.retainStorage(bytes: sourceBytes.partialValue)
+        defer { withExtendedLifetime(sourceStorage) {} }
+        var triangles: [OpticalVolumeTriangle] = []
+        triangles.reserveCapacity(count.partialValue)
+        for (index, occurrence) in resources.plan.occurrences.enumerated() {
+            try Task.checkCancellation()
+            let instance = resources.instances[index]
+            let source = resources.geometry[instance.groupIndex]
+            let preview = previews[occurrence.occurrenceID.rawValue]
+            let reflected: Bool
+            if let preview {
+                let m = preview.matrix.values
+                let determinant = m[0] * (m[5] * m[10] - m[6] * m[9])
+                    - m[1] * (m[4] * m[10] - m[6] * m[8])
+                    + m[2] * (m[4] * m[9] - m[5] * m[8])
+                guard determinant.isFinite, determinant != 0 else {
+                    throw Self.failure("Optical preview has a singular original transform.")
+                }
+                reflected = determinant < 0
+            } else { reflected = false }
+            for base in stride(from: 0, to: source.visualIndices.count, by: 3) {
+                if base.isMultiple(of: 768) { try Task.checkCancellation() }
+                func corner(_ offset: Int) throws -> SIMD3<Float> {
+                    if let preview {
+                        let original = occurrence.positions[Int(occurrence.vertexIndices[base + offset])]
+                        let image = try ViewportWorldTransformAlgebra.transformedPoint(
+                            .init(x: original.x, y: original.y, z: original.z), by: preview)
+                        return try RealityViewportSpatialBatch.nativePoint(image, relativeTo: renderOrigin)
+                    }
+                    return source.geometry.positions[Int(source.visualIndices[base + offset])] + instance.translation
+                }
+                let first = try corner(0)
+                let second = try corner(reflected ? 2 : 1)
+                let third = try corner(reflected ? 1 : 2)
+                let normal: SIMD3<Float>
+                if preview != nil {
+                    // Match the native preview's original Float flat-normal producer.
+                    let cross = simd_cross(second - first, third - first)
+                    let length = simd_length(cross)
+                    guard length.isFinite else { throw Self.failure("Optical preview normal is not finite.") }
+                    normal = length > 0 ? cross / length : [0, 0, 1]
+                } else { normal = source.geometry.normals[base / 3] }
+                triangles.append(try OpticalVolumeTriangle(first: first, second: second, third: third,
+                    normal: normal, surface: surfaces[index], occurrenceIndex: UInt32(index)))
+            }
+        }
+        triangles.append(contentsOf: spatialTriangles)
+        var activeOccurrences: [UInt32] = []
+        activeOccurrences.reserveCapacity(surfaces.count)
+        for index in surfaces.indices where surfaces[index].transmission > 0 && surfaces[index].thickness > 0 {
+            activeOccurrences.append(UInt32(index))
+        }
+        return try OpticalVolumeTransport(triangles: triangles, opticalOccurrenceIndices: activeOccurrences,
+            limits: limits, previous: opticalTransport, images: opticalImages)
+    }
+
+    private func updateBodyLineRasterizers() throws {
+        try withOpticalStoragePreparation { try updatePreparedBodyLineRasterizers() }
+    }
+
+    private func updatePreparedBodyLineRasterizers() throws {
+        let state = BodyLineCameraState(layout: appliedLayout, displayScale: appliedDisplayScale,
+            previews: appliedObjectPreviews, mode: appearance?.mode)
+        guard bodyLineCameraState != state else { return }
+        guard let resources = surfaceResources, let content, let pixels = appliedDisplayScale,
+              entries.contains(where: { $0.lines?.isEnabled == true }) else { return }
+        var sources: [BodyLineSource] = []
+        for (index, entry) in entries.enumerated() where entry.lines?.isEnabled == true {
+            let instance = resources.instances[index]
+            guard let source = objectPreviews[index]?.wireSource
+                    ?? resources.resources[instance.groupIndex].lines?.source else {
+                throw Self.failure("A drawn body wire has no original native source buffer.")
+            }
+            sources.append(.init(index: index, source: source, transform: nil))
+        }
+        let staged = try stageBodyLineSources(sources, additionalRetainedBytes: [])
+        defer { for item in staged { item.raster.discardStagedFrame() } }
+        for item in staged { try item.raster.validateStagedFrame(entity: item.entity) }
+        for item in staged {
+            try item.raster.commit(entity: item.entity)
+            bodyLineRasterizers[item.index] = item.raster
+        }
+        bodyLineCameraState = state
+    }
+
+    private struct BodyLineSource {
+        let index: Int
+        let source: LowLevelMesh
+        let transform: Transform?
+    }
+    private struct BodyLineCandidate {
+        let index: Int
+        let raster: NativeLineRasterizer
+        let entity: ModelEntity
+    }
+
+    private func stageBodyLineSources(_ sources: [BodyLineSource],
+                                     additionalRetainedBytes: [Int]) throws -> [BodyLineCandidate] {
+        guard !sources.isEmpty else { return [] }
+        guard let resources = surfaceResources, let content, let pixels = appliedDisplayScale,
+              let projection = NativeLineCameraProjection.capture(camera: camera, content: content) else {
+            throw RealityViewportSpatialResources.CameraReadinessError.projectionUnavailable
+        }
+        var available = try OpticalVolumeStorageBudget.remaining(limit: resources.plan.nativePreparationByteLimit,
+            used: resources.plan.retainedByteCount, (try spatialResources?.retainedNativeByteCount()) ?? 0,
+            (try spatialDelta?.added?.retainedNativeByteCount()) ?? 0, opticalTransport?.scene.byteCount ?? 0,
+            OpticalVolumeStorageBudget.bytes(count: opticalSpatialTriangles.count,
+                stride: MemoryLayout<OpticalVolumeTriangle>.stride), retainedNativeCandidateBytes(),
+            OpticalVolumeStorageBudget.bytes(count: sources.count,
+                stride: MemoryLayout<BodyLineSource>.stride + MemoryLayout<BodyLineCandidate>.stride))
+        for bytes in additionalRetainedBytes {
+            available = try OpticalVolumeStorageBudget.remaining(limit: available, used: bytes)
+        }
+        available = min(available, try opticalImages.remainingPreparationBytes())
+        var staged: [BodyLineCandidate] = []
+        do {
+            for source in sources {
+                guard let entity = entries[source.index].lines else { throw Self.failure("Body wire entity is absent.") }
+                let raster: NativeLineRasterizer
+                if let existing = bodyLineRasterizers[source.index], existing.source === source.source { raster = existing }
+                else {
+                    let lineCount = resources.plan.occurrences[source.index].boundaryIndexCount / 2
+                    let extra = lineCount.multipliedReportingOverflow(by: 4)
+                    let vertices = source.source.vertexCapacity.addingReportingOverflow(extra.partialValue)
+                    let retainedVertices = vertices.partialValue.multipliedReportingOverflow(by: 2)
+                    let triangles = lineCount.multipliedReportingOverflow(by: 4)
+                    guard !extra.overflow, !vertices.overflow, !retainedVertices.overflow,
+                          !triangles.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+                    raster = try NativeLineRasterizer(source: source.source, maximumLineCount: lineCount,
+                        maximumPartCount: source.source.parts.count,
+                        limits: .init(maximumPositionCount: retainedVertices.partialValue,
+                            maximumTriangleCount: triangles.partialValue, maximumRetainedByteCount: available))
+                    available = try OpticalVolumeStorageBudget.remaining(limit: available, used: raster.retainedByteCount)
+                }
+                staged.append(.init(index: source.index, raster: raster, entity: entity))
+                try raster.stage(entity: entity, plannedLocalTransform: source.transform,
+                    projection: projection, nativePixelsPerPoint: pixels)
+            }
+            return staged
+        } catch {
+            for item in staged { item.raster.discardStagedFrame() }
+            throw error
+        }
+    }
+
+    private func retainedNativeCandidateBytes() throws -> Int {
+        var total = 0
+        for preview in objectPreviews.values {
+            let sum = total.addingReportingOverflow(preview.byteCount)
+            guard !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            total = sum.partialValue
+        }
+        for raster in bodyLineRasterizers.values {
+            let sum = total.addingReportingOverflow(raster.retainedByteCount)
+            guard !sum.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            total = sum.partialValue
+        }
+        return total
+    }
+
+    /// Capture only after native camera placement, suppression and glyph publication.
+    private func refreshOpticalSpatialSource() throws {
+        try withOpticalStoragePreparation { try refreshPreparedOpticalSpatialSource() }
+    }
+
+    private func refreshPreparedOpticalSpatialSource() throws {
+        guard opticalTransport != nil, let resources = surfaceResources, let appearance else { return }
+        let owners = [spatialResources, spatialDelta?.added].compactMap { $0 }
+        let previousBytes = try OpticalVolumeStorageBudget.bytes(count: opticalSpatialTriangles.count,
+            stride: MemoryLayout<OpticalVolumeTriangle>.stride)
+        let available = try OpticalVolumeStorageBudget.remaining(limit: resources.plan.nativePreparationByteLimit,
+            used: resources.plan.retainedByteCount, (try spatialResources?.retainedNativeByteCount()) ?? 0,
+            (try spatialDelta?.added?.retainedNativeByteCount()) ?? 0, opticalTransport?.scene.byteCount ?? 0, previousBytes,
+                retainedNativeCandidateBytes())
+        let triangleStride = MemoryLayout<OpticalVolumeTriangle>.stride
+        let packetStride = max(MemoryLayout<RealityViewportSpatialResources.OpticalPrimitive>.stride,
+            MemoryLayout<NativeLineRasterizer.Triangle>.stride)
+        let stride = packetStride + triangleStride
+        guard available > 0 else { throw RealityViewportSpatialBatch.exhausted() }
+        _ = try opticalImages.beginPreparation(byteLimit: resources.plan.nativePreparationByteLimit,
+            externalBytes: opticalExternalStorageBytes())
+        var transferred = false
+        defer { if !transferred { opticalImages.abortPreparation() } }
+        let admittedAvailable = min(available, try opticalImages.remainingPreparationBytes())
+        let maximum = min(admittedAvailable / stride, Int(UInt32.max) / 2 - resources.plan.triangleCount)
+        guard maximum > 0 else { throw RealityViewportSpatialBatch.exhausted() }
+        let candidateStorage = try opticalImages.retainStorage(bytes:
+            OpticalVolumeStorageBudget.bytes(count: maximum, stride: triangleStride))
+        var candidate: [OpticalVolumeTriangle] = []
+        candidate.reserveCapacity(maximum)
+        for owner in owners {
+            let remainingCount = maximum - candidate.count
+            guard remainingCount > 0 else { throw RealityViewportSpatialBatch.exhausted() }
+            let packetBytes = try OpticalVolumeStorageBudget.bytes(count: remainingCount, stride: packetStride)
+            let packetStorage = try opticalImages.retainStorage(bytes: packetBytes)
+            defer { withExtendedLifetime(packetStorage) {} }
+            let packet = try owner.opticalPrimitives(maximumPrimitiveCount: remainingCount,
+                maximumRetainedByteCount: packetBytes)
+            for primitive in packet { candidate.append(try OpticalVolumeTriangle(primitive: primitive)) }
+        }
+        for (index, entry) in entries.enumerated() {
+            guard let entity = entry.lines, entity.isEnabled, let raster = bodyLineRasterizers[index] else { continue }
+            guard opticalWireColors.indices.contains(index) else { throw Self.failure("Body wire lacks its original appearance.") }
+            let remaining = maximum - candidate.count
+            guard remaining > 0 else { throw RealityViewportSpatialBatch.exhausted() }
+            let packetBytes = try OpticalVolumeStorageBudget.bytes(count: remaining, stride: packetStride)
+            let packetStorage = try opticalImages.retainStorage(bytes: packetBytes)
+            defer { withExtendedLifetime(packetStorage) {} }
+            let packet = try raster.triangles(entity: entity, maximumTriangleCount: remaining,
+                maximumRetainedByteCount: packetBytes)
+            let color = opticalWireColors[index]
+            let linear = try OpticalVolumeColor.linear(red: color.r, green: color.g, blue: color.b, alpha: color.a)
+            for triangle in packet {
+                let primitive = RealityViewportSpatialResources.OpticalPrimitive(topology: .triangle,
+                    first: triangle.first, second: triangle.second, third: triangle.third,
+                    radiance: [Float(color.r), Float(color.g), Float(color.b), Float(color.a)],
+                    readsDepth: true, followsSection: true)
+                candidate.append(try OpticalVolumeTriangle(primitive: primitive, linearRadiance: linear))
+            }
+        }
+        guard candidate != opticalSpatialTriangles else { return }
+        var previous: [OpticalVolumeTriangle]? = opticalSpatialTriangles
+        do {
+            let complete = try prepareOpticalTransport(surfaces: opticalSurfaces, mode: appearance.mode,
+                shading: appearance.shading, previews: opticalPreviewInputs, spatialTriangles: candidate)
+            opticalSpatialTriangles = candidate
+            let retained = try opticalExternalStorageBytes().addingReportingOverflow(previousBytes)
+            guard !retained.overflow else { throw RealityViewportSpatialBatch.exhausted() }
+            try opticalImages.finishPreparation(externalBytes: retained.partialValue, releasing: candidateStorage)
+            transferred = true
+            opticalTransport = complete
+            previous = nil
+        } catch {
+            if let previous { opticalSpatialTriangles = previous }
+            throw error
+        }
+    }
+
+    var opticalFrameNeedsAttention: Bool { opticalTransport?.hasFailure == true }
+    var opticalFrameIsReady: Bool { opticalTransport?.status.isReady ?? true }
+
+    func installOpticalEffect(in content: inout RealityViewCameraContent) throws {
+        if spatialCameraState != nil && !owesSpatialPlacement {
+            try updateBodyLineRasterizers()
+            try refreshOpticalSpatialSource()
+        }
+        guard let opticalTransport, let appearance else {
+            content.renderingEffects.customPostProcessing = .none
+            return
+        }
+        let effect = try opticalTransport.effect(worldFromView: camera.transformMatrix(relativeTo: nil),
+            section: section, shading: appearance.shading, nativeSurfaceVisible: geometryRoot.isEnabled,
+            cameraRevision: appliedViewportRevision, viewportSize: appliedLayout?.viewportSize,
+            displayScale: appliedDisplayScale)
+        content.renderingEffects.customPostProcessing = .effect(effect)
     }
 
     /// One native clipping volume owns the cut for both surfaces and boundary lines.
@@ -1055,6 +1567,7 @@ final class RealityViewport {
     func updateSpatialCamera(safeRect: CGRect = .zero, excludedRects: [CGRect] = [],
                              gridRuler: RulerConfiguration? = nil,
                              gridSpacing: ViewportGridVisualSpacingMode = .adaptive) throws -> MeshSourcePresentationRenderError? {
+        try opticalTransport?.status.check()
         guard let content, let appliedLayout, appliedViewportRevision != nil else { return nil }
         let state = SpatialCameraState(layout: appliedLayout, displayScale: appliedDisplayScale,
             previews: appliedObjectPreviews, safeRect: safeRect, excludedRects: excludedRects,
@@ -1064,17 +1577,98 @@ final class RealityViewport {
         guard spatialCameraState != state else { return nil }
         spatialCameraState = nil
         spatialCameraUpdateCount += 1
-        let gridError = try spatialResources?.updateCamera(camera: camera, content: content, safeRect: safeRect, excludedRects: excludedRects,
-                                           gridRuler: gridRuler, gridBasis: appliedLayout.basis,
-                                           gridSize: appliedLayout.viewportSize, gridSpacing: gridSpacing,
-                                           objectPreviews: appliedObjectPreviews)
-        // A delta layer has no grid, axes or rulers, so it reports no grid failure.
-        _ = try spatialDelta?.added?.updateCamera(camera: camera, content: content, objectPreviews: appliedObjectPreviews)
-        try updateCameraCalibration(content: content)
-        try updateSectionContainment(reapplyingSection: owesSpatialPlacement)
-        owesSpatialPlacement = false
-        if gridError == nil { spatialCameraState = state }
-        return gridError
+        let base = spatialResources, delta = spatialDelta?.added
+        let baseCheckpoint = try base?.cameraStateCheckpoint()
+        let deltaCheckpoint = try delta?.cameraStateCheckpoint()
+        // This source boundary is synchronous. Leases survive all siblings and
+        // final storage accounting; the requested camera remains active for retry.
+        return try withExtendedLifetime((baseCheckpoint, deltaCheckpoint)) {
+            let sourcePlan = surfaceResources?.plan
+            if let sourcePlan {
+                _ = try opticalImages.beginPreparation(byteLimit: sourcePlan.nativePreparationByteLimit,
+                    externalBytes: opticalExternalStorageBytes())
+            } else {
+                guard entries.isEmpty, bodyLineRasterizers.isEmpty else {
+                    throw Self.notReadyFailure("Body wire publication has no admitted native source plan.")
+                }
+            }
+            var finished = sourcePlan == nil
+            func finishStorage() throws {
+                if sourcePlan != nil { try opticalImages.finishPreparation(externalBytes: opticalExternalStorageBytes()) }
+                finished = true
+            }
+            defer { if !finished { opticalImages.abortPreparation() } }
+            do {
+                let bodyCheckpoint = try sourcePlan.map { _ in
+                    try RealityViewportBodyWireCheckpoint(entities: entries,
+                        rasterSources: bodyLineRasterizers, images: opticalImages)
+                }
+                let originalRasters = bodyLineRasterizers, originalBodyState = bodyLineCameraState
+                let originalBounds = bounds, originalSection = section
+                let originalClip = clipper.components[ClippingComponent.self]
+                let originalClipTransform = clipper.transform, originalGeometryTransform = geometryRoot.transform
+                let originalGeometryEnabled = geometryRoot.isEnabled
+                let originalCalibration = cameraCalibration, originalDerivedCalibration = derivedCameraCalibration
+                let originalGeneration = calibrationGeneration, originalRegionKey = regionRasterKey
+                let originalRegionState = regionRasterState, originalOwesPlacement = owesSpatialPlacement
+                func restore() throws {
+                    if let base, let baseCheckpoint { try base.restoreCameraState(baseCheckpoint) }
+                    if let delta, let deltaCheckpoint { try delta.restoreCameraState(deltaCheckpoint) }
+                    try bodyCheckpoint?.restore()
+                    bodyLineRasterizers = originalRasters; bodyLineCameraState = originalBodyState
+                    bounds = originalBounds; section = originalSection
+                    if let originalClip { clipper.components.set(originalClip) }
+                    else { clipper.components.remove(ClippingComponent.self) }
+                    clipper.transform = originalClipTransform; geometryRoot.transform = originalGeometryTransform
+                    geometryRoot.isEnabled = originalGeometryEnabled
+                    cameraCalibration = originalCalibration; derivedCameraCalibration = originalDerivedCalibration
+                    calibrationGeneration = originalGeneration; regionRasterKey = originalRegionKey
+                    regionRasterState = originalRegionState; owesSpatialPlacement = originalOwesPlacement
+                    spatialCameraState = nil
+                }
+                return try withExtendedLifetime(bodyCheckpoint) {
+                    do {
+                        let gridError = try base?.updateCamera(camera: camera, content: content,
+                            safeRect: safeRect, excludedRects: excludedRects, gridRuler: gridRuler,
+                            gridBasis: appliedLayout.basis, gridSize: appliedLayout.viewportSize,
+                            gridSpacing: gridSpacing, objectPreviews: appliedObjectPreviews,
+                            nativePixelsPerPoint: appliedDisplayScale)
+                        if let gridError {
+                            try restore()
+                            try finishStorage()
+                            finished = true; return gridError
+                        }
+                        let deltaError = try delta?.updateCamera(camera: camera, content: content,
+                            objectPreviews: appliedObjectPreviews, nativePixelsPerPoint: appliedDisplayScale)
+                        if let deltaError {
+                            try restore()
+                            try finishStorage()
+                            finished = true; return deltaError
+                        }
+                        try updateCameraCalibration(content: content)
+                        try updateSectionContainment(reapplyingSection: owesSpatialPlacement)
+                        try updatePreparedBodyLineRasterizers()
+                        // Include final accounting inside the rollback boundary.
+                        // No source mutation follows successful shared accounting.
+                        try finishStorage()
+                        finished = true
+                        owesSpatialPlacement = false; spatialCameraState = state
+                        return nil
+                    } catch {
+                        let originalFailure = error
+                        do { try restore() }
+                        catch { opticalImages.failStoragePublication(); throw error }
+                        if !finished {
+                            do {
+                                try finishStorage()
+                                finished = true
+                            } catch { opticalImages.failStoragePublication(); throw error }
+                        }
+                        throw originalFailure
+                    }
+                }
+            } catch { throw error }
+        }
     }
 
     /// Rebuilds the projection-free camera map only after the mounted native
@@ -1182,6 +1776,8 @@ final class RealityViewport {
 
     func unbind(owner: ObjectIdentifier? = nil) {
         guard bindingOwner == owner else { return }
+        spatialResources?.shutdownGlyphPreparation()
+        spatialDelta?.added?.shutdownGlyphPreparation()
         spatialCameraState = nil
         // A RealityView root has no Entity parent. Withdraw it from its actual
         // scene owner before releasing the content and camera query lifetime.
@@ -2044,6 +2640,7 @@ final class RealityViewport {
     /// checked before the applied revision because an unmounted frame has no
     /// revision to be stale about.
     private func validateMountedFrame(describing subject: String) throws {
+        try opticalTransport?.status.check()
         guard root.isEnabled, clipper.isEnabled, content != nil else {
             throw Self.notReadyFailure("The native \(subject) is unavailable for the mounted frame.")
         }

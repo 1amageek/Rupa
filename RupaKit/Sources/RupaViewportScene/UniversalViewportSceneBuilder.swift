@@ -1,3 +1,4 @@
+import RupaCoreTypes
 import RupaEvaluation
 import RupaProjectModel
 
@@ -21,7 +22,9 @@ public struct UniversalViewportSceneBuilder: Sendable {
                 message: "A universal viewport scene requires a presentation-purpose evaluation."
             )
         }
-        let items = try snapshot.occurrences.keys.sorted { $0.rawValue < $1.rawValue }.map { occurrenceID in
+        var items: [UniversalViewportSceneItem] = []
+        var identities: Set<SceneOccurrenceID> = []
+        for occurrenceID in snapshot.occurrences.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
             guard let occurrence = snapshot.occurrences[occurrenceID] else {
                 throw UniversalViewportSceneError(
                     code: .occurrenceMismatch,
@@ -61,13 +64,37 @@ public struct UniversalViewportSceneBuilder: Sendable {
                     message: "Viewport occurrence does not match its selected presentation authority."
                 )
             }
-            let item = UniversalViewportSceneItem(
-                occurrence,
-                displayName: definition.name
-            )
-            try item.validate()
-            return item
+            if occurrence.parts.isEmpty {
+                let item = UniversalViewportSceneItem(occurrence, displayName: definition.name)
+                try item.validate()
+                guard identities.insert(item.presentationID).inserted else {
+                    throw UniversalViewportSceneError(code: .occurrenceMismatch, message: "Duplicate presentation part identity.")
+                }
+                items.append(item)
+            } else {
+                for part in occurrence.parts {
+                    try Task.checkCancellation()
+                    // This identifier belongs only to rendering; source resolution uses occurrenceID.
+                    let presentationID = part.sourceBodyID.map {
+                        SceneOccurrenceID(rawValue: "part.\(occurrenceID.rawValue.utf8.count).\(occurrenceID.rawValue).\($0)")
+                    } ?? occurrenceID
+                    let item = UniversalViewportSceneItem(id: presentationID,
+                        definitionID: occurrence.definitionID, displayName: definition.name,
+                        representationID: occurrence.representationID, reference: occurrence.reference,
+                        mesh: part.mesh, copyTelemetry: part.copyTelemetry,
+                        worldTransform: occurrence.worldTransform,
+                        worldBounds: try part.localBounds.transformed(by: occurrence.worldTransform),
+                        occurrenceID: occurrenceID, sourceBodyID: part.sourceBodyID,
+                        sourceFeatureID: part.sourceFeatureID, outputRole: part.outputRole)
+                    try item.validate()
+                    guard identities.insert(presentationID).inserted else {
+                        throw UniversalViewportSceneError(code: .occurrenceMismatch, message: "Duplicate original body part in an occurrence.")
+                    }
+                    items.append(item)
+                }
+            }
         }
+
         return UniversalViewportScene(
             snapshotID: snapshot.id,
             projectID: snapshot.projectID,

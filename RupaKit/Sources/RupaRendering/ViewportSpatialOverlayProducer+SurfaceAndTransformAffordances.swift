@@ -2315,7 +2315,7 @@ private extension ViewportSpatialOverlayProducer {
                     source: source,
                     input: input
                 )
-                let occurrenceItem = input.scene.firstItem(sceneNodeID: target.sceneNodeID)
+                let occurrenceItem = input.scene.item(for: target)
                 let occurrenceID = occurrenceItem?.id
                 let occurrenceModelTransform = occurrenceItem?.modelTransform ?? .identity
                 let originIdentity: ViewportSpatialHandleIdentity? = input.interactiveRoutes.contains(.constructionPlane)
@@ -2622,7 +2622,7 @@ private extension ViewportSpatialOverlayProducer {
         }
         let sketchItems = input.selection.selectedTargets.compactMap { target -> ViewportSceneItem? in
             guard target.component == .object,
-                  let item = input.scene.firstItem(sceneNodeID: target.sceneNodeID),
+                  let item = input.scene.item(for: target),
                   case .sketch = item.kind else { return nil }
             return item
         }
@@ -3470,10 +3470,11 @@ private extension ViewportSpatialOverlayProducer {
         for target: SelectionTarget,
         input: SurfaceTransformAffordanceSource.RawInput
     ) -> ViewportSceneItem? {
-        if let item = input.selectionScene.firstItem(sceneNodeID: target.sceneNodeID) {
+        if let item = input.selectionScene.item(for: target) {
             return item
         }
-        guard let featureID = input.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID else {
+        guard target.occurrenceID == nil,
+              let featureID = input.document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID else {
             return nil
         }
         return input.selectionScene.firstItem(featureID: featureID)

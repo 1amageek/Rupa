@@ -182,6 +182,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         topology: TopologySnapshot,
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
+        try OriginalBodyTopologyMembership.validate(target, in: topology.evaluatedDocument)
         guard case .face(let componentID) = target.component,
               let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
@@ -189,9 +190,10 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) requires a generated topology face target."
             )
         }
+        _ = try OriginalOccurrenceSelectionResolver(document: document).resolve(target)
         let identity = GeneratedSubshapeIdentity.string(for: subshapeID)
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
-            for: target.sceneNodeID,
+            for: target.sourceSceneNodeID ?? target.sceneNodeID,
             preferredFeatureID: subshapeID.featureID,
             in: document,
             operationName: operationName
@@ -258,6 +260,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         topology: TopologySnapshot,
         operationName: String = "Generated topology edge"
     ) throws -> BodyCornerEdge {
+        try OriginalBodyTopologyMembership.validate(target, in: topology.evaluatedDocument)
         let (identity, resolvedSceneNodeID, context) = try cornerTarget(
             target, .edge, in: document, operationName: operationName
         )
@@ -308,6 +311,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         topology: TopologySnapshot,
         operationName: String = "Generated topology vertex"
     ) throws -> BodyCornerVertex {
+        try OriginalBodyTopologyMembership.validate(target, in: topology.evaluatedDocument)
         let (identity, resolvedSceneNodeID, context) = try cornerTarget(
             target, .vertex, in: document, operationName: operationName
         )
@@ -511,8 +515,9 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) requires a generated topology \(kind.rawValue) target."
             )
         }
+        _ = try OriginalOccurrenceSelectionResolver(document: document).resolve(target)
         let sceneNodeID = try resolvedBodySceneNodeID(
-            for: target.sceneNodeID,
+            for: target.sourceSceneNodeID ?? target.sceneNodeID,
             preferredFeatureID: subshapeID.featureID,
             in: document,
             operationName: operationName

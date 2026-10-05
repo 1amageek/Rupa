@@ -457,3 +457,10 @@ T09-C owns the following behavioral proof:
 Changes to the use-case request shape, compiled-plan adaptation, snapshot
 coordinate, read materialization, or workspace publication require rechecking
 DomainFoundation, Automation, Project, Agent Runtime, and the system design.
+
+### Source occurrence navigation for output parts
+
+ProjectViewSnapshotBuilder validates every presentation part against its
+original occurrence and filters visibility by that original occurrence.
+Render part IDs are never looked up in ProjectSourceModel or source navigation.
+An occurrence's multiple original body parts share navigation and placement.

@@ -163,8 +163,9 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         in document: DesignDocument
     ) throws {
         let uniqueTargets = Self.uniqueTargets(targets)
+        let occurrences = try OriginalOccurrenceSelectionResolver(document: document)
         for target in uniqueTargets {
-            try validateTarget(target, in: document)
+            try validateTarget(target, in: document, occurrences: occurrences)
         }
         selectValidatedTargets(uniqueTargets)
     }
@@ -237,15 +238,57 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         hoveredReference = nil
     }
 
-    public mutating func pruneMissingReferences(in document: DesignDocument) {
+    public mutating func pruneMissingReferences(
+        in document: DesignDocument,
+        evaluation: DocumentEvaluationContext? = nil,
+        generation: DocumentGeneration? = nil
+    ) {
+        let current = evaluation.flatMap { context in
+            context.matches(document: document, generation: generation) ? context.evaluatedDocument : nil
+        }
+        var membershipByBody: [BodyID: OriginalBodyTopologyMembership] = [:]
+        var invalidBodies: Set<BodyID> = []
+        if let current {
+            for target in selectedTargets + (hoveredTarget.map { [$0] } ?? []) {
+                guard let bodyID = target.sourceBodyID, membershipByBody[bodyID] == nil,
+                      invalidBodies.contains(bodyID) == false else { continue }
+                do { membershipByBody[bodyID] = try OriginalBodyTopologyMembership(bodyID: bodyID, in: current.brep) }
+                catch { invalidBodies.insert(bodyID) }
+            }
+        }
+        func hasLiveTopology(_ target: SelectionTarget) -> Bool {
+            guard let current else { return true }
+            if let bodyID = target.sourceBodyID {
+                guard let featureID = target.sourceFeatureID, membershipByBody[bodyID] != nil,
+                      current.subshapes.entries.contains(where: { $0.key.featureID == featureID && $0.value == .body(bodyID) }) else { return false }
+            }
+            let componentID: SelectionComponentID
+            switch target.component {
+            case .face(let id), .edge(let id), .vertex(let id): componentID = id
+            default: return true
+            }
+            guard let identity = componentID.generatedTopologySubshapeID else { return true }
+            guard let topology = current.subshapes.entries[identity] else { return false }
+            if let bodyID = target.sourceBodyID {
+                guard target.sourceFeatureID == identity.featureID,
+                      membershipByBody[bodyID]?.contains(topology) == true,
+                      current.subshapes.entries.contains(where: { $0.key.featureID == identity.featureID && $0.value == .body(bodyID) }) else { return false }
+            }
+            switch (target.component, topology) {
+            case (.face, .face(let id)): return current.brep.faces[id] != nil
+            case (.edge, .edge(let id)): return current.brep.edges[id] != nil
+            case (.vertex, .vertex(let id)): return current.brep.vertices[id] != nil
+            default: return false
+            }
+        }
         selectedTargets = selectedTargets.filter { target in
-            isTargetValid(target, in: document)
+            isTargetValid(target, in: document) && hasLiveTopology(target)
         }
         selectedReferences = selectedReferences.filter { reference in
             isReferenceValid(reference, in: document)
         }
         if let hoveredTarget,
-           !isTargetValid(hoveredTarget, in: document) {
+           (!isTargetValid(hoveredTarget, in: document) || !hasLiveTopology(hoveredTarget)) {
             clearHover()
         }
         if let hoveredReference,
@@ -274,13 +317,19 @@ public struct SelectionModel: Codable, Equatable, Sendable {
 
     private func validateTarget(
         _ target: SelectionTarget,
-        in document: DesignDocument
+        in document: DesignDocument,
+        occurrences: OriginalOccurrenceSelectionResolver? = nil
     ) throws {
-        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID] else {
+        let resolver = try occurrences ?? OriginalOccurrenceSelectionResolver(document: document)
+        let occurrence = try resolver.resolve(target)
+        guard let sceneNode = document.productMetadata.sceneNodes[occurrence?.sourceSceneNodeID ?? target.sceneNodeID] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Selection references a missing scene node."
             )
+        }
+        guard target.sourceBodyID == nil || (target.sourceFeatureID != nil && target.sourceFeatureID == sceneNode.reference?.featureID) else {
+            throw EditorError(code: .referenceUnresolved, message: "Body-bound selection has a foreign source feature.")
         }
         guard isComponent(target.component, compatibleWith: sceneNode.reference, in: document) else {
             throw incompatibleTargetError()
@@ -440,14 +489,9 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         }
     }
 
-    private func isTargetValid(
-        _ target: SelectionTarget,
-        in document: DesignDocument
-    ) -> Bool {
-        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID] else {
-            return false
-        }
-        return isComponent(target.component, compatibleWith: sceneNode.reference, in: document)
+    private func isTargetValid(_ target: SelectionTarget, in document: DesignDocument) -> Bool {
+        do { try validateTarget(target, in: document); return true }
+        catch { return false }
     }
 
     private func isReferenceValid(

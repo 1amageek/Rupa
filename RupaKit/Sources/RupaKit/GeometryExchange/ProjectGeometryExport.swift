@@ -33,8 +33,9 @@ enum ProjectGeometryExport {
             for item in snapshot.viewport.items {
                 guard item.worldTransform == .identity,
                       case .cad(_, let outputID) = item.reference,
-                      let body = CADGeometryExchange.resolvedBodyID(outputID: outputID, in: evaluated),
-                      bodies.insert(body).inserted else {
+                      let bodyWitness = item.sourceBodyID, let bodyUUID = UUID(uuidString: bodyWitness),
+                      CADGeometryExchange.resolvedBodyIDs(outputID: outputID, in: evaluated).contains(BodyID(bodyUUID)),
+                      bodies.insert(BodyID(bodyUUID)).inserted else {
                     throw unsupported("Exact STEP source export cannot represent scene placement or repeated body occurrences. Use STL/OBJ to export world placement.")
                 }
             }
@@ -55,7 +56,7 @@ enum ProjectGeometryExport {
             var retainedBytes = 0
             for item in snapshot.viewport.items {
                 try Task.checkCancellation()
-                if format == .obj, let nodeID = snapshot.sceneNodeIDByOccurrenceID[item.id],
+                if format == .obj, let nodeID = snapshot.sceneNodeIDByOccurrenceID[item.occurrenceID],
                    snapshot.document.document.productMetadata.sceneNodes[nodeID]?.materialID != nil {
                     throw unsupported("OBJ material export is unavailable. Save .rupa to retain materials, or use geometry-only STL.")
                 }

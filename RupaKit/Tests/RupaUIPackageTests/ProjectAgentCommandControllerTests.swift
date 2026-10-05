@@ -13,6 +13,26 @@ import RupaProjectModel
 import Synchronization
 import Testing
 
+@Test(.timeLimit(.minutes(1)))
+func documentExportMissingPresetRetainsLiteralNativeIdentityDiagnostic() throws {
+    let presetID = ExportPresetID(UUID(uuid: (
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x46, 0x77,
+        0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF
+    )))
+    let document = DesignDocument.empty(named: "Missing Canonical Preset")
+    do {
+        _ = try DocumentExportService().prepareExport(
+            document: document, generation: DocumentGeneration(0),
+            to: URL(fileURLWithPath: "/unused-canonical-preset.stl"),
+            options: ExportOptions(presetID: presetID), dryRun: true
+        )
+        Issue.record("Expected missing preset resolution to fail before evaluation or staging.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message == "Export preset ID 00112233-4455-4677-8899-AABBCCDDEEFF was not found.")
+    }
+}
+
 @MainActor
 @Test(.timeLimit(.minutes(1)))
 func projectAgentDiscoveryProjectsItsCompilerRegistryExactly() throws {

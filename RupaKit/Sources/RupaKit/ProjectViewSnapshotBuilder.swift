@@ -160,7 +160,7 @@ public struct ProjectViewSnapshotBuilder:
         let sceneNodeIDByOccurrenceID = Dictionary(uniqueKeysWithValues:
             placements.map { ($0.id, $0.sceneNodeID) })
         for item in evaluatedViewport.items {
-            guard let sourceOccurrence = evaluationSource.occurrences[item.id],
+            guard let sourceOccurrence = evaluationSource.occurrences[item.occurrenceID],
                   sourceOccurrence.definitionID == item.definitionID,
                   let definition = evaluationSource.objectDefinitions[item.definitionID],
                   let presentation = definition.representations.representation(for: .presentation),
@@ -171,7 +171,7 @@ public struct ProjectViewSnapshotBuilder:
                     message: "A viewport occurrence does not match its selected presentation authority."
                 )
             }
-            guard sceneNodeIDByOccurrenceID[item.id] != nil else {
+            guard sceneNodeIDByOccurrenceID[item.occurrenceID] != nil else {
                 throw ProjectViewSnapshotError(
                     code: .missingNavigation,
                     message: "A viewport occurrence has no explicit scene-node navigation target."
@@ -183,7 +183,7 @@ public struct ProjectViewSnapshotBuilder:
             snapshotID: evaluatedViewport.snapshotID,
             projectID: evaluatedViewport.projectID,
             items: evaluatedViewport.items.filter { item in
-                visibleOccurrenceIDs.contains(item.id)
+                visibleOccurrenceIDs.contains(item.occurrenceID)
             },
             copyTelemetry: evaluatedViewport.copyTelemetry
         )

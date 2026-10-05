@@ -24,7 +24,7 @@ public struct ViewportObjectSelectionIndex: Sendable {
             return false
         }
         let sourceTargets = objectTargets.compactMap { target -> SourceTarget? in
-            guard let featureID = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.featureID else {
+            guard let featureID = target.sourceFeatureID ?? document.productMetadata.sceneNodes[target.sourceSceneNodeID ?? target.sceneNodeID]?.reference?.featureID else {
                 return nil
             }
             return SourceTarget(featureID: featureID, target: target)
@@ -36,15 +36,19 @@ public struct ViewportObjectSelectionIndex: Sendable {
     }
 
     func contains(_ item: ViewportSceneItem) -> Bool {
-        item.sceneNodeID.map(sceneNodeIDs.contains) ?? false
+        objectTargets.contains { target in
+            target.sceneNodeID == item.sceneNodeID && (target.occurrenceID == nil || target.occurrenceID == item.occurrenceID)
+        }
     }
 
     func selectedBodySourceItems(in scene: ViewportScene) -> [ViewportSceneItem] {
-        sourceTargets.compactMap { sourceTarget in
-            scene.items.first { item in
-                item.sceneNodeID == sourceTarget.target.sceneNodeID
-                    && item.featureID == sourceTarget.featureID
-                    && item.kind.selectableKind == .body
+        scene.items.filter { item in
+            guard item.kind.selectableKind == .body else { return false }
+            return sourceTargets.contains { sourceTarget in
+                let target = sourceTarget.target
+                return item.featureID == sourceTarget.featureID && item.sceneNodeID == target.sceneNodeID &&
+                    (target.occurrenceID == nil || target.occurrenceID == item.occurrenceID) &&
+                    (target.sourceBodyID == nil || target.sourceBodyID == item.sourceBodyID)
             }
         }
     }
@@ -53,7 +57,7 @@ public struct ViewportObjectSelectionIndex: Sendable {
         guard let sceneNodeID = item.sceneNodeID else {
             return nil
         }
-        return objectTargets.first { $0.sceneNodeID == sceneNodeID }
+        return objectTargets.first { $0.sceneNodeID == sceneNodeID && ($0.occurrenceID == nil || $0.occurrenceID == item.occurrenceID) }
     }
 
     private struct SourceTarget: Equatable, Sendable {

@@ -168,7 +168,7 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         try Task.checkCancellation()
         try cache.publish(publications)
         if let conversionCache {
-            let admittedIdentities = Set(results.values.map { $0.mesh.identity })
+            let admittedIdentities = Set(results.values.flatMap { $0.parts.map { $0.mesh.identity } })
             var conversions: CADMeshSourceConversionCache.Entries = [:]
             conversions.reserveCapacity(results.count)
             for publication in publications {
@@ -270,21 +270,39 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
         meshSourcesByBodyID.reserveCapacity(outputs.count)
         for output in outputs {
             try Task.checkCancellation()
-            guard let bodyID = CADGeometryExchange.resolvedBodyID(
-                outputID: output.outputID,
-                in: evaluatedDocument
-            ) else {
+            let bodyIDs = CADGeometryExchange.resolvedBodyIDs(outputID: output.outputID, in: evaluatedDocument)
+            guard bodyIDs.isEmpty == false else {
                 throw CADIntegrationError(
                     code: .bodyUnavailable,
                     message: "CAD evaluation produced no body for output \(output.outputID)."
                 )
             }
+            var parts: [GeometryEvaluationPart] = []
+            for bodyID in bodyIDs {
+            try Task.checkCancellation()
             guard let mesh = evaluatedDocument.meshes[bodyID] else {
                 throw CADIntegrationError(
                     code: .bodyUnavailable,
                     message: "CAD evaluation produced no mesh for body \(bodyID.description)."
                 )
             }
+            let requestedFeatureID = UUID(uuidString: output.outputID).map { FeatureID($0) }
+            let witnesses = evaluatedDocument.subshapes.entries.filter {
+                if case let .body(originalBodyID) = $0.value {
+                    return originalBodyID == bodyID &&
+                        (requestedFeatureID.flatMap { evaluatedDocument.document.designGraph.nodes[$0] } == nil || $0.key.featureID == requestedFeatureID)
+                }
+                return false
+            }.sorted { $0.key < $1.key }
+            guard let witness = witnesses.first else {
+                throw CADIntegrationError(code: .invalidEvaluationResult,
+                    message: "CAD output has no original generated-body witness.")
+            }
+            let bodyWitness = bodyID.description
+            let featureWitness = witness.key.featureID.description
+            let roleWitness = "\(witness.key.role)#\(witness.key.ordinal)"
+            try admission.admitPartMetadata(GeometryEvaluationPart.metadataByteCount(
+                sourceBodyID: bodyWitness, sourceFeatureID: featureWitness, outputRole: roleWitness))
             try validate(mesh: mesh, tolerance: configuration.tolerance)
             guard mesh.material == nil else {
                 throw CADIntegrationError(
@@ -355,12 +373,15 @@ public struct CADGeometrySourceProvider: GeometrySourceEvaluationProvider {
                     message: "CAD mesh resource usage could not be verified: \(error)"
                 )
             }
-            results[output.reference] = GeometryEvaluationResult(
-                reference: output.reference,
-                mesh: meshSource,
-                localBounds: try meshSource.bounds(),
-                copyTelemetry: copyTelemetry
-            )
+            parts.append(GeometryEvaluationPart(mesh: meshSource, localBounds: try meshSource.bounds(),
+                copyTelemetry: copyTelemetry, sourceBodyID: bodyWitness,
+                sourceFeatureID: featureWitness, outputRole: roleWitness))
+            }
+            guard let primary = parts.first else {
+                throw CADIntegrationError(code: .bodyUnavailable, message: "CAD output contains no original body parts.")
+            }
+            results[output.reference] = GeometryEvaluationResult(reference: output.reference,
+                primary: primary, additionalParts: Array(parts.dropFirst()))
         }
 
         try Task.checkCancellation()
