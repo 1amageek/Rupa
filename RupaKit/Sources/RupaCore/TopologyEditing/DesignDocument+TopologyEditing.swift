@@ -75,6 +75,7 @@ extension DesignDocument {
         target: SelectionTarget,
         insertedSheet: FeatureID? = nil,
         guides: [CurveSectionReference] = [],
+        trimsToSheet: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -90,7 +91,8 @@ extension DesignDocument {
             targetFeatureID: selection.sourceID,
             boundarySeed: selection.reference,
             insertedSheet: insertedSheet,
-            guides: guides
+            guides: guides,
+            trimsToSheet: trimsToSheet
         ))
         let feature = try FeatureNodeFactory.make(
             operation: operation,

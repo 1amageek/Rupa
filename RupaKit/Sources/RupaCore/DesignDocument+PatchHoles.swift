@@ -42,12 +42,15 @@ extension DesignDocument {
     /// Insert Sheet (Patch with a hole's edge and another sheet, Plasticity's Trim to hole): the
     /// sheet trimmed to the hole through `hole` (a surface fill taking the sheet's enclosed part)
     /// is joined with the holed sheet's object, a solid when it closes; the inserted sheet's object
-    /// is taken away.
+    /// is taken away. With `trimsToSheet` (Trim to sheet, inferred with the user 2026-10-05) the
+    /// holed sheet is cut back to the inserted sheet's boundary instead and both are sewn into the
+    /// fill's one sheet, which takes both objects' places.
     @discardableResult
     public mutating func insertSheet(
         name: String = "Patch",
         hole: SelectionTarget,
         sheet: SceneNodeID,
+        trimsToSheet: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
@@ -64,10 +67,20 @@ extension DesignDocument {
             throw EditorError(code: .commandInvalid, message: "\(operationName) inserts a sheet shown where it was made, as the holed sheet is.")
         }
         let transaction = try prepareSurfaceFill(name: "\(name) Insert", target: hole, insertedSheet: inserted.featureID,
-                                                 objectRegistry: objectRegistry,
+                                                 trimsToSheet: trimsToSheet, objectRegistry: objectRegistry,
                                                  currentEvaluation: currentEvaluation, currentGeneration: currentGeneration)
         var updated = self
         _ = try updated.appendFeatureGraph(transaction, objectRegistry: objectRegistry)
+        if trimsToSheet {
+            guard let filled = transaction.primaryFeatureID else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName): the trimmed sheet has no feature.")
+            }
+            // The fill is the holed sheet cut back and the inserted sheet sewn in: it replaces both.
+            let holed = try bodyObject(SelectionTarget(sceneNodeID: hole.sceneNodeID), operationName: operationName)
+            try updated.removeSceneNodes(presenting: [holed.featureID, inserted.featureID])
+            self = updated
+            return filled
+        }
         let fills = transaction.presentations.map { SelectionTarget(sceneNodeID: $0.sceneNodeID) }
         let joined = try updated.joinSheets(name: name, targets: [SelectionTarget(sceneNodeID: hole.sceneNodeID)] + fills,
                                             objectRegistry: objectRegistry)

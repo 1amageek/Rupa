@@ -74,9 +74,9 @@ func productionMainViewGraphAuditIncludesEveryNonLegacyUIAndPresentationSource()
 @Test(.timeLimit(.minutes(1)))
 func productionMainViewActionManifestSourceCommandSetIsUniqueAndFixed() {
     let names = ProductionMainViewActionManifest.sourceCommandNames
-    #expect(names.count == 177)
+    #expect(names.count == 178)
     #expect(Set(names).count == names.count)
-    #expect(Set(ProductionMainViewActionManifest.sourceCommandRows.map(\.actionID)).count == 177)
+    #expect(Set(ProductionMainViewActionManifest.sourceCommandRows.map(\.actionID)).count == 178)
 }
 
 @Test(.timeLimit(.minutes(1)))

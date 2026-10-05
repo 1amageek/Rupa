@@ -189,6 +189,7 @@ struct ModelingOperationDraft: Equatable {
     /// Loft's Trim overlap: guides running on past the end sections are cut there (on, as
     /// Plasticity opens); off, the loft runs on along them to their ends.
     var loftTrimsOverlap = true
+    var loftTrimsProfiles = false
     var loftDefaultTension = "1"
     /// How a Loft meets the face beside an edge selected as its first or last section.
     enum LoftContinuityChoice: String, CaseIterable, Identifiable {
@@ -255,13 +256,23 @@ struct ModelingOperationDraft: Equatable {
     var patchContinuity = PatchContinuityChoice.g0
     /// Patch's Faces through guides: Multiple (as Plasticity opens) divides the hole along each
     /// guide, each part a face of its own meeting the others along it; Single fits one face
-    /// passing through the guides.
+    /// passing through the guides; Minimal fits the least-area face through the hole's edges and
+    /// any guides (inferred with the user 2026-10-05).
     enum PatchFacesChoice: String, CaseIterable, Identifiable {
         case single = "Single"
         case multiple = "Multiple"
+        case minimal = "Minimal"
         var id: Self { self }
     }
     var patchFaces = PatchFacesChoice.multiple
+    /// Insert Sheet's trim: the inserted sheet to the hole (as Plasticity opens), or the holed sheet
+    /// back to the inserted sheet's boundary (Trim to sheet, inferred with the user 2026-10-05).
+    enum PatchInsertTrimChoice: String, CaseIterable, Identifiable {
+        case hole = "Trim to hole"
+        case sheet = "Trim to sheet"
+        var id: Self { self }
+    }
+    var patchInsertTrim = PatchInsertTrimChoice.hole
     /// Tab in Patch's dialog: Planar → G0 → G1 → G2 → Planar.
     mutating func cyclePatchContinuity() {
         let all = PatchContinuityChoice.allCases
@@ -391,6 +402,9 @@ struct ModelingOperationDraft: Equatable {
     /// joins them with it) and, apart from it, how far the bridge runs along where the sheets meet:
     /// Both (their shared stretch), Short or Long (the shorter or longer sheet's), None (untrimmed).
     var bridgeTrimsWalls = true
+    /// Bridge Surface's Propagate (off by default; inferred with the user 2026-10-05): between
+    /// boundary edges, the bridge runs on along both sheets' boundary edges tangent to the pair.
+    var bridgePropagates = false
     enum BridgeExtentChoice: String, CaseIterable, Identifiable {
         case both = "Both"
         case short = "Short"
@@ -1182,7 +1196,7 @@ struct ModelingOperationDraft: Equatable {
             let options = LoftOptions(resultKind: lofted ? .sheet : .solid,
                 closesSectionLoop: closesSectionLoop, surfaceMode: smooth ? .smooth : .ruled,
                 smoothTangentScale: try number(loftDefaultTension, label: "Default section tension"),
-                simplify: loftSimplify, trimsOverlap: loftTrimsOverlap)
+                simplify: loftSimplify, trimsOverlap: loftTrimsOverlap, trimsProfiles: loftTrimsProfiles)
             if let vertex = vertices.first {
                 let apex = try document.loftApex(for: vertex, currentEvaluation: nil)
                 guard sections.count == 1, guides.isEmpty else { throw invalid("A loft to a vertex takes one section and no guides.") }
@@ -1205,7 +1219,8 @@ struct ModelingOperationDraft: Equatable {
                 shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrimsWalls ? .both : .none,
                 extent: bridgeExtent.extent, reversesFirstSense: bridgeReversesFirstSense, reversesSecondSense: bridgeReversesSecondSense,
                 angularAllowance: try continuityAllowanceRadians(),
-                curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil)
+                curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil,
+                propagates: bridgePropagates)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
             return .createBridgeSurface(name: name, bridge: bridge, wallByReach: nil)
         case .xnurbs:
@@ -1327,9 +1342,10 @@ struct ModelingOperationDraft: Equatable {
             && patchGuideTargets[0].sceneNodeID != patchHoleEdges[0].sceneNodeID:
             // A hole's edges and another sheet: Insert Sheet, the sheet trimmed to the hole and
             // sewn into it.
-            return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID)
+            return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID,
+                                trimsToSheet: patchInsertTrim == .sheet ? true : nil)
         case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
-            && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
+            && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false || patchFaces == .minimal)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:
             // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,
             // each continuous with the sheet beside it, passing through the guides. With Faces
@@ -1379,7 +1395,8 @@ struct ModelingOperationDraft: Equatable {
                 satisfiesTolerances: xnurbsSatisfiesTolerances,
                 positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
                 angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180,
-                dividesAlongGuides: divides
+                dividesAlongGuides: divides,
+                minimizesArea: patchFaces == .minimal
             )
             do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)

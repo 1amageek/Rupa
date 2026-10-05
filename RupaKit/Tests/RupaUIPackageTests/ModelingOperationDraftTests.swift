@@ -1436,6 +1436,14 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(bridge.angularAllowance != nil && bridge.curvatureAllowance != nil)
+        // Propagate opens off and reaches the bridge when turned on.
+        #expect(bridge.propagates == false)
+        draft.bridgePropagates = true
+        guard case .createBridgeSurface(_, let propagated, _) = try draft.command(in: document), propagated.propagates else {
+            Issue.record("Expected Propagate on the Bridge Surface.")
+            return
+        }
+        draft.bridgePropagates = false
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
@@ -1572,6 +1580,55 @@ struct ModelingOperationDraftTests {
         #expect(abs(measurement.totals.sheetAreaSquareMeters - (0.04 * 0.03 + 0.03 * 0.03 + 0.02 * 2.0.squareRoot() * 0.04)) < 1e-12)
     }
 
+    @Test func insertSheetTrimToSheetCutsThePlateBackToAFlatSquareOnIt() throws {
+        // The holed plate's top sheet (as in the G1 patch test) and a flat 20 mm square lying on
+        // it over the hole: Trim to sheet cuts the plate back to the square and sews the square
+        // in, one whole 40 mm sheet.
+        var document = DesignDocument.empty()
+        let plate = try document.createExtrudedRectangle(name: "Plate", plane: .xy, width: .length(0.04, .meter),
+                                                          height: .length(0.04, .meter), depth: .length(0.01, .meter), direction: .normal)
+        let tool = try document.createExtrudedRectangle(name: "Tool", plane: .xy, width: .length(0.01, .meter),
+                                                         height: .length(0.01, .meter), depth: .length(0.03, .meter), direction: .symmetric)
+        let holed = try document.createBoolean(name: "Holed", targets: [BooleanTargetReference(featureID: plate)],
+                                               tools: [BooleanToolReference(featureID: tool)], operation: .difference)
+        let node = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(holed) })
+        let faces = try TopologySnapshotService().snapshot(document: document).entries.filter { $0.kind == .face && $0.sceneNodeID == node.id.description }
+        let top = faces.max { ($0.center?.z ?? 0) < ($1.center?.z ?? 0) }
+        let topZ = try #require(top?.center?.z)
+        _ = try document.deleteBodyFaces(targets: faces.filter { $0 != top }.compactMap { $0.selectionTarget() })
+        let sheetNode = try #require(document.productMetadata.sceneNodes.values.first {
+            $0.reference?.kind == .body && $0.object?.geometryRole == .surface
+        })
+        let entries = try TopologySnapshotService().snapshot(document: document).entries
+        func reach(_ loop: [SelectionTarget]) -> Double {
+            loop.compactMap { edge in entries.first { $0.selectionTarget() == edge }?.start }.map { max(abs($0.x), abs($0.y)) }.max() ?? .infinity
+        }
+        let hole = try #require(try OpenBoundaryLoopService().loops(of: sheetNode.id, in: document).min { reach($0) < reach($1) })
+        let square = try document.createBSplineSurface(name: "Square", surface: BSplineSurface3D(
+            uDegree: 1, vDegree: 1, uKnots: [0, 0, 1, 1], vKnots: [0, 0, 1, 1],
+            controlPoints: [[Point3D(x: -0.01, y: -0.01, z: topZ), Point3D(x: 0.01, y: -0.01, z: topZ)],
+                            [Point3D(x: -0.01, y: 0.01, z: topZ), Point3D(x: 0.01, y: 0.01, z: topZ)]]))
+        let squareNode = try #require(document.productMetadata.sceneNodes.values.first { $0.reference == .body(square) })
+        var draft = makeDraft(.patch, targets: [try #require(hole.first), SelectionTarget(sceneNodeID: squareNode.id)])
+        draft.isSurfaceCreation = true
+        #expect(draft.patchInsertTrim == .hole)
+        draft.patchInsertTrim = .sheet
+        let command = try draft.command(in: document)
+        guard case .insertSheet(_, _, _, let trimsToSheet) = command, trimsToSheet == true else {
+            Issue.record("Trim to sheet reaches the Insert Sheet command."); return
+        }
+        let store = CADDocumentStore(document: document)
+        _ = try store.apply(command)
+        let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))
+        #expect(measurement.counts.sheets == 1)
+        #expect(abs(measurement.totals.sheetAreaSquareMeters - 0.04 * 0.04) < 1e-10, "\(measurement.totals.sheetAreaSquareMeters)")
+        // A command journaled before the option decodes as Trim to hole.
+        let legacy = try JSONEncoder().encode(EditorCommand.insertSheet(name: "Patch", hole: try #require(hole.first), sheet: squareNode.id))
+        guard case .insertSheet(_, _, _, nil) = try JSONDecoder().decode(EditorCommand.self, from: legacy) else {
+            Issue.record("An Insert Sheet without the option decodes."); return
+        }
+    }
+
     @Test func aG1PatchFillsAHoleOfAPlateTangentToIt() throws {
         // A 40 mm plate with a 10 mm square hole through it: a box less a smaller box, then every
         // face but the top taken out, leaving the top as a sheet with a hole.
@@ -1641,6 +1698,23 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil } && withGuide.dividesAlongGuides == false)
+        // Faces Minimal: the least-area XNURBS through the guide, undivided.
+        guided.patchFaces = .minimal
+        guard case .createXNurbs(_, let least, _) = try guided.command(in: document) else {
+            Issue.record("A Minimal patch is a least-area XNURBS.")
+            return
+        }
+        #expect(least.minimizesArea && least.dividesAlongGuides == false && least.guides.count == 1)
+        // Without guides too, at G0: the hole's least-area XNURBS.
+        var bare = makeDraft(.patch, targets: [try #require(hole.first)])
+        bare.isSurfaceCreation = true
+        bare.patchContinuity = .g0
+        bare.patchFaces = .minimal
+        guard case .createXNurbs(_, let bareLeast, _) = try bare.command(in: document) else {
+            Issue.record("A Minimal patch without guides is a least-area XNURBS.")
+            return
+        }
+        #expect(bareLeast.minimizesArea && bareLeast.guides.isEmpty)
     }
 
     @Test func aPatchOnASolidsEdgeLoopMakesASheetOfTheFacesItEncloses() throws {
@@ -2546,6 +2620,13 @@ struct ModelingOperationDraftTests {
             Issue.record("Expected Trim overlap off."); return
         }
         draft.loftTrimsOverlap = true
+        // Trim profiles opens off and reaches the loft's options when turned on.
+        #expect(running.trimsProfiles == false)
+        draft.loftTrimsProfiles = true
+        guard case .createLoft(_, _, _, let cutting, _) = try draft.command(in: document), cutting.trimsProfiles else {
+            Issue.record("Expected Trim profiles on."); return
+        }
+        draft.loftTrimsProfiles = false
         let store = CADDocumentStore(document: document)
         _ = try store.apply(command)
         let result = try DocumentEvaluator.modelingDefault(for: store.document).evaluateExact(store.document.cadDocument)

@@ -452,6 +452,8 @@ struct ModelingOperationView: View {
             if draft.loftGuideNodeIDs.isEmpty == false || draft.loftGuideEdges.isEmpty == false {
                 Toggle("Trim overlap", isOn: $draft.loftTrimsOverlap)
                     .help("Cut the guides where they run on past the end sections; off, the loft runs on along them to their ends.")
+                Toggle("Trim profiles", isOn: $draft.loftTrimsProfiles)
+                    .help("Cut open sections where the two guides cross them, lofting only between the guides; off, the sections loft whole.")
             }
             Picker("Start continuity", selection: $draft.loftStartContinuity) {
                 ForEach(ModelingOperationDraft.LoftContinuityChoice.allCases) { Text($0.rawValue).tag($0) }
@@ -545,13 +547,21 @@ struct ModelingOperationView: View {
             if draft.patchContinuity.order != nil {
                 TextField("Tension", text: $draft.xnurbsTension)
             }
-            if draft.patchGuideTargets.isEmpty == false {
+            if draft.patchHoleEdges.isEmpty == false && draft.patchGuideTargets.count == 1 {
+                Picker("Insert sheet", selection: $draft.patchInsertTrim) {
+                    ForEach(ModelingOperationDraft.PatchInsertTrimChoice.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .contentShape(Rectangle())
+                .help("With a hole's edge and another sheet: trim that sheet to the hole, or trim the holed sheet back to the inserted sheet's edge.")
+            }
+            if draft.patchHoleEdges.isEmpty == false || draft.patchGuideTargets.isEmpty == false {
                 Picker("Faces", selection: $draft.patchFaces) {
                     ForEach(ModelingOperationDraft.PatchFacesChoice.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
                 .contentShape(Rectangle())
-                .help("Multiple divides the hole along its guides, a face each side; Single fits one face through them.")
+                .help("Multiple divides the hole along its guides, a face each side; Single fits one face through them; Minimal fits the least-area face.")
             }
             lengthField("Tolerance", text: $draft.xnurbsPositionTolerance)
                 .help("How far a fitted fill (G1, G2 or through guides) may stray from its edges and guides.")
@@ -573,6 +583,8 @@ struct ModelingOperationView: View {
             Toggle("Sense (first sheet)", isOn: $draft.bridgeReversesFirstSense)
             Toggle("Sense (second sheet)", isOn: $draft.bridgeReversesSecondSense)
             Toggle("Trim walls", isOn: $draft.bridgeTrimsWalls)
+            Toggle("Propagate", isOn: $draft.bridgePropagates)
+                .help("Between boundary edges, run the bridge on along both sheets' edges tangent to the pair.")
                 .help("Cut both sheets back to the bridge and join them with it into one sheet.")
             Picker("Bridge extent", selection: $draft.bridgeExtent) {
                 ForEach(ModelingOperationDraft.BridgeExtentChoice.allCases) { Text($0.rawValue).tag($0) }

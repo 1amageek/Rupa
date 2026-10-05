@@ -88,7 +88,7 @@ public struct ManufacturingExportPreflightValidator: DocumentExportPreflightVali
         switch context.format {
         case .stl, .threeMF, .step:
             true
-        case .swiftCAD, .iges, .obj, .dxf, .svg, .glb, .usd, .usda, .usdc, .usdz, .pdf:
+        case .swiftCAD, .iges, .obj, .dxf, .svg, .glb, .gltf, .ply, .vrml, .usd, .usda, .usdc, .usdz, .pdf:
             false
         }
     }
