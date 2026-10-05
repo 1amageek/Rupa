@@ -164,6 +164,10 @@ are patched and made Solid"); a sheet with no hole is refused. Insert Sheet
 (`insertSheet(name:hole:sheet:)`, Plasticity's Trim to hole) fills the hole through an edge with
 another sheet shown in the same frame — a surface fill taking that sheet's part the hole encloses —
 joins it in the same way and takes the inserted sheet's object away (`SurfaceFillCommandTests`).
+With `trimsToSheet` (Trim to sheet, inferred with the user 2026-10-05) the fill is the holed sheet
+cut back to the inserted sheet's boundary and both sewn into one sheet: no Join follows, both objects
+are taken away, and the fill supersedes both bodies (`supersededBodyFeatureIDs`) so measurement and
+presentation read only the sewn sheet (`insertSheetTrimToSheetCutsThePlateBackToAFlatSquareOnIt`).
 
 Unjoin on faces (`unjoinFaces(name:targets:)`) and on solids or sheets
 (`unjoinShells(name:targets:)`) append one Swift-CAD `unjoinFaces` feature per

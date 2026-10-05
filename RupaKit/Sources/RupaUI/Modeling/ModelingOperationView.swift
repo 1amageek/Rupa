@@ -547,6 +547,14 @@ struct ModelingOperationView: View {
             if draft.patchContinuity.order != nil {
                 TextField("Tension", text: $draft.xnurbsTension)
             }
+            if draft.patchHoleEdges.isEmpty == false && draft.patchGuideTargets.count == 1 {
+                Picker("Insert sheet", selection: $draft.patchInsertTrim) {
+                    ForEach(ModelingOperationDraft.PatchInsertTrimChoice.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .contentShape(Rectangle())
+                .help("With a hole's edge and another sheet: trim that sheet to the hole, or trim the holed sheet back to the inserted sheet's edge.")
+            }
             if draft.patchHoleEdges.isEmpty == false || draft.patchGuideTargets.isEmpty == false {
                 Picker("Faces", selection: $draft.patchFaces) {
                     ForEach(ModelingOperationDraft.PatchFacesChoice.allCases) { Text($0.rawValue).tag($0) }

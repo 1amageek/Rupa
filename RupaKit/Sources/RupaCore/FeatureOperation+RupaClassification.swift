@@ -329,11 +329,14 @@ extension FeatureOperation {
              .radialPattern,
              .gridPattern,
              .curveDrivenPattern,
-             .surfaceFill,
              .curveExtend,
              .curveMatch,
              .projectCurve:
             return []
+        // Insert Sheet's Trim to sheet sews the holed sheet, cut back, and the inserted sheet into its
+        // own sheet, replacing both; a fill otherwise leaves its target to a later Join.
+        case .surfaceFill(let fill):
+            return fill.trimsToSheet ? Set([fill.targetFeatureID] + (fill.insertedSheet.map { [$0] } ?? [])) : []
         }
     }
 }

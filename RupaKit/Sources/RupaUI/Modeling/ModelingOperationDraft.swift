@@ -265,6 +265,14 @@ struct ModelingOperationDraft: Equatable {
         var id: Self { self }
     }
     var patchFaces = PatchFacesChoice.multiple
+    /// Insert Sheet's trim: the inserted sheet to the hole (as Plasticity opens), or the holed sheet
+    /// back to the inserted sheet's boundary (Trim to sheet, inferred with the user 2026-10-05).
+    enum PatchInsertTrimChoice: String, CaseIterable, Identifiable {
+        case hole = "Trim to hole"
+        case sheet = "Trim to sheet"
+        var id: Self { self }
+    }
+    var patchInsertTrim = PatchInsertTrimChoice.hole
     /// Tab in Patch's dialog: Planar → G0 → G1 → G2 → Planar.
     mutating func cyclePatchContinuity() {
         let all = PatchContinuityChoice.allCases
@@ -1330,7 +1338,8 @@ struct ModelingOperationDraft: Equatable {
             && patchGuideTargets[0].sceneNodeID != patchHoleEdges[0].sceneNodeID:
             // A hole's edges and another sheet: Insert Sheet, the sheet trimmed to the hole and
             // sewn into it.
-            return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID)
+            return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID,
+                                trimsToSheet: patchInsertTrim == .sheet ? true : nil)
         case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
             && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false || patchFaces == .minimal)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:

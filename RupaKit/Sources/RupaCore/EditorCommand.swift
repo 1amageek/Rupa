@@ -487,8 +487,9 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
     case joinSheets(name: String, targets: [SelectionTarget])
     /// Patch on a sheet object: every hole filled and joined with it, a solid when they close.
     case patchHoles(name: String, target: SceneNodeID)
-    /// Patch with a hole's edge and another sheet: Plasticity's Insert Sheet, Trim to hole.
-    case insertSheet(name: String, hole: SelectionTarget, sheet: SceneNodeID)
+    /// Patch with a hole's edge and another sheet: Plasticity's Insert Sheet, Trim to hole, or with
+    /// `trimsToSheet` Trim to sheet (the holed sheet cut back to the inserted sheet's boundary).
+    case insertSheet(name: String, hole: SelectionTarget, sheet: SceneNodeID, trimsToSheet: Bool? = nil)
     /// Unjoin on faces: each face leaves its body as a sheet of its own.
     case unjoinFaces(name: String, targets: [SelectionTarget])
     /// Unjoin on solids or sheets: every face becomes a sheet of its own.
