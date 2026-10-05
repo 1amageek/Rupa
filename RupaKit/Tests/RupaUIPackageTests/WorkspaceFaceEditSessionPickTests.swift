@@ -25,7 +25,7 @@ struct WorkspaceFaceEditSessionPickTests {
         #expect(session.kind == .draft(faces: [faces[1], faces[2]], neutral: faces[0]))
         #expect(session.missingInput == "Draft Face: set Degrees.")
         session.draftAngleDegrees = 5
-        guard case let .draftBodyFaces(targets, neutral, _, _, _)? = session.commands().first else {
+        guard case let .draftBodyFaces(targets, neutral, _, _, _, method)? = session.commands().first, method == nil else {
             Issue.record("Expected a draft.")
             return
         }
@@ -33,6 +33,44 @@ struct WorkspaceFaceEditSessionPickTests {
         // Control-click takes a drafted face back off.
         session.pick(face: faces[1], toggles: true)
         #expect(session.kind == .draft(faces: [faces[2]], neutral: faces[0]))
+    }
+
+    /// Draft Face's Curve takes clicks as pivot edges (Control-click taking one off), and Surface
+    /// takes the next face clicked as the face whose normal is the pull; each reaches the command.
+    @Test func draftFaceMethodsTakeTheirPicks() throws {
+        let faces = (0..<4).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        let edges = (0..<2).map { _ in SelectionTarget(sceneNodeID: SceneNodeID()) }
+        var session = WorkspaceFaceEditSession(kind: .draft(faces: [faces[1]], neutral: faces[0]))
+        session.draftAngleDegrees = 5
+        session.draftMethod = .curve
+        #expect(session.takesEdgePicks && session.takesFacePicks == false)
+        #expect(session.missingInput == "Draft Face: click the pivot edges, one on each face; Control-click takes one off.")
+        session.pick(edge: edges[0], toggles: false)
+        session.pick(edge: edges[1], toggles: false)
+        session.pick(edge: edges[1], toggles: true)
+        #expect(session.draftPivots == [edges[0]])
+        guard case let .draftBodyFaces(_, _, _, _, _, curve)? = session.commands().first else {
+            Issue.record("Expected a curve draft.")
+            return
+        }
+        #expect(curve == .curve(pivots: [edges[0]]))
+        session.draftMethod = .surface
+        #expect(session.takesFacePicks && session.awaitsSurfaceReference)
+        #expect(session.commands().isEmpty)
+        session.pick(face: faces[3], toggles: false)
+        #expect(session.draftSurfaceReference == faces[3])
+        #expect(session.kind == .draft(faces: [faces[1]], neutral: faces[0]))
+        guard case let .draftBodyFaces(_, _, _, _, _, surface)? = session.commands().first else {
+            Issue.record("Expected a surface draft.")
+            return
+        }
+        #expect(surface == .surface(reference: faces[3]))
+        session.draftMethod = .normal
+        guard case let .draftBodyFaces(_, _, _, _, _, normal)? = session.commands().first else {
+            Issue.record("Expected a normal draft.")
+            return
+        }
+        #expect(normal == .normal)
     }
 
     @Test func matchFaceTakesItsReferenceInTheDialog() throws {

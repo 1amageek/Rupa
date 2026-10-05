@@ -2100,7 +2100,8 @@ public final class EditorSession {
         neutralTarget: SelectionTarget,
         angle: CADExpression,
         neutralOffset: CADExpression? = nil,
-        grow: FaceEditGrow = .moving
+        grow: FaceEditGrow = .moving,
+        method: BodyFaceDraftMethod? = nil
     ) -> CommandExecutionResult? {
         perform(
             .draftBodyFaces(
@@ -2108,7 +2109,8 @@ public final class EditorSession {
                 neutralTarget: neutralTarget,
                 angle: angle,
                 neutralOffset: neutralOffset,
-                grow: grow
+                grow: grow,
+                method: method
             )
         )
     }

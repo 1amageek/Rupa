@@ -14,6 +14,7 @@ extension DesignDocument {
         angle: CADExpression,
         neutralOffset: CADExpression? = nil,
         grow: FaceEditGrow = .moving,
+        method: BodyFaceDraftMethod = .isocline,
         name: String = "Draft Face",
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
@@ -98,13 +99,43 @@ extension DesignDocument {
             )
         }
 
+        // The method's picks lie on the drafted body: pivot edges for Curve, the pull's face for Surface.
+        let kernelMethod: FaceDraftMethod
+        switch method {
+        case .isocline:
+            kernelMethod = .isocline
+        case .normal:
+            kernelMethod = .normal
+        case let .curve(pivots):
+            guard pivots.isEmpty == false else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) Curve needs at least one pivot edge.")
+            }
+            kernelMethod = .curve(pivots: try pivots.map { pivot in
+                let resolution = try generatedFaceDraftTarget(
+                    pivot, kind: .edge, entriesBySubshapeID: entriesBySubshapeID, operationName: operationName
+                )
+                guard resolution.sceneNodeID == neutralResolution.sceneNodeID else {
+                    throw EditorError(code: .commandInvalid, message: "\(operationName) pivot edges must belong to the drafted body.")
+                }
+                return resolution.face
+            })
+        case let .surface(reference):
+            let resolution = try generatedFaceDraftTarget(
+                reference, entriesBySubshapeID: entriesBySubshapeID, operationName: operationName
+            )
+            guard resolution.sceneNodeID == neutralResolution.sceneNodeID else {
+                throw EditorError(code: .commandInvalid, message: "\(operationName) Surface reference must be a face of the drafted body.")
+            }
+            kernelMethod = .surface(reference: resolution.face)
+        }
         let faceDraft = FaceDraftFeature(
             target: FaceDraftTargetReference(featureID: neutralResolution.featureID),
             faces: targetFaces,
             neutralFace: neutralResolution.face,
             angle: angle,
             neutralOffset: neutralOffset,
-            grow: grow
+            grow: grow,
+            method: kernelMethod
         )
         try faceDraft.validate()
 
@@ -144,16 +175,23 @@ extension DesignDocument {
         var face: StableSubshapeReference
     }
 
+    private enum FaceDraftPickKind { case face, edge }
+
     private func generatedFaceDraftTarget(
         _ target: SelectionTarget,
+        kind: FaceDraftPickKind = .face,
         entriesBySubshapeID: [String: TopologySummaryResult.Entry],
         operationName: String
     ) throws -> FaceDraftTargetResolution {
-        guard case .face(let componentID) = target.component,
-              let subshapeID = componentID.generatedTopologySubshapeID else {
+        let picked: SelectionComponentID?
+        switch (kind, target.component) {
+        case (.face, .face(let componentID)), (.edge, .edge(let componentID)): picked = componentID
+        default: picked = nil
+        }
+        guard let componentID = picked, let subshapeID = componentID.generatedTopologySubshapeID else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "\(operationName) requires generated topology face targets."
+                message: "\(operationName) requires generated topology \(kind == .face ? "face" : "edge") targets."
             )
         }
         let resolvedTarget = try editableBodyTargetResolution(
@@ -166,7 +204,7 @@ extension DesignDocument {
                 message: "\(operationName) generated topology face was not found in the current evaluation."
             )
         }
-        guard entry.kind == .face,
+        guard entry.kind == (kind == .face ? .face : .edge),
               entry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
