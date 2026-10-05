@@ -282,7 +282,7 @@ public indirect enum EditorCommand: Codable, Equatable, Sendable {
         inputShapeInfluence: Double = 1, partialStart: Double = 0, partialEnd: Double = 1, layout: SurfaceControlLayout? = nil,
         boundaryFlow: SquareFitOptions.BoundaryFlow = .next, keepsOtherEdges: Bool = false
     )
-    case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving)
+    case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression, neutralOffset: CADExpression? = nil, grow: FaceEditGrow = .moving, method: BodyFaceDraftMethod? = nil)
     case matchFaces(targets: [SelectionTarget], reference: SelectionTarget, front: Bool = false, grow: FaceEditGrow = .moving)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case createBodyEdgeTreatment(name: String, target: SelectionTarget, treatment: BodyEdgeTreatment)

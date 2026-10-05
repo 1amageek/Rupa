@@ -10970,6 +10970,12 @@ private struct ProjectMainViewContent: View {
                 return
             }
             let toggles = target.modifierFlags.containsControl
+            if case .draft = edit.kind {
+                edit.pick(edge: edge, toggles: toggles)
+                faceEditSession = edit
+                reportToolStatus(edit.missingInput ?? "\(edit.title): OK, Return or right-click drafts the faces.")
+                return
+            }
             // A pair starts on a sheet's edge, as Plasticity aligns a sheet to its reference.
             if toggles == false, edit.pendingAlignEdge == nil,
                snapshot.document.document.productMetadata.sceneNodes[edge.sceneNodeID]?.object?.geometryRole != .surface {

@@ -156,6 +156,59 @@ import Testing
     #expect(session.evaluationStatus == .valid)
 }
 
+/// Draft Face's Curve: a side face turned about its edge farthest from the neutral face, which
+/// becomes a pivot of the kernel's curve method; the body stays one solid and, leaning in along
+/// the pull, loses volume.
+@MainActor
+@Test func draftBodyFacesTakesTheCurveMethodsPivotEdge() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(draftSceneNodeID(for: bodyFeatureID, in: session.document))
+    let before = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    let topology = try TopologySnapshotService().snapshot(document: session.document)
+    let bodyEntries = topology.entries.filter { $0.sceneNodeID == bodySceneNodeID.description }
+    let side = try #require(bodyEntries.first { $0.kind == .face && $0.generatedRole == "sideFace" })
+    let neutral = try #require(bodyEntries.first { $0.kind == .face && $0.generatedRole == "endFace" })
+    let (sideOrigin, sideNormal) = (try #require(side.surfaceOrigin), try #require(side.surfaceNormal))
+    let (neutralOrigin, neutralNormal) = (try #require(neutral.surfaceOrigin), try #require(neutral.surfaceNormal))
+    func offset(_ p: TopologySummaryResult.Entry.Point, from o: TopologySummaryResult.Entry.Point, along n: TopologySummaryResult.Entry.Point) -> Double {
+        (p.x - o.x) * n.x + (p.y - o.y) * n.y + (p.z - o.z) * n.z
+    }
+    // The side face's edges level with the neutral face; the pivot is the one farthest from it.
+    let level = bodyEntries.filter { entry in
+        guard entry.kind == .edge, let start = entry.start, let end = entry.end else { return false }
+        return abs(offset(start, from: sideOrigin, along: sideNormal)) < 1e-9 && abs(offset(end, from: sideOrigin, along: sideNormal)) < 1e-9
+            && abs(offset(start, from: neutralOrigin, along: neutralNormal) - offset(end, from: neutralOrigin, along: neutralNormal)) < 1e-9
+    }
+    let pivot = try #require(level.max { a, b in
+        abs(offset(a.start!, from: neutralOrigin, along: neutralNormal)) < abs(offset(b.start!, from: neutralOrigin, along: neutralNormal))
+    })
+
+    let result = try session.execute(
+        .draftBodyFaces(
+            targets: [try #require(side.selectionTarget())],
+            neutralTarget: try #require(neutral.selectionTarget()),
+            angle: .angle(10.0, .degree),
+            method: .curve(pivots: [try #require(pivot.selectionTarget())])
+        ),
+        expectedGeneration: DocumentGeneration(1)
+    )
+
+    let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let draftFeature = try #require(session.document.cadDocument.designGraph.nodes[draftFeatureID])
+    guard case let .faceDraft(faceDraft) = draftFeature.operation, case let .curve(pivots) = faceDraft.method else {
+        Issue.record("Draft Face's Curve should create a FaceDraft feature with the curve method.")
+        return
+    }
+    let after = try MeasurementService().measure(document: session.document, ruler: session.workspaceState.ruler)
+    #expect(result.didMutate)
+    #expect(pivots.count == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(after.counts.solids == 1)
+    #expect((after.solids.first?.volumeCubicMeters ?? 0) < (before.solids.first?.volumeCubicMeters ?? 0))
+}
+
 private func draftSceneNodeID(
     for featureID: FeatureID,
     in document: DesignDocument

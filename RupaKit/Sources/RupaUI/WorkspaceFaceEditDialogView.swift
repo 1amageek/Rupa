@@ -42,6 +42,22 @@ struct WorkspaceFaceEditDialogView: View {
                 .frame(width: 56)
                 .accessibilityIdentifier("WorkspaceFaceEdit.degrees")
             lengthField("Offset", meters: $dialog.neutralOffsetMeters, identifier: "WorkspaceFaceEdit.neutralOffset")
+            Picker("Method", selection: $dialog.draftMethod) {
+                ForEach(WorkspaceFaceEditSession.DraftMethodChoice.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .fixedSize()
+            .accessibilityIdentifier("WorkspaceFaceEdit.draftMethod")
+            switch dialog.draftMethod {
+            case .curve:
+                pickedLabel("Pivots \(dialog.draftPivots.count)", picked: dialog.draftPivots.isEmpty == false,
+                            identifier: "WorkspaceFaceEdit.pivotsPicked")
+                Toggle("Pick pivots", isOn: $dialog.picksPivots)
+                    .accessibilityIdentifier("WorkspaceFaceEdit.picksPivots")
+            case .surface:
+                pickedLabel("Pull face", picked: dialog.draftSurfaceReference != nil, identifier: "WorkspaceFaceEdit.pullFacePicked")
+            case .isocline, .normal:
+                EmptyView()
+            }
         case let .match(_, reference):
             pickedLabel("Face", picked: reference != nil, identifier: "WorkspaceFaceEdit.referencePicked")
             Toggle("Front", isOn: $dialog.front)

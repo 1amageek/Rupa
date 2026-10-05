@@ -2068,7 +2068,7 @@ public final class CADDocumentStore {
             try run()
         case .draftBodyFaces:
             func run() throws {
-                guard case .draftBodyFaces(let targets, let neutralTarget, let angle, let neutralOffset, let grow) = command else {
+                guard case .draftBodyFaces(let targets, let neutralTarget, let angle, let neutralOffset, let grow, let method) = command else {
                     throw EditorError(
                         code: .commandInvalid,
                         message: "Command dispatch expected draftBodyFaces."
@@ -2081,6 +2081,7 @@ public final class CADDocumentStore {
                     angle: angle,
                     neutralOffset: neutralOffset,
                     grow: grow,
+                    method: method ?? .isocline,
                     objectRegistry: objectRegistry,
                     currentEvaluation: currentEvaluation,
                     currentGeneration: generation

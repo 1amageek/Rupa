@@ -59,6 +59,27 @@ struct WorkspaceFaceEditSession: Equatable {
     var draftAngleDegrees = 0.0
     /// Draft Face's neutral plane offset along the neutral face's outward side, in meters.
     var neutralOffsetMeters = 0.0
+    /// Draft Face's taper method. Choosing Curve turns clicks to the pivot edges; choosing Surface
+    /// takes the next face clicked as the face whose normal is the pull direction.
+    var draftMethod: DraftMethodChoice = .isocline {
+        didSet {
+            picksPivots = draftMethod == .curve
+            awaitsSurfaceReference = draftMethod == .surface && draftSurfaceReference == nil
+        }
+    }
+    /// Draft Face's Curve pivot edges (the parting line), one on each drafted face.
+    var draftPivots: [SelectionTarget] = []
+    /// Draft Face's Surface reference: the face whose outward normal is the pull direction.
+    var draftSurfaceReference: SelectionTarget?
+    /// Whether clicks pick Curve's pivot edges rather than faces.
+    var picksPivots = false
+    /// Whether the next face clicked is Surface's reference.
+    var awaitsSurfaceReference = false
+
+    /// Draft Face's taper methods, as the dialog names them.
+    enum DraftMethodChoice: String, CaseIterable {
+        case isocline = "Isocline", curve = "Curve", surface = "Surface", normal = "Normal"
+    }
     var front = false
     var grow: FaceEditGrow = .moving
     /// Remove Fillets' largest radius, in meters, which applies only while `limitsRadius` is on
@@ -182,21 +203,30 @@ struct WorkspaceFaceEditSession: Equatable {
     /// reference and faces, Match Face's reference, Extend Sheet's object to extend up to.
     var takesFacePicks: Bool {
         switch kind {
-        case .push, .draft, .match, .extendSheet: true
+        case .draft: picksPivots == false
+        case .push, .match, .extendSheet: true
         case .removeFillets, .hollow, .thicken, .alignSurface, .rebuildFace, .polySplines: false
         }
     }
 
     /// Whether the dialog takes edge clicks: Align Surface's pairs are picked while it runs.
     var takesEdgePicks: Bool {
-        if case .alignSurface = kind { return true }
-        return false
+        switch kind {
+        case .alignSurface: true
+        case .draft: picksPivots
+        default: false
+        }
     }
 
     /// An edge clicked while Align Surface runs: a sheet's edge, then the edge it follows, adds a
     /// pair; Control-click on an edge of a pair takes that pair off (its own continuity and
     /// tension with it), or drops a sheet edge still waiting for its reference.
     mutating func pick(edge: SelectionTarget, toggles: Bool) {
+        if case .draft = kind {
+            // Draft Face's Curve: a pivot edge added, or taken back off with Control-click.
+            if toggles { draftPivots.removeAll { $0 == edge } } else if draftPivots.contains(edge) == false { draftPivots.append(edge) }
+            return
+        }
         guard case let .alignSurface(pairs) = kind else { return }
         if toggles {
             if pendingAlignEdge == edge {
@@ -235,6 +265,11 @@ struct WorkspaceFaceEditSession: Equatable {
         case let .draft(faces, neutral):
             guard let neutral else {
                 kind = .draft(faces: faces.filter { $0 != face }, neutral: face)
+                return
+            }
+            if awaitsSurfaceReference {
+                draftSurfaceReference = face
+                awaitsSurfaceReference = false
                 return
             }
             guard face != neutral else { return }
@@ -296,6 +331,8 @@ struct WorkspaceFaceEditSession: Equatable {
             if neutral == nil { return "Draft Face: click the reference face." }
             if faces.isEmpty { return "Draft Face: click the faces to draft; Control-click takes one off." }
             if draftAngleDegrees == 0 { return "Draft Face: set Degrees." }
+            if draftMethod == .curve, draftPivots.isEmpty { return "Draft Face: click the pivot edges, one on each face; Control-click takes one off." }
+            if draftMethod == .surface, draftSurfaceReference == nil { return "Draft Face: click the face whose normal is the pull direction." }
             return nil
         case let .match(faces, reference):
             if reference == nil { return "Match Face: click the face to match onto." }
@@ -396,9 +433,19 @@ struct WorkspaceFaceEditSession: Equatable {
             )
         case let .draft(faces, neutral):
             guard let neutral else { return nil }
+            let method: BodyFaceDraftMethod?
+            switch draftMethod {
+            case .isocline: method = nil
+            case .normal: method = .normal
+            case .curve: method = .curve(pivots: draftPivots)
+            case .surface:
+                guard let draftSurfaceReference else { return nil }
+                method = .surface(reference: draftSurfaceReference)
+            }
             return .draftBodyFaces(
                 targets: faces, neutralTarget: neutral, angle: .angle(draftAngleDegrees, .degree),
-                neutralOffset: neutralOffsetMeters == 0 ? nil : .length(neutralOffsetMeters, .meter), grow: grow
+                neutralOffset: neutralOffsetMeters == 0 ? nil : .length(neutralOffsetMeters, .meter), grow: grow,
+                method: method
             )
         case let .match(faces, reference):
             guard let reference else { return nil }
