@@ -1436,6 +1436,14 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(bridge.angularAllowance != nil && bridge.curvatureAllowance != nil)
+        // Propagate opens off and reaches the bridge when turned on.
+        #expect(bridge.propagates == false)
+        draft.bridgePropagates = true
+        guard case .createBridgeSurface(_, let propagated, _) = try draft.command(in: document), propagated.propagates else {
+            Issue.record("Expected Propagate on the Bridge Surface.")
+            return
+        }
+        draft.bridgePropagates = false
         let store = CADDocumentStore(document: document)
         _ = try store.apply(draft.command(in: document))
         let measurement = try MeasurementService().measure(document: store.document, ruler: .standard(for: .meter))

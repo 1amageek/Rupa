@@ -402,6 +402,9 @@ struct ModelingOperationDraft: Equatable {
     /// joins them with it) and, apart from it, how far the bridge runs along where the sheets meet:
     /// Both (their shared stretch), Short or Long (the shorter or longer sheet's), None (untrimmed).
     var bridgeTrimsWalls = true
+    /// Bridge Surface's Propagate (off by default; inferred with the user 2026-10-05): between
+    /// boundary edges, the bridge runs on along both sheets' boundary edges tangent to the pair.
+    var bridgePropagates = false
     enum BridgeExtentChoice: String, CaseIterable, Identifiable {
         case both = "Both"
         case short = "Short"
@@ -1216,7 +1219,8 @@ struct ModelingOperationDraft: Equatable {
                 shape: bridgeShape == .g2 ? .curvature : .chamfer, trimWalls: bridgeTrimsWalls ? .both : .none,
                 extent: bridgeExtent.extent, reversesFirstSense: bridgeReversesFirstSense, reversesSecondSense: bridgeReversesSecondSense,
                 angularAllowance: try continuityAllowanceRadians(),
-                curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil)
+                curvatureAllowance: bridgeShape == .g2 ? try curvatureAllowance(for: .curvature) : nil,
+                propagates: bridgePropagates)
             do { try bridge.validate() } catch { throw invalid("The Bridge Surface is invalid: \(error).") }
             return .createBridgeSurface(name: name, bridge: bridge, wallByReach: nil)
         case .xnurbs:

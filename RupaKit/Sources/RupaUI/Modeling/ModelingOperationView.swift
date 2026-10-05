@@ -583,6 +583,8 @@ struct ModelingOperationView: View {
             Toggle("Sense (first sheet)", isOn: $draft.bridgeReversesFirstSense)
             Toggle("Sense (second sheet)", isOn: $draft.bridgeReversesSecondSense)
             Toggle("Trim walls", isOn: $draft.bridgeTrimsWalls)
+            Toggle("Propagate", isOn: $draft.bridgePropagates)
+                .help("Between boundary edges, run the bridge on along both sheets' edges tangent to the pair.")
                 .help("Cut both sheets back to the bridge and join them with it into one sheet.")
             Picker("Bridge extent", selection: $draft.bridgeExtent) {
                 ForEach(ModelingOperationDraft.BridgeExtentChoice.allCases) { Text($0.rawValue).tag($0) }
