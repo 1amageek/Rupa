@@ -256,10 +256,12 @@ struct ModelingOperationDraft: Equatable {
     var patchContinuity = PatchContinuityChoice.g0
     /// Patch's Faces through guides: Multiple (as Plasticity opens) divides the hole along each
     /// guide, each part a face of its own meeting the others along it; Single fits one face
-    /// passing through the guides.
+    /// passing through the guides; Minimal fits the least-area face through the hole's edges and
+    /// any guides (inferred with the user 2026-10-05).
     enum PatchFacesChoice: String, CaseIterable, Identifiable {
         case single = "Single"
         case multiple = "Multiple"
+        case minimal = "Minimal"
         var id: Self { self }
     }
     var patchFaces = PatchFacesChoice.multiple
@@ -1330,7 +1332,7 @@ struct ModelingOperationDraft: Equatable {
             // sewn into it.
             return .insertSheet(name: name, hole: patchHoleEdges[0], sheet: patchGuideTargets[0].sceneNodeID)
         case .patch where patchHoleEdges.isEmpty == false && Set(patchHoleEdges.map(\.sceneNodeID)).count == 1
-            && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false)
+            && (patchContinuity.order != nil || patchGuideTargets.isEmpty == false || patchFaces == .minimal)
             && patchHoleEdges.count + patchGuideTargets.count == targets.count:
             // G1 or G2 on a hole, or guides through it: XNURBS over every edge of the hole's loop,
             // each continuous with the sheet beside it, passing through the guides. With Faces
@@ -1380,7 +1382,8 @@ struct ModelingOperationDraft: Equatable {
                 satisfiesTolerances: xnurbsSatisfiesTolerances,
                 positionTolerance: try length(xnurbsPositionTolerance, label: "Position tolerance"),
                 angleTolerance: try number(xnurbsAngleTolerance, label: "Angle tolerance") * Double.pi / 180,
-                dividesAlongGuides: divides
+                dividesAlongGuides: divides,
+                minimizesArea: patchFaces == .minimal
             )
             do { try xnurbs.validate() } catch { throw invalid("The patch is invalid: \(error).") }
             return .createXNurbs(name: name, xnurbs: xnurbs, edgeCurves: edgeCurves)

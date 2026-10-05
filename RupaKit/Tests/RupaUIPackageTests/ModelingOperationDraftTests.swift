@@ -1641,6 +1641,23 @@ struct ModelingOperationDraftTests {
             return
         }
         #expect(withGuide.guides.count == 1 && withGuide.boundaries.allSatisfy { $0.continuity == nil } && withGuide.dividesAlongGuides == false)
+        // Faces Minimal: the least-area XNURBS through the guide, undivided.
+        guided.patchFaces = .minimal
+        guard case .createXNurbs(_, let least, _) = try guided.command(in: document) else {
+            Issue.record("A Minimal patch is a least-area XNURBS.")
+            return
+        }
+        #expect(least.minimizesArea && least.dividesAlongGuides == false && least.guides.count == 1)
+        // Without guides too, at G0: the hole's least-area XNURBS.
+        var bare = makeDraft(.patch, targets: [try #require(hole.first)])
+        bare.isSurfaceCreation = true
+        bare.patchContinuity = .g0
+        bare.patchFaces = .minimal
+        guard case .createXNurbs(_, let bareLeast, _) = try bare.command(in: document) else {
+            Issue.record("A Minimal patch without guides is a least-area XNURBS.")
+            return
+        }
+        #expect(bareLeast.minimizesArea && bareLeast.guides.isEmpty)
     }
 
     @Test func aPatchOnASolidsEdgeLoopMakesASheetOfTheFacesItEncloses() throws {
