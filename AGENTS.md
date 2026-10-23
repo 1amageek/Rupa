@@ -25,3 +25,14 @@
 - Keep each test small enough to run beside others: split independent scenarios into separate tests or parameterized cases so they run side by side, and do not let one long test bound the suite's wall time.
 - A test's time limit is part of its contract and is measured in the same parallel run it is executed in; a test that exceeds it under parallel load is reported, not given a looser limit or moved to a serial run.
 - Run suites with the package's parallel runner (for swift-CAD, `Scripts/swift-test-parallel.py`) rather than serial whole-suite commands, and run single tests in their own process when isolating a failure.
+
+### Adding Tests
+
+- Add a test only when it falsifies one contract, invariant, or defect that no existing test already proves; name that target in the test.
+- Assert the actual success and failure behavior of the implementation path; a test that checks only types, declarations, or existence does not count as evidence.
+- For a defect fix, observe the new test failing against the unfixed code before the fix lands.
+- Place the test in the test target of the module that owns the contract, and keep it traceable from that owner's `DESIGN.md`.
+- When adding a test, measure it in the package's parallel run and assign its lane and time limit from that measurement; each package's `DESIGN.md` verification section owns the lane names, budgets, and limit rules.
+- Before accepting a heavy test, reduce its input to the smallest one that still proves the same contract; when it must stay long, split its independent scenarios into separate tests or parameterized cases.
+- When a new test subsumes an existing one, delete the existing test in the same change; the number of tests is not a measure of progress.
+- A new test that needs a resource that cannot be duplicated uses the shared exclusive-access helper under the same conditions as above.
