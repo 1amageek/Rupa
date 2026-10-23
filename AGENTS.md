@@ -15,3 +15,13 @@
 - A successful empty intersection result requires exclusion over the entire requested domain. Insufficient evidence, unsupported required coverage, cancellation, or exhausted resources propagate explicit failure or an explicit indeterminate result; they never become absence, coincidence, or partial complete success.
 - Sewing, healing, snapping, and tolerance-based Boolean processing own an explicit policy for accepting proximity and changing geometry or connectivity. They record the applied tolerance, displacement/deviation evidence, and resulting correspondence; the intersection foundation does not silently perform these changes.
 - Existing tolerance-based coincidence paths require an explicit migration to these contracts. Record a path as unconverted until its public success, absence, coincidence, proximity, and indeterminate behavior are verified; documentation alone does not complete implementation.
+
+## Test Policy
+
+- Every test is independent: it builds its own inputs, state, temporary files, and resources, and its outcome does not depend on other tests, execution order, or which tests share its process.
+- Tests run in parallel by default. Do not make a test pass by serializing it, ordering it, or retrying it; a test that passes only alone, only in the full suite, or only in one order has an isolation defect in the test or in the code under test.
+- Give each test its own copy of anything it mutates: a unique temporary directory, an injected dependency instead of static or process-global mutable state, and its own document, session, or fixture instance.
+- When a resource cannot be duplicated per test (for example a display-bound renderer or a single device), route every test that touches it through one shared exclusive-access helper, keep the exclusion to that resource only, and record why it cannot be isolated next to the helper.
+- Keep each test small enough to run beside others: split independent scenarios into separate tests or parameterized cases so they run side by side, and do not let one long test bound the suite's wall time.
+- A test's time limit is part of its contract and is measured in the same parallel run it is executed in; a test that exceeds it under parallel load is reported, not given a looser limit or moved to a serial run.
+- Run suites with the package's parallel runner (for swift-CAD, `Scripts/swift-test-parallel.py`) rather than serial whole-suite commands, and run single tests in their own process when isolating a failure.
