@@ -36,3 +36,13 @@
 - Before accepting a heavy test, reduce its input to the smallest one that still proves the same contract; when it must stay long, split its independent scenarios into separate tests or parameterized cases.
 - When a new test subsumes an existing one, delete the existing test in the same change; the number of tests is not a measure of progress.
 - A new test that needs a resource that cannot be duplicated uses the shared exclusive-access helper under the same conditions as above.
+
+## swift-CAD Development Goal
+
+- The goal of swift-CAD is functional parity with OCCT 8.0.1 as registered in `swift-CAD/OCCT_REQUIREMENTS.md`, completed through the gates of `swift-CAD/ROADMAP.md`, serving the modeling commands Rupa exposes. Those documents own the requirement text; this section owns the order and the measure of progress.
+- State every goal as functions the kernel performs over the full valid input domain of each operation. Test counts, restored fixtures, refactors, module splits, and verification tooling are means and never stand in for a goal.
+- Pursue stability before new functions. Stability means every registered capability succeeds on every finite valid public input of its operation with a validated exact result, and fails only because the result is mathematically non-discrete, singular, or ambiguous, or because an explicit caller budget or cancellation ends it; it never crashes, hangs, returns a wrong result, or rejects an input for lying outside an implemented envelope.
+- Within stability, complete first the operations Rupa's modeling relies on: primitives, extrude, revolve, Boolean, fillet, chamfer, shell, sweep, and loft.
+- Start the OCCT requirements that are not yet registered capabilities after the registered capabilities are supported.
+- Report progress per capability and per requirement as supported, partial with the rejected valid inputs named, or missing, judged from the implementation path and its behavior; catalog status, marker removal, or passing tests alone do not establish support.
+- Never narrow a goal to make it reachable: restricting the input domain, deleting a failing test, or adding a self-imposed limit does not advance it, and a failing behavior stays recorded as an open gap until it is implemented.
